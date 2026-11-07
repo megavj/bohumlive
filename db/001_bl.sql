@@ -114,7 +114,7 @@ begin
  raise exception '지원하지 않는 조회입니다.';
 end; $$;
 
-create or replace function public.bl_action(p_action text,p_payload jsonb default '{}') returns jsonb language plpgsql security definer set search_path='' as $$
+create or replace function public.bl_action_internal(p_action text,p_payload jsonb default '{}') returns jsonb language plpgsql security definer set search_path='' as $$
 #variable_conflict use_column
 declare u uuid:=auth.uid(); pr public.bl_profiles; oth public.bl_profiles; p public.bl_posts; cm public.bl_comments; rv public.bl_reviews; rp public.bl_reports; idv uuid; parentv uuid; companyv uuid; companyname text; targetv text; op text; st text; reasonv text; bodyv text; titlev text; nickv text; pathv text; sc int[]; activev boolean; authorv uuid; postv uuid; oldproof text; n int;
 begin
@@ -298,6 +298,33 @@ begin
  raise exception '지원하지 않는 작업입니다.';
 end; $$;
 
+create or replace function public.bl_action(p_action text,p_payload jsonb default '{}') returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare
+ v_result jsonb;
+ v_admin_before boolean:=exists(select 1 from public.bl_admins where user_id=auth.uid());
+ v_target text;
+ v_target_id text;
+begin
+ v_result:=public.bl_action_internal(p_action,p_payload);
+ -- 관리 메뉴는 내부 구현이 이미 기록한다. 여기서는 성공한 일반 쓰기를 보완한다.
+ if p_action<>'admin' and (v_admin_before or exists(select 1 from public.bl_admins where user_id=auth.uid())) then
+  v_target:=case
+   when p_action in ('profile_submit','profile_update','withdraw') then 'member'
+   when p_action in ('post_save','post_delete') then 'post'
+   when p_action in ('comment_save','comment_delete') then 'comment'
+   when p_action in ('review_save','review_delete') then 'review'
+   when p_action in ('toggle','report','appeal') then p_payload->>'target'
+   when p_action='notification_read' then 'notification'
+   else 'action' end;
+  v_target_id:=case when v_target='member' then auth.uid()::text else coalesce(v_result->>'id',p_payload->>'id') end;
+  if v_target_id is not null and v_target_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v_target_id:=null; end if;
+  perform public.bl_log('admin_write_'||p_action,v_target,v_target_id,
+   jsonb_strip_nulls(jsonb_build_object('success',true,'kind',case when p_action='toggle' then p_payload->>'kind' end,'active',v_result->'active','status',v_result->'status')));
+ end if;
+ return v_result;
+end; $$;
+
 alter table public.bl_ai_jobs add column if not exists source_updated_at timestamptz;
 create table if not exists public.bl_ai_runs(id bigint generated always as identity primary key,job_id uuid not null references public.bl_ai_jobs(id),created_at timestamptz not null default now());
 create or replace function public.bl_worker(p_action text,p_payload jsonb default '{}') returns jsonb language plpgsql security definer set search_path='' as $$
@@ -392,6 +419,7 @@ create policy bl_proof_select on storage.objects for select to authenticated usi
 do $$ declare t record; begin for t in select tablename from pg_tables where schemaname='public' and tablename like 'bl\_%' escape '\' loop execute format('alter table public.%I enable row level security',t.tablename); execute format('revoke all on table public.%I from public,anon,authenticated',t.tablename); end loop; end $$;
 do $$ declare f record; begin for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'bl\_%' escape '\' loop execute format('revoke all on function %s from public,anon,authenticated',f.sig); end loop; end $$;
 grant execute on function public.bl_read(text,jsonb) to anon,authenticated;
+revoke all on function public.bl_action_internal(text,jsonb) from service_role;
 grant execute on function public.bl_action(text,jsonb) to authenticated;
 grant execute on function public.bl_worker(text,jsonb) to service_role;
 grant execute on function public.bl_proof_upload_allowed(text),public.bl_proof_read_allowed(text) to authenticated;
