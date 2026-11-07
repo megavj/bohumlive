@@ -438,6 +438,11 @@ begin
   if TG_OP='DELETE' then return OLD; else return NEW; end if;
  end if;
  if v_new_owner is not null then
+  -- 사전 권한 검사 후 정지/탈퇴된 요청도 최종 쓰기에서 차단한다.
+  perform 1 from public.bl_profiles where id=v_new_owner and status not in ('suspended','withdrawn') for update;
+  if not found then
+   raise exception using errcode='23514',message='증빙을 저장할 수 없는 회원 상태입니다.';
+  end if;
   insert into public.bl_proof_counters(owner_id,object_count) values(v_new_owner,0) on conflict(owner_id) do nothing;
   -- 조건부 UPDATE 자체가 행 잠금 및 최신 행 재검사를 수행하므로 선검사·스냅샷과 무관하다.
   update public.bl_proof_counters set object_count=object_count+1
