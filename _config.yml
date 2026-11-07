@@ -1,0 +1,5 @@
+exclude:
+  - db
+  - worker
+  - README.md
+  - vendor/LICENSE
