@@ -65,3 +65,7 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - worker `cleanup_users`: `{}` -> `{ids:[withdrawn uuid...]}`. 미삭제증빙/Storage객체 없는 탈퇴회원만 반환. Auth Admin hard delete 후 `cleanup_user_done:{id}`. DB는 실제 auth.users 삭제 확인 후 tombstone에 auth_deleted_at 기록. bl_profiles UUID는 익명 콘텐츠 관계를 위해 유지되며 auth.users FK는 없음.
 - 인증 신청자에게는 본인 증빙 원본 SELECT 권한 없음. admin `proof_access` 기록 후 Storage sign60초; Storage SELECT도 관리자 검사와 별도 열람감사 기록.
 - 신고는 로그인 회원부터 가능(설계사 인증 전 포함). 방문자는 로그인 안내. 이의신청은 대표 이메일·실명·연락처 없이 앱 내부 통지.
+
+- 검색 매칭과 일반 게시글 목록(home/posts/search/company/me)의 경험형 본문은 인증 여부와 무관하게 앞 300자만 반환합니다. 인증회원의 나머지 본문은 post 상세 조회에서만 반환하며 관리자 심사용 조회는 예외입니다.
+
+- 증빙 업로드는 회원별 보관 중인 객체 최대 5개로 제한하며 Storage INSERT 트랜잭션에서 본인 프로필 행 잠금으로 동시 요청을 직렬화합니다. 미제출 고아 파일은 24시간 후 worker cleanup 대상으로 넣습니다.
