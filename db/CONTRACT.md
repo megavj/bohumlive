@@ -73,3 +73,15 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - 004 이전에 이미 5개를 초과한 증빙은 삭제하지 않고 실제 개수로 카운터를 맞춥니다. 5개 미만이 될 때까지 신규 저장을 거부합니다. 다른 bucket의 Storage 동작은 이 트리거가 변경하지 않습니다.
 
 - 모든 성공한 관리자 일반 쓰기(profile/post/comment/review/반응/신고/이의/읽음표시/탈퇴 포함)는 `admin_write_*` 감사 사건을 추가합니다. 본문·이름·연락처·증빙 경로 대신 행위·대상 UUID·허용된 상태/반응 메타데이터만 기록합니다. 관리 메뉴는 기존 감사 기록을 유지하며 중복 래퍼 기록은 하지 않습니다. 내부 구현 `bl_action_internal`은 외부 역할에서 실행할 수 없습니다.
+
+## 006 권한·관리 보완 (2026-11-08)
+- `viewer`에 `{can_write,can_admin,verification_exempt,is_sample}`를 추가합니다. 권한 판단은 서버 값이 우선입니다. 대표(owner)는 인증·소속 면제, 일반 관리자는 운영 권한과 회원 작성 권한을 분리합니다. 일반 관리자의 글·댓글·리뷰와 반응은 유효기간 내 인증이 필요합니다. 보완·반려·만료·정지·탈퇴도 작성·수정·삭제·반응이 차단됩니다.
+- 대표는 인증이나 소속 등록 없이 닉네임만 변경할 수 있고, 활성 회사에 리뷰를 작성할 수 있습니다. 대표의 정지·역할 회수·직접 탈퇴는 계속 차단됩니다. 타인 본문 수정은 허용하지 않으며 운영자는 기존 콘텐츠 관리 기능으로 숨김·삭제·복구합니다.
+- 신고는 미인증·대기·보완·반려·만료를 포함한 로그인 회원에게 허용합니다(댓글 신고는 댓글 열람 권한 필요). 정지·탈퇴는 신고 차단, 정지 회원의 본인 가림 콘텐츠 이의신청은 유지합니다. 알림 조회는 로그인 사용자, 읽음 처리는 탈퇴 외 로그인 사용자에게 허용합니다.
+- `admin channel_delete`: `{operation:'channel_delete',id,target_channel_id?,reason?}`. 연결 글이 있으면 서로 다른 활성 대상 채널이 필수입니다. 가림·삭제 글을 포함해 모든 글을 이동하며 팔로우도 중복 없이 옮깁니다. 빈 채널은 바로 삭제합니다. 한 트랜잭션으로 수행하고 `admin_channel_delete`, 글 이동 시 `admin_channel_move`를 기록합니다. 응답 `{ok:true,id,moved_posts}`.
+- `admin company_delete`: `{operation:'company_delete',id,target_company_id?,reason?}`. 연결 글·리뷰·회원이 있으면 서로 다른 활성 대상 회사가 필수입니다. 글 태그·리뷰·현재 회원 소속을 병합하고 회사명도 맞춥니다. 기존 작성 시점의 작성자 회사 표시값은 보존합니다. 한 트랜잭션으로 수행하며 `admin_company_delete`, 병합 시 `admin_company_merge`를 기록합니다. 응답 `{ok:true,id,moved_posts,moved_reviews,moved_members}`. 회사 이름 수정 시 현재 연결 회원의 소속명도 반영합니다.
+- 관리자 채널 DTO에 `post_count`, 회사 DTO에 `post_count,total_review_count,member_count,reference_count`를 제공합니다. 일반 조회에서는 이 관리용 값이 null입니다. 삭제 여부는 숨김·삭제 콘텐츠까지 포함한 전체 연결 수를 기준으로 합니다.
+- profiles/posts/comments/reviews에 서버 전용 `is_sample`을 추가합니다. 견본 계정에서 작성한 글·댓글·리뷰에 자동 전파하며 클라이언트가 값을 지정할 수 없습니다. post/comment/review DTO에 `is_sample`을 제공합니다. 견본은 공개 유지하고 기존 `is_test` 가림은 유지합니다.
+- 관리자 dashboard의 회원·대기·신고·오늘 글·오늘 댓글 집계는 시험과 견본을 제외합니다. 글·댓글은 삭제 상태도 제외합니다. `dashboard.counts_exclude_test_and_sample=true`로 기준을 표시합니다.
+- 회사 리뷰 통계는 시험·견본을 제외합니다. 회사 병합으로 같은 작성자의 리뷰가 여러 개가 되면 가장 최근 공개 리뷰 한 건만 점수와 최소 5명 기준에 반영합니다. 리뷰 원문은 삭제하지 않습니다.
+- 회원 소속 `bl_profiles.company_id`에도 `bl_profiles_company_fk` 외래 키를 추가합니다. 회사 병합/삭제와 회원 소속 제출이 동시에 실행되어도 존재하지 않는 회사 참조를 남길 수 없습니다.
