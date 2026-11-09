@@ -2457,3 +2457,30 @@ dialog::backdrop {
 .policy-list li {
   margin-bottom: 6px;
 }
+
+/* 2026-11-09 수정: 휴대폰 검색창 글자 16(아이폰 확대 방지), 숨김 상태 띠, 회사 묶음 */
+@media (max-width: 799px) {
+  .header-search input {
+    font-size: 16px;
+  }
+}
+.status-band {
+  margin: 0 20px 16px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid #f0c4ca;
+  background: #fff4f5;
+  color: #7a2330;
+  font-size: 13px;
+}
+.status-band .btn {
+  margin-top: 8px;
+}
+.hidden-tag {
+  color: var(--danger);
+  border-color: #f0c4ca;
+}
+.company-group {
+  margin: 22px 0 8px;
+  font-size: 16px;
+}
