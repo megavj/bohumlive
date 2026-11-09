@@ -2391,3 +2391,69 @@ dialog::backdrop {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* 2026-11-09 수정: 휴대폰 글쓰기 버튼, 홈 채널 바로가기, 견본 표시, 방침 목록 */
+.fab-write {
+  display: none;
+}
+@media (max-width: 799px) {
+  .fab-write {
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 48px;
+    padding: 0 18px;
+    border-radius: 24px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 6px 18px rgba(109, 63, 216, 0.35);
+  }
+  body.has-fab .site-footer {
+    padding-bottom: 88px;
+  }
+}
+.home-channel-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 16px;
+  padding: 4px 20px 20px;
+}
+.home-channel-links a.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  flex-wrap: nowrap;
+}
+.home-channel-links .topic-disc {
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+}
+.home-channel-links small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.sample-badge {
+  color: #8a5a00 !important;
+  background: #fff3d6 !important;
+  border-color: #efd9a6 !important;
+}
+.policy-list {
+  list-style: disc;
+  padding-left: 20px;
+  margin-bottom: 14px;
+}
+.policy-list li {
+  margin-bottom: 6px;
+}

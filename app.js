@@ -56,7 +56,7 @@
       : p?.status === "verified" && !validVerification(p)
         ? "인증 기간 만료 · 재인증 필요"
         : statusNames[p?.status] || "계정 확인 중";
-  const sampleBadge = (p) => (p?.is_sample ? '<span class="tag sample-badge">임시 견본</span>' : "");
+  const sampleBadge = (p) => (p?.is_sample ? '<span class="tag sample-badge" title="정식 공개 전 화면 확인용으로 만든 글입니다">견본 글</span>' : "");
   const icon = (name) => {
     const paths = {
       search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
@@ -84,10 +84,12 @@
   }
   function safeError(error) {
     const msg = String(error?.message || "");
+    if (/permission denied/i.test(msg)) return "로그인한 뒤 이용할 수 있어요.";
+    if (/invalid input syntax|uuid/i.test(msg)) return "주소가 올바르지 않아요. 목록에서 다시 골라 주세요.";
     if (/fetch|network|Failed|Load failed/i.test(msg))
       return "연결하지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.";
     if (/rate|over_email_send_rate_limit|429/i.test(msg))
-      return "요청이 너무 많아요. 잠시 후 다시 시도해 주세요. 이메일은 무료 발송 한도가 적용됩니다.";
+      return "요청이 많아 잠시 처리하지 못했어요. 몇 분 뒤 다시 시도하거나 Google로 로그인해 주세요.";
     if (/Email address not authorized|email_address_not_authorized/i.test(msg))
       return "기본 이메일 발송기는 사전 등록된 운영자 이메일만 지원합니다. 일반 가입 연결을 준비하고 있습니다.";
     if (/provider.*enabled|Unsupported provider/i.test(msg))
@@ -139,11 +141,17 @@
             ? "company"
             : "";
     $("#header").innerHTML =
-      `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></a><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="관심 있는 내용을 검색해 보세요" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${session ? `<div class="header-user" data-testid="header-user"><a class="notification-link" href="/notifications.html" aria-label="${viewer?.unread_count ? `알림 ${Number(viewer.unread_count)}개 안 읽음` : "알림"}">${icon("bell")}${viewer?.unread_count ? `<span class="notification-count" data-testid="unread-count">${Number(viewer.unread_count) > 99 ? "99+" : Number(viewer.unread_count)}</span>` : ""}</a><a class="header-name" href="/me.html" title="내 정보">${E(displayName())}님</a><span class="header-sep" aria-hidden="true">·</span><button type="button" class="header-logout" data-do="logout" data-testid="header-logout">로그아웃</button></div>` : page === "login" ? "" : `<a class="header-login" href="${E(loginUrl())}">로그인·가입</a>`}</div><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a><a class="${active === "company" ? "active" : ""}" href="/company.html">보험사 리뷰</a>${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
+      `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><picture><source media="(prefers-reduced-motion: reduce)" srcset="/assets/logo-live-still.png?v=20261109"><source media="(max-width: 799px)" srcset="/assets/logo-live-m.gif?v=20261109b"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109b" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></picture></a><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="관심 있는 내용을 검색해 보세요" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${session ? `<div class="header-user" data-testid="header-user"><a class="notification-link" href="/notifications.html" aria-label="${viewer?.unread_count ? `알림 ${Number(viewer.unread_count)}개 안 읽음` : "알림"}">${icon("bell")}${viewer?.unread_count ? `<span class="notification-count" data-testid="unread-count">${Number(viewer.unread_count) > 99 ? "99+" : Number(viewer.unread_count)}</span>` : ""}</a><a class="header-name" href="/me.html" title="내 정보">${E(displayName())}님</a><span class="header-sep" aria-hidden="true">·</span><button type="button" class="header-logout" data-do="logout" data-testid="header-logout">로그아웃</button></div>` : page === "login" ? "" : `<a class="header-login" href="${E(loginUrl())}">로그인·가입</a>`}</div><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a><a class="${active === "company" ? "active" : ""}" href="/company.html">보험사 리뷰</a>${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
     $("#footer").innerHTML =
       `<footer class="site-footer"><div class="footer-logo">보험<b style="color:var(--accent)">라이브</b></div><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html">개인정보처리방침</a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">이용 도움말·권리침해 신고</a></nav><p class="footer-note">보험라이브는 설계사의 경험과 실무 지식을 나누는 공간입니다. 회원의 글은 개인의 의견이며 회사의 공식 입장이나 보험상품 가입 권유가 아닙니다. 고객정보·주민등록번호·개인 연락처를 게시하지 마세요.</p><p class="footer-note">공개 준비 중 · 검색 노출을 차단하고 있습니다.</p></footer>`;
     $("#sidebar").innerHTML =
       `<section class="sidebar-block"><h2>동료의 경험이 필요할 때</h2><p class="muted">궁금한 내용을 질문하고<br>설계사 동료의 답변을 만나 보세요.</p><a class="btn btn-primary" href="/write.html">${icon("edit")} 글쓰기</a></section><section class="sidebar-block"><h2>함께 지키는 약속</h2><p class="muted small">회사는 그대로, 닉네임은 첫 글자만 표시해요(완전익명 채널은 ‘익명’). 고객정보나 동료의 개인정보가 담기지 않았는지 확인해 주세요.</p><a class="text-link" href="/rules.html" target="_blank" rel="noopener">운영정책 보기 →</a></section>${session ? `<section class="sidebar-block"><h2>${isOwner() ? "나의 권한" : "나의 인증 상태"}</h2><p>${E(statusLabel())}</p><a class="text-link" href="/me.html" target="_blank" rel="noopener">내 정보 확인 →</a></section>` : ""}`;
+    if (["home", "channels", "channel", "post", "search", "company"].includes(page))
+      $("#footer").insertAdjacentHTML(
+        "beforeend",
+        `<a class="fab-write" href="${E(uri("write.html", page === "channel" && params.get("id") ? { channel: params.get("id") } : {}))}" data-testid="fab-write">${icon("edit")} 글쓰기</a>`,
+      );
+    document.body.classList.toggle("has-fab", ["home", "channels", "channel", "post", "search", "company"].includes(page));
     $("#main").classList.toggle("admin-main", page === "admin");
     if (page === "admin") $("#sidebar").hidden = true;
   }
@@ -167,8 +175,11 @@
     const d = await read("home");
     channels = d.channels || [];
     companies = d.companies || [];
-    const posts = d.posts || [];
-    return `${d.notices?.length ? `<section class="home-section"><h2 class="section-title">운영 안내</h2>${feeds(d.notices, true)}</section><div class="divider"></div>` : ""}<section class="home-section"><h1 class="section-title">토픽 베스트</h1>${feeds(posts.slice(0, 10), true)}<a class="more-row" href="/channel.html?sort=popular">더보기</a></section><div class="divider"></div><section class="home-section"><h2 class="section-title">지금 많이 읽는 글</h2>${feeds(d.popular || [], true)}<a class="more-row" href="/channel.html?sort=popular">더보기</a></section><div class="divider"></div>${channels.map((c) => `<section class="home-section"><div class="home-channel-heading"><h2 class="section-title"><a class="row" href="${uri("channel.html", { id: c.id })}"><span class="topic-disc mini ${E(c.slug)}">${E(c.name.slice(0, 1))}</span>${E(c.name)}</a></h2><a href="${uri("channel.html", { id: c.id })}">더보기</a></div>${feeds(posts.filter((p) => p.channel_id === c.id).slice(0, 5), true)}</section><div class="divider"></div>`).join("")}`;
+    // 공지는 '운영 안내'에 한 번만, 최신 글과 좋아요 많은 글은 겹치지 않게, 채널은 바로가기로만.
+    const latest = (d.posts || []).filter((p) => !p.pinned).slice(0, 10);
+    const shown = new Set(latest.map((p) => p.id));
+    const liked = (d.popular || []).filter((p) => !p.pinned && Number(p.likes) > 0 && !shown.has(p.id)).slice(0, 5);
+    return `${d.notices?.length ? `<section class="home-section"><h2 class="section-title">운영 안내</h2>${feeds(d.notices, true)}</section><div class="divider"></div>` : ""}<section class="home-section" data-testid="home-latest"><h1 class="section-title">최신 글</h1>${feeds(latest, true)}<a class="more-row" href="/channel.html">최신 글 더 보기</a></section>${liked.length ? `<div class="divider"></div><section class="home-section" data-testid="home-liked"><h2 class="section-title">좋아요 많은 글</h2>${feeds(liked, true)}<a class="more-row" href="/channel.html?sort=popular">좋아요 순으로 더 보기</a></section>` : ""}<div class="divider"></div><section class="home-section" data-testid="home-channels"><h2 class="section-title">채널</h2><nav class="home-channel-links">${channels.map((c) => `<a class="row" href="${uri("channel.html", { id: c.id })}">${channelDisc(c)}<span><b>${E(c.name)}</b>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}<small>${E(c.description || "")}</small></span></a>`).join("")}</nav></section>`;
   }
   async function channelList() {
     const d = await read("channels");
@@ -184,11 +195,14 @@
     channels = cd.channels || [];
     if (!id && params.get("channel")) id = channels.find((c) => c.slug === params.get("channel"))?.id || "";
     const channel = channels.find((c) => c.id === id);
+    if (id && !channel && page !== "search") return empty("채널을 찾을 수 없어요.", "채널 목록에서 다시 골라 주세요.");
     const sort = params.get("sort") === "popular" ? "popular" : "latest";
-    const d = await read("posts", { ...(id ? { channel_id: id } : {}), ...(q ? { q } : {}), sort, limit: 50 });
+    const listArgs = { ...(id ? { channel_id: id } : {}), ...(q ? { q } : {}), sort, limit: 20 };
+    const d = await read("posts", listArgs);
     const posts = d.posts || [];
+    current = { list: { args: listArgs, offset: posts.length } };
     const isSearch = page === "search";
-    return `<section class="section"><div class="section-head"><h1>${isSearch ? "검색 결과" : E(channel?.name || "모든 글")}${channel?.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h1><a class="btn btn-primary btn-small" href="${uri("write.html", id ? { channel: id } : {})}">글쓰기</a></div>${isSearch ? `<form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="muted small">${q ? `“${E(q)}” 검색 결과 ${posts.length}개` : "검색어를 입력해 주세요."}</p>` : `<p class="muted">${E(channel?.description || "설계사의 경험과 실무 이야기를 함께 나눠요.")}</p>${channel?.anonymous ? '<p class="notice small">이 채널의 글과 댓글은 회사명·닉네임 없이 ‘익명’으로만 보여요. 운영자는 신고 처리 때만 기록을 남기고 작성자를 확인합니다.</p>' : ""}${channel ? btn(channel.following ? "팔로잉" : "팔로우", "toggle", `data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}"`) : ""}`}</section><nav class="tabs"><a class="${sort === "latest" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "latest" })}">최신순</a><a class="${sort === "popular" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "popular" })}">인기순</a></nav>${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : feeds(posts)}`;
+    return `<section class="section"><div class="section-head"><h1>${isSearch ? "검색 결과" : E(channel?.name || "모든 글")}${channel?.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h1><a class="btn btn-primary btn-small" href="${uri("write.html", id ? { channel: id } : {})}">글쓰기</a></div>${isSearch ? `<form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="muted small">${q ? `“${E(q)}” 검색 결과 ${posts.length >= 20 ? "20개 이상" : `${posts.length}개`}` : "검색어를 입력해 주세요."}</p>` : `<p class="muted">${E(channel?.description || "설계사의 경험과 실무 이야기를 함께 나눠요.")}</p>${channel?.anonymous ? '<p class="notice small">이 채널의 글과 댓글은 회사명·닉네임 없이 ‘익명’으로만 보여요. 운영자는 신고 처리 때만 기록을 남기고 작성자를 확인합니다.</p>' : ""}${channel ? btn(channel.following ? "팔로잉" : "팔로우", "toggle", `data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}"`) : ""}`}</section><nav class="tabs"><a class="${sort === "latest" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "latest" })}">최신순</a><a class="${sort === "popular" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "popular" })}">인기순</a></nav>${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : `<div data-post-list>${feeds(posts)}</div>${posts.length >= 20 ? `<p class="more-wrap">${btn("더 보기", "more-posts", 'data-testid="more-posts"')}</p>` : ""}`}`;
   }
   function commentHTML(c) {
     return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${E(c.author_display)} ${c.is_mine ? '<span class="author-badge">내 댓글</span>' : ""} ${sampleBadge(c)}</div><p class="body-text">${E(c.body)}</p><div class="meta"><span>${E(date(c.created_at))}</span><button data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : ""}>${icon("heart")} ${Number(c.likes) || 0}</button>${!c.parent_id && isVerified() ? `<button data-do="reply" data-id="${E(c.id)}">답글</button>` : ""}${c.is_mine && isVerified() ? `<button data-do="comment-edit" data-id="${E(c.id)}">수정</button><button data-do="comment-delete" data-id="${E(c.id)}">삭제</button>` : ""}${c.is_mine ? "" : `<button data-do="report" data-target="comment" data-id="${E(c.id)}">신고</button>`}</div><div data-reply-slot="${E(c.id)}"></div></article>`;
@@ -200,7 +214,9 @@
     current = d;
     const p = d.post;
     if (!p)
-      return `<section class="section"><h1>${d.unavailable_reason === "temporary_hidden" ? "운영 검토를 위해 임시 가림한 글입니다" : "글을 표시할 수 없어요"}</h1><p class="notice">이 글은 삭제되었거나 신고 접수에 따른 운영 검토로 가려졌습니다. 임시조치는 접수 후 최대 30일 안에 검토합니다.${d.hidden_until ? `<br>검토 예정: ${E(date(d.hidden_until))}` : ""}</p><a class="btn" href="/channel.html">다른 글 보기</a><a class="btn" href="/help.html">신고·이의신청 안내</a>${session ? btn("내 글 조치에 이의신청", "appeal", `data-target="post" data-id="${E(id)}"`) : ""}</section>`;
+      return d.unavailable_reason === "not_found"
+        ? empty("글을 찾을 수 없어요.", "주소가 바뀌었거나 삭제된 글이에요. 채널에서 다른 글을 골라 주세요.")
+        : `<section class="section"><h1>${d.unavailable_reason === "temporary_hidden" ? "운영 검토를 위해 임시 가림한 글입니다" : "글을 표시할 수 없어요"}</h1><p class="notice">이 글은 삭제되었거나 신고 접수에 따른 운영 검토로 가려졌습니다. 임시조치는 접수 후 최대 30일 안에 검토합니다.${d.hidden_until ? `<br>검토 예정: ${E(date(d.hidden_until))}` : ""}</p><a class="btn" href="/channel.html">다른 글 보기</a><a class="btn" href="/help.html">신고·이의신청 안내</a>${session ? btn("내 글 조치에 이의신청", "appeal", `data-target="post" data-id="${E(id)}"`) : ""}</section>`;
     const comments = d.comments || [];
     const ordered = comments
       .filter((c) => !c.parent_id)
@@ -244,7 +260,7 @@
     }
     if (session)
       return `<section class="auth-box"><h1>로그인되어 있어요</h1><p>${E(statusLabel())}</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a><p></p>${btn("로그아웃", "logout")}</section>`;
-    return `<section class="auth-box"><a class="back-link" href="/index.html">← 보험라이브 홈</a><h1>로그인</h1><p class="small muted login-first">처음이면 로그인할 때 자동으로 가입돼요. 따로 가입할 필요가 없어요.</p>${loginReasons[params.get("why")] ? `<p class="notice" data-testid="login-reason">${E(loginReasons[params.get("why")])}</p>` : ""}${/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|Telegram|; wv\)/i.test(navigator.userAgent) ? '<p class="hint" style="color:#b4235a;margin:10px 0">카카오톡·텔레그램 등 앱 안에서는 Google 로그인이 막힐 수 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(크롬·사파리)를 눌러 주세요. 이메일 로그인은 여기서도 됩니다.</p>' : ""}${btn("Google로 계속하기", "google", `data-testid="google-login" ${window.BL_CONFIG?.googleReady === false ? 'disabled aria-disabled="true"' : ""}`, true)}<p class="hint" style="margin-top:10px">${window.BL_CONFIG?.googleReady === false ? "Google 로그인 연결 준비 중입니다. 아래 이메일로 계속해 주세요." : "이메일 발송 한도 없이 로그인할 수 있는 Google 로그인을 권장합니다."}</p><div class="separator">또는 이메일로 로그인</div><form data-form="email" id="email-form">${field("email", "이메일 주소", "email", "", 'required autocomplete="email" placeholder="name@example.com" data-testid="login-email"')}${formEnd("로그인 메일 받기")}</form><div id="otp-area" hidden><form data-form="otp"><h2 style="margin-top:24px">인증번호로 확인</h2><p class="small muted">메일에 인증번호가 있다면 입력해 주세요. 로그인 링크로도 접속할 수 있습니다.</p>${field("token", "이메일 인증번호", "text", "", 'required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"')}${formEnd("인증번호 확인")}</form></div><p class="hint" style="margin-top:20px">${window.BL_CONFIG?.customSMTP === false ? "이메일 로그인은 현재 사전 등록된 운영자 이메일만 지원하며 서비스 전체 시간당 2건으로 제한됩니다. 일반 가입을 위한 메일 연결을 준비하고 있습니다." : window.BL_CONFIG?.emailRateLimit ? `로그인 메일은 서비스 전체 시간당 ${Number(window.BL_CONFIG.emailRateLimit)}건 한도가 적용됩니다. 잠시 기다린 뒤 다시 요청해 주세요.` : "이메일 발송에는 한도가 적용됩니다. 기본 발송기는 시간당 2건이며 허용된 주소만 지원합니다. 별도 메일 서버 연결 시 한도가 달라질 수 있습니다."}</p><p class="small muted">이용 전 <a class="text-link" href="/terms.html">이용약관</a>과 <a class="text-link" href="/privacy.html">개인정보처리방침</a>을 확인해 주세요. 로그인만으로 회사 인증이 완료되지는 않습니다.</p></section>`;
+    return `<section class="auth-box"><a class="back-link" href="/index.html">← 보험라이브 홈</a><h1>로그인</h1><p class="small muted login-first">처음이면 로그인할 때 자동으로 가입돼요. 따로 가입할 필요가 없어요.</p>${loginReasons[params.get("why")] ? `<p class="notice" data-testid="login-reason">${E(loginReasons[params.get("why")])}</p>` : ""}${/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|Telegram|; wv\)/i.test(navigator.userAgent) ? '<p class="hint" style="color:#b4235a;margin:10px 0">카카오톡·텔레그램 등 앱 안에서는 Google 로그인이 막힐 수 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(크롬·사파리)를 눌러 주세요. 이메일 로그인은 여기서도 됩니다.</p>' : ""}${btn("Google로 계속하기", "google", `data-testid="google-login" ${window.BL_CONFIG?.googleReady === false ? 'disabled aria-disabled="true"' : ""}`, true)}<p class="hint" style="margin-top:10px">${window.BL_CONFIG?.googleReady === false ? "Google 로그인 연결 준비 중입니다. 아래 이메일로 계속해 주세요." : "Google 계정이 있으면 가장 빠르게 로그인할 수 있어요."}</p><div class="separator">또는 이메일로 로그인</div><form data-form="email" id="email-form">${field("email", "이메일 주소", "email", "", 'required autocomplete="email" placeholder="name@example.com" data-testid="login-email"')}${formEnd("로그인 메일 받기")}</form><div id="otp-area" hidden><form data-form="otp"><h2 style="margin-top:24px">인증번호로 확인</h2><p class="small muted">메일에 인증번호가 있다면 입력해 주세요. 로그인 링크로도 접속할 수 있습니다.</p>${field("token", "이메일 인증번호", "text", "", 'required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"')}${formEnd("인증번호 확인")}</form></div><p class="hint" style="margin-top:20px">로그인 메일이 오지 않으면 스팸함을 확인하고, 몇 분 뒤 다시 요청해 주세요.</p><p class="small muted">이용 전 <a class="text-link" href="/terms.html">이용약관</a>과 <a class="text-link" href="/privacy.html">개인정보처리방침</a>을 확인해 주세요. 로그인만으로 회사 인증이 완료되지는 않습니다.</p></section>`;
   }
   async function verify() {
     const denied = authorization("login");
@@ -325,6 +341,7 @@
     ["comments", "댓글"],
     ["reviews", "리뷰"],
     ["reports", "신고"],
+    ["inquiries", "문의"],
     ["channels", "채널"],
     ["companies", "보험사·GA"],
     ["ai", "AI 답변"],
@@ -365,6 +382,7 @@
     proof: "증빙",
     notification: "알림",
     verifications: "인증 심사 목록",
+    inquiry: "문의",
   };
   const auditNames = {
     admin_read: "인증 심사 목록 열람",
@@ -409,6 +427,8 @@
     proof_cleanup: "증빙 정리",
     suspension_expired: "기간 정지 종료",
     owner_bootstrap: "대표 지정",
+    inquiry: "운영팀 문의 접수",
+    admin_inquiry_answer: "문의 답변",
   };
   const writeNames = {
     post_save: "글 저장",
@@ -494,6 +514,7 @@
       ai_regenerate: "AI 답변을 다시 만들까요? 지금 답변은 새 답변이 나올 때까지 숨겨집니다.",
       reveal_author: "익명 작성자를 확인할까요? 확인한 사실과 사유가 감사 기록에 남습니다.",
       banned_words: "금칙어 목록을 저장할까요?",
+      inquiry_answer: "이 답변을 보낼까요? 문의한 회원에게 알림으로 전달됩니다.",
     };
     return lines[op] || "이 내용으로 저장할까요?";
   }
@@ -689,6 +710,8 @@
           ? `${adminForm("ai_edit", j.id, area("body", "AI 답변 (고쳐서 저장할 수 있어요)", j.answer, 'required minlength="20" maxlength="15000"'), "고친 내용 저장")}<div class="form-actions">${adminForm("ai_publish", j.id, "", "검토 후 공개")}${adminForm("ai_reject", j.id, "", "답변 반려")}${adminForm("ai_regenerate", j.id, "", "다시 만들기")}</div>`
           : '<p class="muted small">아직 만들어진 답변이 없어요.</p>'
       }${["failed", "skipped"].includes(j.status) ? adminForm("ai_retry", j.id, "", "다시 시도") : ""}</div></details>`,
+    inquiries: (q) =>
+      `<details class="admin-row" data-testid="inquiry-item" ${q.status === "open" ? "open" : ""}><summary><span class="row-main"><strong>${E({ general: "일반 문의", privacy: "개인정보 요청", rights: "권리침해 신고", account: "계정 문의" }[q.kind] || "문의")} · ${E(String(q.body || "").slice(0, 40))}</strong> ${badge(q.status === "open" ? "답변 전" : "답변 완료", q.status === "open" ? "danger" : "muted")}${q.member?.is_test ? badge("시험", "warn") : ""}</span><span class="row-sub">${E(q.member?.nickname || "-")}(${E(q.member?.company_name || "소속 미등록")}) · ${E(date(q.created_at))}</span></summary><div class="row-detail"><p class="body-text">${E(q.body)}</p>${q.link ? `<p class="small">관련 주소: ${E(q.link)}</p>` : ""}<p><a class="text-link" href="${uri("admin/", { section: "members", id: q.member?.id })}">문의한 회원 상세 →</a></p>${q.status === "answered" ? `<div class="notice small"><b>보낸 답변</b>${q.answered_by_name ? ` · ${E(q.answered_by_name)}` : ""} · ${E(date(q.answered_at))}<br>${E(q.answer)}</div>` : adminForm("inquiry_answer", q.id, area("answer", "답변 (회원에게 알림으로 전달)", "", 'required minlength="2" maxlength="2000"'), "답변 보내기")}</div></details>`,
     audit: (a) =>
       `<div class="admin-row static" data-testid="audit-row"><span class="row-main"><strong>${E(a.actor_name || (a.detail?.by === "자동 판정" ? "자동 판정" : "시스템"))}</strong> · ${E(auditName(a.action))}${a.target ? ` · ${E(targetNames[a.target] || a.target)}` : ""}</span><span class="row-sub">${E(date(a.created_at))}${a.detail?.reason ? ` · 사유: ${E(a.detail.reason)}` : ""}${a.detail?.decision ? ` · ${E(autoNames[a.detail.decision] || a.detail.decision)}` : ""}${a.detail?.status && !a.detail?.decision && auditStatus(a.detail.status) ? ` · ${E(auditStatus(a.detail.status))}` : ""} · 기록 ${E(a.id)}</span></div>`,
   };
@@ -697,7 +720,7 @@
     dashboard(d) {
       const k = d.dashboard || {},
         t = d.todo || {};
-      const todoTotal = (Number(t.verifications) || 0) + (Number(t.reports) || 0) + (Number(t.ai_review) || 0);
+      const todoTotal = (Number(t.verifications) || 0) + (Number(t.reports) || 0) + (Number(t.ai_review) || 0) + (Number(t.inquiries) || 0);
       const labels = [
         ["members", "가입 회원"],
         ["verified", "인증 완료"],
@@ -709,7 +732,7 @@
       const trend = d.trend || [];
       const peak = Math.max(1, ...trend.flatMap((x) => [Number(x.members) || 0, Number(x.posts) || 0, Number(x.comments) || 0]));
       const bar = (n, cls) => `<i class="${cls}" style="height:${Math.round(((Number(n) || 0) / peak) * 100)}%" title="${Number(n) || 0}"></i>`;
-      return `<section class="admin-todo ${todoTotal ? "has-todo" : ""}" data-testid="admin-todo"><h3>처리할 일 ${todoTotal}건</h3>${todoTotal ? `<div class="todo-links"><a href="/admin/?section=verifications&amp;status=pending">인증 심사 대기 ${Number(t.verifications) || 0}건${t.verifications_hold ? ` (자동 판정 보류 ${Number(t.verifications_hold)}건)` : ""}</a><a href="/admin/?section=reports">미처리 신고 ${Number(t.reports) || 0}건</a><a href="/admin/?section=ai">AI 답변 검토 ${Number(t.ai_review) || 0}건</a></div>` : '<p class="muted small">지금 처리할 일이 없어요.</p>'}</section><div class="status-list">${labels.map(([key, label]) => `<div><strong>${Number(k[key]) || 0}</strong><small>${label}</small></div>`).join("")}</div><p class="notice small" data-testid="dashboard-count-basis">집계 기준: 시험 계정·임시 견본은 빼고 셉니다. ${Number(k.expiring) ? `<a href="/admin/?section=members&amp;status=expiring">인증 만료 예정자 보기 →</a>` : ""}</p><section class="trend" aria-label="최근 14일 추이"><h3>최근 14일 가입·글·댓글</h3><div class="trend-legend"><span class="tm">가입</span><span class="tp">글</span><span class="tc">댓글</span></div><div class="trend-bars">${trend.map((x) => `<div class="trend-day" title="${E(x.day)} 가입 ${Number(x.members) || 0} · 글 ${Number(x.posts) || 0} · 댓글 ${Number(x.comments) || 0}"><div class="trend-stack">${bar(x.members, "tm")}${bar(x.posts, "tp")}${bar(x.comments, "tc")}</div><small>${E(String(x.day).slice(3))}</small></div>`).join("")}</div></section>`;
+      return `<section class="admin-todo ${todoTotal ? "has-todo" : ""}" data-testid="admin-todo"><h3>처리할 일 ${todoTotal}건</h3>${todoTotal ? `<div class="todo-links"><a href="/admin/?section=verifications&amp;status=pending">인증 심사 대기 ${Number(t.verifications) || 0}건${t.verifications_hold ? ` (자동 판정 보류 ${Number(t.verifications_hold)}건)` : ""}</a><a href="/admin/?section=reports">미처리 신고 ${Number(t.reports) || 0}건</a><a href="/admin/?section=ai">AI 답변 검토 ${Number(t.ai_review) || 0}건</a><a href="/admin/?section=inquiries">답변 전 문의 ${Number(t.inquiries) || 0}건</a></div>` : '<p class="muted small">지금 처리할 일이 없어요.</p>'}</section><div class="status-list">${labels.map(([key, label]) => `<div><strong>${Number(k[key]) || 0}</strong><small>${label}</small></div>`).join("")}</div><p class="notice small" data-testid="dashboard-count-basis">집계 기준: 시험 계정·임시 견본은 빼고 셉니다. ${Number(k.expiring) ? `<a href="/admin/?section=members&amp;status=expiring">인증 만료 예정자 보기 →</a>` : ""}</p><section class="trend" aria-label="최근 14일 추이"><h3>최근 14일 가입·글·댓글</h3><div class="trend-legend"><span class="tm">가입</span><span class="tp">글</span><span class="tc">댓글</span></div><div class="trend-bars">${trend.map((x) => `<div class="trend-day" title="${E(x.day)} 가입 ${Number(x.members) || 0} · 글 ${Number(x.posts) || 0} · 댓글 ${Number(x.comments) || 0}"><div class="trend-stack">${bar(x.members, "tm")}${bar(x.posts, "tp")}${bar(x.comments, "tc")}</div><small>${E(String(x.day).slice(3))}</small></div>`).join("")}</div></section>`;
     },
     verifications(d) {
       const c = d.counts || {};
@@ -755,6 +778,9 @@
     },
     reports(d) {
       return `${adminFilterChips("reports", [["pending", "미처리만"], ["done", "처리 완료"], ["all", "전체"]], d.status)}<p class="hint">같은 대상에 서로 다른 회원 신고가 3건 이상 모이면 자동으로 임시 가려집니다. 처리하면 같은 대상의 미처리 신고가 함께 정리돼요.</p><div class="admin-list" data-admin-list="reports">${(d.items || []).map(adminRows.reports).join("") || empty(d.status === "pending" ? "미처리 신고가 없어요." : "신고가 없어요.", "신고가 들어오면 이곳과 알림으로 알려 드려요.")}</div>${adminMore("reports", d.items)}`;
+    },
+    inquiries(d) {
+      return `${adminFilterChips("inquiries", [["open", "답변 전"], ["answered", "답변 완료"], ["all", "전체"]], d.status)}<p class="hint">개인정보 열람·정정·삭제 요청은 확인 후 회원 화면이나 관리 기능으로 처리하고 답변해 주세요.</p><div class="admin-list" data-admin-list="inquiries">${(d.items || []).map(adminRows.inquiries).join("") || empty("문의가 없어요.", "회원이 도움말 화면에서 문의하면 이곳과 알림으로 알려 드려요.")}</div>${adminMore("inquiries", d.items)}`;
     },
     channels(d) {
       const list = d.channels || [];
@@ -807,32 +833,20 @@
     if (d.channels) channels = d.channels;
     if (d.companies) companies = d.companies;
     const t = d.todo || {};
-    const tabCount = { verifications: Number(t.verifications) || 0, reports: Number(t.reports) || 0, ai: Number(t.ai_review) || 0 };
+    const tabCount = { verifications: Number(t.verifications) || 0, reports: Number(t.reports) || 0, ai: Number(t.ai_review) || 0, inquiries: Number(t.inquiries) || 0 };
     return `<section class="section admin-page"><div class="section-head"><h1>관리자 모드</h1><span class="status-badge">${isOwner() ? "대표 관리자 · 모든 권한" : "관리자"}</span></div><nav class="admin-tabs" aria-label="관리 메뉴">${adminSections.map(([id, label]) => `<a class="chip ${section === id ? "active" : ""}" href="${uri("admin/", { section: id })}">${label}${tabCount[id] ? ` <span class="tab-count">${tabCount[id]}</span>` : ""}</a>`).join("")}</nav><h2>${E(adminSections.find(([s]) => s === section)?.[1] || "대시보드")}</h2>${adminRender[sec](d)}</section>`;
   }
   const policyDocs = {
     terms: `<h1>이용약관</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브</p><h2>1. 서비스와 가입</h2><p>보험라이브는 보험설계사들이 실무 지식과 개인 경험을 나누는 커뮤니티입니다. 성인 이용자는 Google 또는 이메일로 로그인할 수 있습니다. 설계사 인증을 마쳐야 회원 전용 글·댓글·AI 답변을 읽고 글을 작성할 수 있습니다. 가입 정보와 증빙은 본인의 현재 정보여야 합니다.</p><h2>2. 공개 범위</h2><p>공개 화면에는 소속 회사명과 닉네임 첫 글자 뒤 별표 3개만 표시합니다. 완전익명 채널의 글·댓글은 회사명·닉네임 없이 ‘익명’으로만 표시하며, 운영자는 신고 처리 등 필요한 경우에만 사유를 기록하고 작성자를 확인합니다. 실무지식·커리어·운영팀 정리는 본문 전체, 경험·자유 글과 회사 리뷰는 앞부분 최대 300자를 공개합니다. 댓글·대댓글·AI 답변은 인증 회원에게만 제공됩니다. 본문 자체에 개인정보를 쓰면 작성자를 추정할 수 있으므로 게시 전에 확인해 주세요.</p><h2>3. 회원 콘텐츠와 책임</h2><p>게시물의 권리는 작성자에게 있습니다. 작성자는 서비스 안에서 콘텐츠를 저장·표시하고 신고를 처리하는 데 필요한 이용을 허락합니다. 회원의 글과 리뷰는 개인 의견이며 소속 회사나 운영팀의 공식 입장, 보험상품 가입 권유 또는 개별 계약에 대한 확정적인 판단이 아닙니다. 실제 계약·보장·지급 여부는 약관과 공식 자료로 확인해야 합니다.</p><h2>4. 금지 행위와 운영 조치</h2><p>허위사실·명예훼손·개인정보 공개·욕설·사칭·불법 자료·도배·무단 광고·계정 거래·악의적 신고·권한 우회는 금지합니다. 운영자는 사유를 기록하고 글 숨김·삭제, 인증 보완·반려, 일시 또는 지속적 이용 제한을 적용할 수 있습니다. 주요 결과는 서비스 내 알림과 내 정보에 안내합니다.</p><h2>5. 권리침해 신고와 임시조치</h2><p>사생활 침해·명예훼손 등 권리침해를 주장하는 회원은 글·댓글·리뷰의 신고 메뉴에서 대상과 침해 사실을 구체적으로 소명해 삭제 또는 조치를 요청할 수 있습니다. 신고는 설계사 인증을 마친 회원이 할 수 있으며 본인의 글은 신고할 수 없습니다. 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상 모이거나 운영자가 필요하다고 판단하면 접근을 임시 차단하고 신청인·게시자에게 서비스 내 알림으로 알리며 원래 게시물 위치에 조치 사실을 표시합니다. 운영 공지는 신고로 자동 가려지지 않고 운영자가 직접 검토합니다. 권리침해 판단이 어렵거나 다툼이 예상될 때 정보통신망법 제44조의2에 따른 임시조치는 30일 이내로 합니다. 운영자는 그 안에 소명을 검토해 복구 또는 위반에 따른 최종 가림·삭제를 결정합니다. 미결인 임시조치는 기간 종료 후 복구하고 당사자에게 알립니다. 조치 사유가 잘못되었다고 판단하면 해당 신고에 추가 소명을 적어 이의를 제기할 수 있습니다.</p><h2>6. 회사 리뷰와 AI</h2><p>회사 리뷰는 현재 소속이 인증된 회원이 회사별 365일에 1건 작성할 수 있으며 본인의 리뷰를 수정할 수 있습니다. 5개 이상의 유효 리뷰가 모이면 평균을 공개합니다. AI 참고 답변은 AI 작성 표시를 하며 정확성을 보장하지 않습니다. 사람 댓글과 인기 수치에 포함하지 않고 운영 검토와 설정에 따라 표시합니다.</p><h2>7. 탈퇴와 변경</h2><p>내 정보에서 탈퇴하면 회원 전용 접근을 즉시 차단하고 남은 콘텐츠의 작성자를 ‘탈퇴한 회원’으로 표시합니다. 삭제를 원하는 본인 글·댓글은 탈퇴 전에 삭제해 주세요. 관계 법령상 보관 의무가 없는 인증 정보는 삭제합니다. 약관 변경과 중요한 운영 변경은 공지로 안내합니다.</p>`,
-    privacy: `<h1>개인정보처리방침</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브 운영팀</p><h2>1. 수집하는 정보와 목적</h2><p>로그인에는 이메일 주소와 로그인 제공자가 발급하는 계정 식별정보를 사용합니다. 설계사 인증에는 이름, 닉네임, 현재 소속 회사, 연락처, 설계사 고유번호와 증빙 사진 1장을 받습니다. 목적은 계정 확인, 설계사·소속 심사, 부정 이용 방지, 회원 문의와 신고 처리입니다. 주민등록번호는 수집하지 않습니다. 증빙에 주민등록번호·주소·고객정보가 있으면 업로드 전에 가려 주세요.</p><h2>2. 공개 정보와 접근 권한</h2><p>공개 화면에 회사명과 닉네임 첫 글자·별표 3개만 표시합니다(완전익명 채널은 ‘익명’으로만 표시하고, 운영자의 작성자 확인은 사유와 함께 감사 기록에 남깁니다). 실명, 연락처, 설계사 고유번호, 증빙 사진은 공개하지 않습니다. 증빙은 비공개 저장소에 보관하고 담당 관리자만 60초 동안 유효한 서명 주소로 확인합니다. 제출한 증빙 사진은 운영팀 Mac의 기기 안 글자인식(Apple Vision)으로 이름·설계사 고유번호·소속 회사를 읽어 신청 내용과 자동으로 비교하며, 사진과 읽은 내용을 외부 AI나 다른 서비스로 보내지 않습니다. 자동 판정 결과(승인·반려·보류)는 운영자가 확인하고 바꿀 수 있습니다. 관리자의 열람과 처리 행동은 감사 기록으로 남깁니다. 공개 회원 명부나 회원별 공개 프로필을 제공하지 않습니다.</p><h2>3. 보유 기간과 파기</h2><p>계정과 공개 닉네임·현재 소속·인증 상태는 회원 유지 기간 동안 사용합니다. 인증 증빙과 심사 원본 개인정보는 승인·반려 등 처리 후 30일이 지나면 삭제 대상으로 지정하며 정리 작업에서 파일과 원본 정보를 제거합니다. 신청하지 않은 업로드 파일은 24시간 뒤 삭제 대상이 됩니다. 탈퇴 시 접근을 즉시 차단하고 개인정보와 증빙을 삭제 대상으로 전환합니다. 회원의 남은 글·댓글은 신원과의 공개 연결을 끊고 ‘탈퇴한 회원’으로 표시합니다. 법적 보존 의무가 발생한 정보는 법령이 정한 범위와 기간에 한해 별도로 보관합니다.</p><h2>4. 처리에 사용하는 서비스</h2><p>웹 화면은 GitHub Pages, 계정 인증·데이터베이스·비공개 파일 저장은 Supabase를 사용합니다. Google 로그인 선택 시 Google의 계정 확인 절차를 거칩니다. 이메일 로그인 시 로그인 확인 메일 발송에만 이메일 주소를 사용합니다. 서비스 제공자의 처리 설비가 해외에 있을 수 있으며 처리 위치와 제공자 정책은 각 서비스의 공개 정책에 따릅니다. 광고 추적, 외부 광고 이미지, 제3자 분석 스크립트를 넣지 않습니다.</p><h2>5. AI 참고 답변</h2><p>질문형 글을 선택한 경우 게시물의 제목과 본문을 Mac 처리기에서 기존 구독의 AI 도구로 처리할 수 있습니다. 회원의 실명·연락처·증빙을 답변 생성 입력에 포함하지 않습니다. 질문에도 고객 개인정보나 민감한 계약자료를 적지 마세요.</p><h2>6. 이용자의 권리와 문의</h2><p>내 정보에서 현재 상태, 내 글·댓글·북마크·알림을 확인하고 닉네임을 변경할 수 있습니다. 소속 변경은 새 증빙과 함께 재인증을 신청해 주세요. 탈퇴는 내 정보의 회원 탈퇴로 직접 처리할 수 있습니다. 개인정보가 포함된 글·댓글은 해당 콘텐츠의 신고 메뉴에서 구체적인 대상과 삭제 요청 사유를 남길 수 있습니다. 운영자는 이를 확인해 접근 제한·정정·삭제를 처리합니다.</p><h2>7. 보호 조치와 로그인 유지</h2><p>데이터베이스에서 회원 상태와 역할을 검사해 공개·회원·관리자 정보를 분리하고, 전송 구간은 HTTPS를 사용합니다. 로그인 유지를 위해 브라우저 저장소에 인증 세션을 보관합니다. 공용 기기에서는 사용 후 로그아웃해 주세요. 정지·탈퇴·세션 만료 시 서버가 회원 전용 요청을 거부하며 화면도 상태를 다시 확인합니다.</p>`,
+    privacy: `<h1>개인정보처리방침</h1><p class="document-meta">시행일: 2026년 11월 7일 · 최종 수정: 2026년 11월 9일(정식 공개 전 보완) · 보험라이브</p><h2>1. 처리하는 개인정보와 목적</h2><ul class="policy-list"><li><b>로그인·회원 관리</b>: 이메일 주소, 로그인 방식(Google 또는 이메일)과 로그인 제공자가 발급하는 계정 식별정보, 가입·마지막 로그인 시각 — 회원 확인, 부정 이용 방지</li><li><b>설계사 인증</b>: 이름, 닉네임, 현재 소속 회사, 연락처, 설계사 고유번호, 증빙 사진 1장 — 설계사·소속 확인, 같은 고유번호의 중복 가입 확인</li><li><b>서비스 이용</b>: 글·댓글·리뷰, 좋아요·북마크·팔로우, 신고·이의신청·운영팀 문의 내용, 알림 — 커뮤니티 제공, 신고·분쟁 처리, 문의 답변</li><li><b>운영 기록</b>: 관리자 처리 내역(처리자·행동·대상·사유), 증빙 열람 기록 — 운영 책임 확인, 위변조 방지</li></ul><p>주민등록번호는 수집하지 않습니다. 증빙에 주민등록번호·주소·고객정보가 보이면 올리기 전에 가려 주세요.</p><h2>2. 공개 정보와 접근 권한</h2><p>공개 화면에 회사명과 닉네임 첫 글자·별표 3개만 표시합니다(완전익명 채널은 ‘익명’으로만 표시하고, 운영자의 작성자 확인은 사유와 함께 감사 기록에 남깁니다). 실명, 연락처, 설계사 고유번호, 증빙 사진은 공개하지 않습니다. 증빙은 비공개 저장소에 보관하고 담당 관리자만 60초 동안 유효한 서명 주소로 확인합니다. 제출한 증빙 사진은 운영팀 Mac의 기기 안 글자인식(Apple Vision)으로 이름·설계사 고유번호·소속 회사를 읽어 신청 내용과 자동으로 비교하며, 사진과 읽은 내용을 외부 AI나 다른 서비스로 보내지 않습니다. 자동 판정 결과(승인·반려·보류)는 운영자가 확인하고 바꿀 수 있습니다. 관리자의 열람과 처리 행동은 감사 기록으로 남깁니다. 공개 회원 명부나 회원별 공개 프로필을 제공하지 않습니다.</p><h2>3. 보유 기간과 파기</h2><p>계정과 닉네임·현재 소속·인증 상태는 회원 유지 기간 동안 보관합니다. 인증 증빙 사진과 심사용 이름·연락처·설계사 고유번호 원본은 승인·반려 등 처리 후 30일이 지나면 파일과 원본을 지웁니다. 같은 고유번호의 중복 가입을 막기 위해 원래 번호 대신 변환한 확인값만 탈퇴 전까지 보관합니다. 신청하지 않고 남은 사진은 24시간 안에, 신청이 실패한 사진은 곧바로 정리합니다. 탈퇴하면 접근을 즉시 막고 이름·연락처·고유번호·확인값·증빙·알림·운영팀 문의를 지우며, 남은 글·댓글은 신원과의 공개 연결을 끊고 ‘탈퇴한 회원’으로 표시합니다. 운영 처리 기록은 위변조 방지를 위해 지우지 않고 보관합니다. 법적 보존 의무가 생긴 정보는 법령이 정한 범위와 기간에 한해 따로 보관합니다.</p><h2>4. 처리 위탁과 국외 이전</h2><p>서비스 제공을 위해 아래 사업자의 서비스를 이용하며, 이 과정에서 개인정보가 국외에서 처리될 수 있습니다. 정보는 서비스를 이용할 때 암호화된 통신(HTTPS)으로 전송되며, 회원 탈퇴 또는 위탁 종료 시까지 보관되고 각 사업자의 정책에 따라 파기됩니다.</p><ul class="policy-list"><li><b>Supabase</b> — 회원 계정·로그인, 데이터베이스, 증빙 사진 등 파일 저장 — 위 1의 정보 — 데이터 저장 위치: 유럽(프랑스) 지역(서비스 설정 기준)</li><li><b>Google</b> — Google 로그인을 선택한 경우 계정 확인 — 이메일 주소, 계정 식별정보 — 미국 등 해외(사업자 정책에 따름)</li><li><b>Resend</b> — 이메일 로그인 메일 발송 — 이메일 주소 — 미국 등 해외(사업자 정책에 따름)</li><li><b>GitHub(GitHub Pages)</b> — 웹 화면 제공 — 접속 과정의 기술 정보(IP 주소 등)가 사업자 정책에 따라 처리될 수 있음 — 미국 등 해외</li><li><b>Anthropic(Claude)</b> — 질문 글을 선택한 경우 AI 참고 답변 생성 — 질문 글의 제목·본문(작성자의 이름·연락처·닉네임 등 알려진 개인정보는 지우고 전달) — 미국 등 해외(사업자 정책에 따름)</li></ul><p>국외 처리를 원하지 않으면 가입하지 않거나 탈퇴할 수 있으며, 이 경우 서비스를 이용할 수 없습니다. 광고 추적, 외부 광고 이미지, 제3자 분석 스크립트는 넣지 않습니다.</p><h2>5. 이용자의 권리와 행사 방법</h2><p>내 정보에서 현재 상태, 내 글·댓글·북마크·알림을 확인하고 닉네임을 바꾸거나 탈퇴할 수 있습니다. 개인정보 열람·정정·삭제·처리정지 요청은 로그인 후 <a class="text-link" href="/help.html#inquiry">이용 도움말의 ‘운영팀 문의’</a>에서 ‘개인정보 열람·정정·삭제 요청’을 골라 보내 주세요. 운영팀이 확인해 알림으로 답변합니다. 개인정보가 담긴 글·댓글은 해당 콘텐츠의 신고 버튼으로도 알릴 수 있습니다.</p><h2>6. 개인정보 보호책임자와 문의</h2><p>개인정보 보호책임자: 보험라이브 운영팀. 개인정보 관련 문의·불만·피해 구제 요청은 로그인 후 <a class="text-link" href="/help.html#inquiry">운영팀 문의</a>로 접수합니다.</p><h2>7. 안전성 확보 조치와 로그인 유지</h2><p>데이터베이스에서 회원 상태와 역할을 검사해 공개·회원·관리자 정보를 분리하고, 전송 구간은 HTTPS를 사용합니다. 관리자 처리와 증빙 열람은 감사 기록으로 남깁니다. 로그인 유지를 위해 브라우저 저장소에 로그인 정보를 보관합니다. 공용 기기에서는 사용 후 오른쪽 위 ‘로그아웃’을 눌러 주세요.</p><h2>8. AI 참고 답변</h2><p>질문형 글을 선택한 경우 게시물의 제목과 본문을 운영팀 Mac 처리기에서 Anthropic의 Claude(기존 구독)로 처리해 참고 답변을 만들 수 있습니다. 회원의 실명·연락처·증빙은 답변 생성에 넣지 않으며, 만들어진 답변은 운영자가 검토한 뒤 공개합니다. 질문에도 고객 개인정보나 민감한 계약자료를 적지 마세요.</p><h2>9. 방침 변경</h2><p>이 방침을 바꾸면 서비스 공지로 알립니다.</p>`,
     rules: `<h1>커뮤니티 운영정책</h1><p class="document-meta">시행일: 2026년 11월 7일</p><h2>경험은 솔직하게, 사람은 존중해 주세요</h2><p>직접 겪은 사실과 의견을 구분하고 자료의 기준일을 함께 적어 주세요. 타인·회사에 대한 허위사실, 명예훼손, 위협, 혐오와 비방은 허용하지 않습니다. 리뷰와 회원 글은 작성자 개인 의견입니다.</p><h2>영업화법은 정직하게</h2><p>허위·과장·부당권유 화법, 고객정보·녹취 게시는 금지합니다.</p><h2>개인정보와 고객자료를 올리지 마세요</h2><p>본인이나 타인의 실명·연락처·주소·주민등록번호·계약번호·질병정보·고객 사진, 개인을 추정할 수 있는 조합 정보를 공개하지 마세요. 회사 이름은 실제 명칭으로 표시하지만 지점·직급·담당 고객 등 개인을 특정하는 상세정보는 게시하지 않습니다.</p><h2>반복 게시와 영업을 제한합니다</h2><p>인증 회원은 글 하루 10개, 글 사이 60초, 댓글 하루 50개, 댓글 사이 10초 간격을 지켜야 합니다. 서버에서 제한을 적용합니다. 같은 내용 반복, 무단 광고·모집·판매, 계정 거래, 자동화 도배, 악의적 신고는 제재 대상입니다. 신고도 회원당 하루 10건으로 제한합니다.</p><h2>신고 → 운영자 판단(필요하면 임시 가림)</h2><p>설계사 인증 회원은 각 글·댓글·리뷰에서 신고 사유를 선택하고 대상과 침해 사실을 구체적으로 적어 신고할 수 있습니다(내 글은 신고할 수 없음). 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상 모이면 운영자 판단 전까지 임시로 가리고 신고자와 작성자에게 알립니다. 운영 공지는 신고로 자동 가려지지 않습니다. 운영자는 사실관계·소명을 확인해 복구하거나 위반이 확인된 경우 가림을 유지·삭제합니다. 권리침해 다툼을 위한 임시조치는 최대 30일이며 미결 건은 기간 종료 후 복구합니다. 신고 자체가 위반 확정을 뜻하지 않습니다.</p><h2>처리 결과와 이의신청</h2><p>콘텐츠 숨김·삭제, 인증 보완·반려, 일시 정지 또는 반복 위반 계정 정지를 적용할 수 있습니다. 사유는 내 정보와 알림에 표시합니다. 이의가 있으면 해당 대상의 신고 메뉴에서 ‘처리 결과 이의신청’을 선택하고 기존 조치와 추가 소명을 적어 주세요. 운영자는 검토 사유와 결과를 기록합니다.</p><h2>AI와 회사 리뷰</h2><p>AI 참고 답변은 사람의 답변과 구분하여 표시하며 전문적인 확정 판단으로 사용하지 마세요. 현재 인증된 회사의 리뷰만 작성할 수 있고, 실제 근무 경험 없이 평가하거나 리뷰를 거래·조작하는 행위를 금지합니다.</p>`,
-    help: `<h1>이용 도움말</h1><h2>이용하는 순서</h2><ol><li>Google 또는 이메일로 로그인합니다.</li><li>설계사 인증에서 이름·소속·연락처·설계사 고유번호와 증빙 사진 1장을 제출합니다.</li><li>내 정보와 알림에서 심사 결과를 확인합니다.</li><li>인증 후 글·댓글·북마크·리뷰를 이용합니다.</li></ol><h2>공개 표시</h2><p>예를 들어 닉네임 ‘바른설계’이고 소속이 삼성생명이면 ‘삼성생명 · 바***’로 보입니다. ‘완전익명’ 채널에서는 회사명·닉네임 없이 ‘익명’으로 보여요. 소속 변경 시 재인증을 신청해야 합니다.</p><h2>권리침해 신고와 이의신청</h2><p>설계사 인증 회원은 글·댓글·리뷰의 신고 버튼에서 대상, 사유와 침해 사실을 적어 신고할 수 있어요. 주민등록번호나 불필요한 개인 정보는 기재하지 마세요. 운영자가 검토해 서비스 내 알림으로 결과를 안내하며, 같은 콘텐츠에 신고가 3건 이상 모이면 검토 전까지 임시로 가립니다. 이미 조치된 글의 공개 주소를 알고 있다면 아래에서 대상 번호와 소명을 입력할 수 있습니다.</p><form data-form="report"><div class="form-grid">${select(
-      "target",
-      "대상 종류",
-      [
-        ["post", "글"],
-        ["comment", "댓글"],
-        ["review", "리뷰"],
-      ],
-    )}${field("id", "대상 번호 (주소의 id 값)", "text", "", 'required pattern="[0-9a-fA-F-]{36}"')}</div>${select(
-      "reason_type",
-      "신고 종류",
-      [
-        ["privacy", "개인정보 노출"],
-        ["defamation", "명예훼손·허위사실"],
-        ["appeal", "처리 결과 이의신청"],
-        ["other", "그 밖의 권리침해"],
-      ],
-    )}${area("reason_detail", "침해 사실과 소명", "", 'required minlength="5" maxlength="2000" placeholder="침해당한 권리, 대상 내용과 요청하는 조치를 구체적으로 적어 주세요."')}${formEnd("신고·소명 접수")}</form><h2>로그인 메일이 오지 않아요</h2><p>스팸함과 이메일 주소를 확인해 주세요. 발송 한도가 적용되므로 연속 요청을 피하고 잠시 뒤 다시 시도해 주세요. Google 로그인 연결이 완료되어 있으면 Google로 계속할 수 있습니다.</p><h2>계정을 정리하고 싶어요</h2><p>내 정보에서 본인이 쓴 글·댓글을 확인하고 삭제한 뒤 탈퇴할 수 있습니다. 탈퇴 즉시 회원 전용 내용에 접근할 수 없고, 남겨둔 글은 ‘탈퇴한 회원’으로 보입니다.</p>`,
+    help: `<h1>이용 도움말</h1><h2>이용하는 순서</h2><ol><li>Google 또는 이메일로 로그인합니다.</li><li>설계사 인증에서 이름·소속·연락처·설계사 고유번호와 증빙 사진 1장을 제출합니다.</li><li>내 정보와 알림에서 심사 결과를 확인합니다.</li><li>인증 후 글·댓글·좋아요·리뷰를 이용합니다(팔로우·북마크는 로그인만 하면 돼요).</li></ol><h2>공개 표시</h2><p>예를 들어 닉네임 ‘바른설계’이고 소속이 삼성생명이면 ‘삼성생명 · 바***’로 보입니다. ‘완전익명’ 채널에서는 회사명·닉네임 없이 ‘익명’으로 보여요. 소속 변경 시 재인증을 신청해야 합니다.</p><h2>신고와 이의신청</h2><p>문제가 있는 글·댓글·리뷰는 그 화면의 <b>‘신고’</b> 버튼을 눌러 주세요(설계사 인증 회원). 운영자가 검토해 알림으로 결과를 알려 드리며, 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상 모이면 검토 전까지 임시로 가립니다. 내 글이 가려졌다면 그 글 화면의 <b>‘내 글 조치에 이의신청’</b> 버튼으로 소명할 수 있어요.</p><h2 id="inquiry">운영팀 문의</h2><p>개인정보 열람·정정·삭제 요청, 권리침해 신고, 계정 문의와 그 밖의 문의를 보낼 수 있어요. 답변은 알림으로 드립니다.</p><!--inquiry--><h2>로그인 메일이 오지 않아요</h2><p>스팸함과 이메일 주소를 확인하고 몇 분 뒤 다시 요청해 주세요. Google 계정이 있으면 Google로 로그인할 수 있어요.</p><h2>계정을 정리하고 싶어요</h2><p>내 정보에서 본인이 쓴 글·댓글을 확인하고 삭제한 뒤 탈퇴할 수 있습니다. 탈퇴 즉시 회원 전용 내용에 접근할 수 없고, 남겨둔 글은 ‘탈퇴한 회원’으로 보입니다.</p>`,
   };
+  function inquiryForm() {
+    if (!session)
+      return `<p class="notice">문의는 로그인한 뒤 보낼 수 있어요. <a class="text-link" href="${E(loginUrl("/help.html#inquiry"))}">로그인하기</a></p>`;
+    return `<form data-form="inquiry" class="inquiry-form">${select("kind", "문의 종류", [["", "선택하세요"], ["general", "일반 문의"], ["privacy", "개인정보 열람·정정·삭제 요청"], ["rights", "권리침해 신고"], ["account", "계정 문의"]], "", 'required data-testid="inquiry-kind"')}${field("link", "관련 글 주소 (선택)", "text", "", 'maxlength="300" placeholder="글 화면 주소를 붙여 넣어 주세요"')}${area("body", "문의 내용", "", 'required minlength="5" maxlength="2000" data-testid="inquiry-body" placeholder="주민등록번호 등 필요 없는 개인정보는 적지 마세요."')}${formEnd("문의 보내기")}</form>`;
+  }
   function dialog(html) {
     $("#dialog-content").innerHTML = html;
     $("#dialog").showModal();
@@ -1035,7 +1049,7 @@
         }
       }
       let html;
-      if (policyDocs[page]) html = `<article class="section policy">${policyDocs[page]}</article>`;
+      if (policyDocs[page]) html = `<article class="section policy">${policyDocs[page].replace("<!--inquiry-->", inquiryForm())}</article>`;
       else {
         const renderers = {
           home,
@@ -1069,12 +1083,13 @@
       if (stamp !== renderId) return;
       layout();
       $("#content").innerHTML =
-        `<section class="section"><h1>잠시 연결을 확인해 주세요</h1><p class="error" role="alert">${E(safeError(err))}</p>${btn("다시 시도", "refresh", "", true)} <a class="btn" href="/index.html">홈으로</a></section>`;
+        `<section class="section"><h1>${/fetch|network|Failed|Load failed/i.test(String(err?.message || "")) ? "인터넷 연결을 확인해 주세요" : "요청을 처리하지 못했어요"}</h1><p class="error" role="alert">${E(safeError(err))}</p>${btn("다시 시도", "refresh", "", true)} <a class="btn" href="/index.html">홈으로</a></section>`;
     }
   }
   async function requireWriting(why = "") {
     if (session) mine = await read("me");
     if (isVerified()) return true;
+    if (session && isActive() && ["bookmark", "follow"].includes(why)) return true;
     closeDialog();
     if (!session) {
       location.href = loginUrl(here(), why);
@@ -1084,7 +1099,9 @@
     notify(
       viewer?.status === "suspended"
         ? "이용 정지 상태에서는 작성할 수 없어요. 내 정보의 운영 안내를 확인해 주세요."
-        : "설계사 인증을 완료한 뒤 작성할 수 있어요. 인증 신청·보완을 확인해 주세요.",
+        : why === "like"
+          ? "좋아요는 설계사 인증을 마친 뒤 누를 수 있어요. 인증 신청·보완을 확인해 주세요."
+          : "설계사 인증을 마친 뒤 이용할 수 있어요. 인증 신청·보완을 확인해 주세요.",
     );
     return false;
   }
@@ -1207,6 +1224,14 @@
         await act("notification_read", { id });
         location.href = el.href;
         return;
+      case "more-posts": {
+        const d = await read("posts", { ...current.list.args, offset: current.list.offset });
+        const more = d.posts || [];
+        $("[data-post-list]").insertAdjacentHTML("beforeend", more.map((p) => feed(p)).join(""));
+        current.list.offset += more.length;
+        if (more.length < 20) el.closest(".more-wrap")?.remove();
+        return;
+      }
       case "admin-more": {
         const sec = el.dataset.section;
         const d = await read("admin", { ...current.args, offset: current.offset });
@@ -1334,6 +1359,11 @@
         location.href = "/me.html";
         return;
       }
+      case "inquiry":
+        await act("inquiry", { kind: v.kind, link: (v.link || "").trim(), body: v.body.trim() });
+        form.reset();
+        notify("문의를 보냈어요. 답변은 알림으로 알려 드려요.");
+        return;
       case "profile":
         await act("profile_update", { nickname: v.nickname.trim() });
         notify("닉네임을 변경했어요.");
