@@ -409,8 +409,36 @@
     suspension_expired: "기간 정지 종료",
     owner_bootstrap: "대표 지정",
   };
+  const writeNames = {
+    post_save: "글 저장",
+    post_delete: "글 삭제",
+    comment_save: "댓글 저장",
+    comment_delete: "댓글 삭제",
+    review_save: "리뷰 저장",
+    review_delete: "리뷰 삭제",
+    toggle: "좋아요·북마크·팔로우",
+    report: "신고",
+    appeal: "이의신청",
+    notification_read: "알림 읽음",
+    profile_update: "내 정보 변경",
+    profile_submit: "인증 신청",
+    profile_precheck: "인증 신청 입력 확인",
+    proof_discard: "실패한 증빙 사진 정리",
+    withdraw: "탈퇴",
+  };
   const auditName = (a) =>
-    auditNames[a] || (String(a).startsWith("admin_write_") ? `관리자 계정의 일반 이용(${E(String(a).slice(12))})` : a);
+    auditNames[a] ||
+    (String(a).startsWith("admin_write_") ? `관리자 계정의 일반 이용(${writeNames[String(a).slice(12)] || "기타"})` : "기타 처리");
+  const auditStatusNames = {
+    queued: "다시 만들기 대기",
+    edited: "고침",
+    saved: "저장",
+    up: "위로",
+    down: "아래로",
+    report_blocked: "신고 제한",
+    report_unblocked: "신고 제한 해제",
+  };
+  const auditStatus = (v) => statusNames[v] || contentStatusNames[v] || auditStatusNames[v] || (/^[a-z_]+$/.test(v) ? "" : v);
   const badge = (text, tone = "") => `<span class="badge ${tone}">${E(text)}</span>`;
   const memberFlags = (m) =>
     [
@@ -657,7 +685,7 @@
           : '<p class="muted small">아직 만들어진 답변이 없어요.</p>'
       }${["failed", "skipped"].includes(j.status) ? adminForm("ai_retry", j.id, "", "다시 시도") : ""}</div></details>`,
     audit: (a) =>
-      `<div class="admin-row static" data-testid="audit-row"><span class="row-main"><strong>${E(a.actor_name || (a.detail?.by === "자동 판정" ? "자동 판정" : "시스템"))}</strong> · ${E(auditName(a.action))}${a.target ? ` · ${E(targetNames[a.target] || a.target)}` : ""}</span><span class="row-sub">${E(date(a.created_at))}${a.detail?.reason ? ` · 사유: ${E(a.detail.reason)}` : ""}${a.detail?.decision ? ` · ${E(autoNames[a.detail.decision] || a.detail.decision)}` : ""}${a.detail?.status && !a.detail?.decision ? ` · ${E(statusNames[a.detail.status] || contentStatusNames[a.detail.status] || a.detail.status)}` : ""} · 기록 ${E(a.id)}</span></div>`,
+      `<div class="admin-row static" data-testid="audit-row"><span class="row-main"><strong>${E(a.actor_name || (a.detail?.by === "자동 판정" ? "자동 판정" : "시스템"))}</strong> · ${E(auditName(a.action))}${a.target ? ` · ${E(targetNames[a.target] || a.target)}` : ""}</span><span class="row-sub">${E(date(a.created_at))}${a.detail?.reason ? ` · 사유: ${E(a.detail.reason)}` : ""}${a.detail?.decision ? ` · ${E(autoNames[a.detail.decision] || a.detail.decision)}` : ""}${a.detail?.status && !a.detail?.decision && auditStatus(a.detail.status) ? ` · ${E(auditStatus(a.detail.status))}` : ""} · 기록 ${E(a.id)}</span></div>`,
   };
 
   const adminRender = {
