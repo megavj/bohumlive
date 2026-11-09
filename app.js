@@ -208,7 +208,7 @@
     return `<article><header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a><span class="tag">${E(kindNames[p.content_kind])}</span>${p.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(p)}</div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="meta"><span>${E(date(p.created_at))}</span><span>${icon("comment")} 사람 댓글 ${Number(p.comment_count) || 0}</span>${p.is_mine && isVerified() ? `<a href="${uri("write.html", { id: p.id })}">수정</a><button data-do="post-delete" data-id="${E(p.id)}">삭제</button>` : ""}${p.is_mine ? "" : `<button class="push" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button>`}</div></header><div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? '<div class="guest-lock"><h2>여기부터 인증 회원에게만 공개</h2><p>설계사 인증 후 나머지 본문과 동료의 댓글을 읽을 수 있어요.</p>${verifyLink()}</div>' : ""}<div class="post-actions"><button data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 ${Number(p.likes) || 0}</button><button data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" data-testid="post-bookmark">${icon("bookmark")} ${p.bookmarked ? "저장됨" : "북마크"}</button><button data-do="share" class="share-button" aria-label="글 링크 복사">${icon("share")}</button></div>${p.company_id ? `<section class="related-companies"><h2>관련 회사</h2><a class="related-company" href="${uri("company.html", { id: p.company_id })}"><span class="company-mark">${E(p.company_name)}</span><p>${E(p.company_name)}<br><span class="muted small">회사 정보와 리뷰 보기</span></p></a></section>` : ""}<section class="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count) || 0}</h2>${isVerified() ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="고객정보 없이 동료의 경험을 나눠 주세요." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>` : canReadMember() ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>' : `<div class="guest-lock">${icon("lock")}<h2>댓글과 AI 답변은 인증 회원에게 공개돼요</h2><p>${session ? `현재 상태: ${E(statusLabel())}` : "로그인 후 설계사 인증을 완료해 주세요."}</p>${viewer?.status === "suspended" ? '<a class="btn btn-primary" href="/help.html">이용 정지 안내</a>' : verifyLink()}</div>`}</div>${canReadMember() ? (ordered.length ? ordered.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.")) : ""}${d.ai_reply ? `<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>` : ""}</section></article>`;
   }
   async function write() {
-    const denied = authorization();
+    const denied = isAdmin() ? authorization("admin") : authorization();
     if (denied) return denied;
     const ds = await Promise.all([read("channels"), read("companies")]);
     channels = (ds[0].channels || []).filter((c) => c.enabled !== false);
@@ -231,7 +231,11 @@
       Object.entries(kindNames).filter(([k]) => k !== "weekly" || isAdmin()),
       p.content_kind || "experience",
       "required",
-    )}${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}</div><label class="check-line"><input type="checkbox" name="is_question" ${p.is_question ? "checked" : ""}>동료에게 묻는 질문입니다. AI 참고 답변이 함께 생성될 수 있어요.</label><div style="height:20px"></div>${field("title", "제목", "text", p.title || "", 'required minlength="2" maxlength="150" data-testid="post-title"')}${area("body", "본문", p.body || "", 'required minlength="5" maxlength="10000" data-testid="post-body-input"')}<section class="preview-box"><h3>공개 미리보기</h3><p class="small muted" id="public-preview-hint"></p><div class="body-text" id="public-preview"></div></section><label class="check-line"><input type="checkbox" name="checked_preview" required>공개 범위와 미리보기를 확인했습니다.</label>${formEnd(p.id ? "수정 저장" : "글 등록")}</form></section>`;
+    )}${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}</div><label class="check-line"><input type="checkbox" name="is_question" ${p.is_question ? "checked" : ""}>동료에게 묻는 질문입니다. AI 참고 답변이 함께 생성될 수 있어요.</label>${
+      isAdmin()
+        ? `<div class="team-box"><label class="check-line"><input type="checkbox" name="as_team" data-testid="as-team" ${p.as_team || !isVerified() ? "checked" : ""} ${isVerified() ? "" : "required"}>‘보험라이브 운영팀’ 이름으로 쓰기 (작성자 대신 운영팀으로 표시)</label>${p.id ? "" : '<label class="check-line"><input type="checkbox" name="pinned" data-testid="as-notice">공지로 고정 (운영팀 이름일 때만)</label>'}${isVerified() ? "" : '<p class="hint">설계사 인증 전 관리자는 운영팀 이름으로만 쓸 수 있어요.</p>'}</div>`
+        : ""
+    }<div style="height:20px"></div>${field("title", "제목", "text", p.title || "", 'required minlength="2" maxlength="150" data-testid="post-title"')}${area("body", "본문", p.body || "", 'required minlength="5" maxlength="10000" data-testid="post-body-input"')}<section class="preview-box"><h3>공개 미리보기</h3><p class="small muted" id="public-preview-hint"></p><div class="body-text" id="public-preview"></div></section><label class="check-line"><input type="checkbox" name="checked_preview" required>공개 범위와 미리보기를 확인했습니다.</label>${formEnd(p.id ? "수정 저장" : "글 등록")}</form></section>`;
   }
   async function login() {
     if (session && params.get("returnTo")) {
@@ -312,20 +316,119 @@
     const canReview = c.enabled !== false && (isOwner() || (isVerified() && mine?.profile?.company_id === id));
     return `<div class="company-cover"></div><section class="company-hero"><a class="back-link" href="/company.html">← 보험사·GA 목록</a><div class="section-head"><h1>${E(c.name)}</h1><span class="company-mark">${E(c.kind || "보험사")}</span></div><p class="muted">${E(c.description || "설계사 동료가 나누는 근무 경험입니다.")}</p><div class="metrics"><div><strong>${Number(c.review_count) || 0}개</strong>리뷰</div><div><strong>${c.average != null ? Number(c.average).toFixed(1) : "모으는 중"}</strong>종합 별점</div><div><strong>5항목</strong>설계사 관점</div><div><strong>1년 1건</strong>회사별 작성</div></div>${c.average != null ? `<div class="rating-grid">${scoreNames.map((s, i) => `<div class="review-score"><span>${s}</span><span>${Number(c.scores?.[i] || 0).toFixed(1)} / 5</span></div>`).join("")}</div>` : '<p class="notice">유효한 리뷰가 5개 이상 모이면 전체·항목별 평균 별점을 공개합니다.</p>'}<p></p>${canReview ? btn("리뷰 작성", "review-new", `data-id="${E(c.id)}" data-testid="review-create"`, true) : isOwner() ? '<p class="hint">숨김 처리된 회사입니다. 관리자에서 회사를 공개한 후 리뷰를 작성할 수 있어요.</p>' : `<p class="hint">현재 소속 회사가 인증된 회원만 리뷰를 작성할 수 있어요.</p>${viewer?.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : session ? '<a class="btn" href="/verify.html">내 소속 인증하기</a>' : verifyLink("btn")}`}</section><nav class="company-tabs"><a class="active" href="#company-reviews">리뷰</a><a href="#company-posts">관련 글</a></nav><section id="company-reviews">${d.reviews?.length ? d.reviews.map(reviewHTML).join("") : empty("아직 등록된 리뷰가 없어요.", "현재 소속 회사에 대한 첫 경험을 남겨 주세요.")}</section><section id="company-posts"><h2 class="section">${E(c.name)} 관련 글</h2>${feeds(d.posts, true)}</section>`;
   }
+  // ---- 관리자 화면 (2026-11-09 재구성: 탭별 자료, 목록 → 상세, 한국어 상태, 더 보기) ----
   const adminSections = [
     ["dashboard", "대시보드"],
     ["verifications", "인증 심사"],
     ["members", "회원"],
     ["posts", "글"],
     ["comments", "댓글"],
+    ["reviews", "리뷰"],
     ["reports", "신고"],
     ["channels", "채널"],
     ["companies", "보험사·GA"],
-    ["reviews", "리뷰"],
     ["ai", "AI 답변"],
+    ["settings", "금칙어"],
     ["audit", "감사 기록"],
     ["admins", "관리자"],
   ];
+  const contentStatusNames = { published: "게시 중", hidden: "숨김", deleted: "삭제됨" };
+  const reportStatusNames = { pending: "미처리", maintained: "처리 완료 · 가림 유지", restored: "처리 완료 · 복구" };
+  const aiStatusNames = {
+    queued: "생성 대기",
+    processing: "생성 중",
+    review: "검토 대기",
+    complete: "공개됨",
+    failed: "생성 실패",
+    skipped: "반려됨",
+  };
+  const aiAnswerNames = { review: "검토 대기", published: "공개 중", hidden: "숨김" };
+  const aiErrorNames = {
+    LEASE_EXPIRED: "처리 시간이 지나 다시 시도합니다",
+    GENERATION_FAILED: "답변을 만들지 못했어요",
+    subscription_timeout: "답변 생성 시간이 너무 오래 걸렸어요",
+    subscription_generation_failed: "답변을 만들지 못했어요",
+    subscription_invalid_answer: "답변 형식이 올바르지 않았어요",
+    subscription_model_unverified: "정해진 AI 모델로 만들지 못했어요",
+    subscription_cli_unavailable: "Mac 처리기에서 AI를 쓸 수 없었어요",
+    credential_unavailable: "Mac 처리기 인증 정보를 찾지 못했어요",
+  };
+  const targetNames = {
+    post: "글",
+    comment: "댓글",
+    review: "리뷰",
+    member: "회원",
+    channel: "채널",
+    company: "회사",
+    ai: "AI 답변",
+    settings: "설정",
+    proof: "증빙",
+    notification: "알림",
+    verifications: "인증 심사 목록",
+  };
+  const auditNames = {
+    admin_read: "인증 심사 목록 열람",
+    admin_member_view: "회원 상세 열람",
+    admin_verification: "인증 심사",
+    auto_verification: "증빙 자동 판정",
+    admin_member_status: "회원 상태 변경",
+    admin_member_withdraw: "강제 탈퇴",
+    admin_report_block: "신고 기능 제한",
+    admin_nickname: "닉네임 강제 변경",
+    admin_admin_role: "관리자 권한 변경",
+    admin_proof_access: "증빙 열람",
+    proof_access: "증빙 열람",
+    proof_signed_access: "증빙 열람 주소 발급",
+    admin_content: "콘텐츠 상태 변경",
+    admin_report_resolve: "신고 처리",
+    admin_post_move: "글 채널 옮기기",
+    admin_notice_order: "공지 순서 변경",
+    admin_channel_save: "채널 저장",
+    admin_channel_move: "채널 순서 변경",
+    admin_channel_delete: "채널 삭제",
+    admin_channel_move_posts: "채널 글 이동",
+    admin_company_save: "회사 저장",
+    admin_company_delete: "회사 삭제",
+    admin_company_merge: "회사 병합",
+    admin_ai_settings: "AI 설정",
+    admin_ai_publish: "AI 답변 공개",
+    admin_ai_reject: "AI 답변 반려",
+    admin_ai_edit: "AI 답변 고치기",
+    admin_ai_retry: "AI 답변 다시 시도",
+    admin_ai_regenerate: "AI 답변 다시 만들기",
+    admin_banned_words: "금칙어 저장",
+    ai_generated_review: "AI 답변 생성(검토 대기)",
+    report: "신고 접수",
+    report_temporary_hide: "신고로 임시 가림",
+    temporary_expired_restore: "임시 가림 기간 만료 복구",
+    appeal: "이의신청",
+    profile_submit: "인증 신청",
+    withdraw: "탈퇴",
+    withdraw_auth_deleted: "탈퇴 계정 삭제 완료",
+    proof_cleanup: "증빙 정리",
+    suspension_expired: "기간 정지 종료",
+    owner_bootstrap: "대표 지정",
+  };
+  const auditName = (a) =>
+    auditNames[a] || (String(a).startsWith("admin_write_") ? `관리자 계정의 일반 이용(${E(String(a).slice(12))})` : a);
+  const badge = (text, tone = "") => `<span class="badge ${tone}">${E(text)}</span>`;
+  const memberFlags = (m) =>
+    [
+      m.role === "owner" ? badge("대표", "accent") : m.role === "admin" ? badge("관리자", "accent") : "",
+      m.is_test ? badge("시험", "warn") : "",
+      m.is_sample ? badge("견본", "warn") : "",
+      m.status === "withdrawn" ? badge("탈퇴", "muted") : "",
+      m.status === "suspended" ? badge("정지", "danger") : "",
+    ].join("");
+  const contentFlags = (p) =>
+    [
+      p.status && p.status !== "published" ? badge(contentStatusNames[p.status] || p.status, "danger") : "",
+      p.pinned ? badge("공지", "accent") : "",
+      p.as_team ? badge("운영팀 이름", "accent") : "",
+      p.is_sample ? badge("견본", "warn") : "",
+      p.is_test ? badge("시험", "warn") : "",
+    ].join("");
+  const providerNames = { google: "Google", email: "이메일" };
   const autoNames = { approve: "자동 승인", reject: "자동 반려", hold: "보류 · 관리자 확인 필요" };
   const autoFieldNames = { match: "일치", mismatch: "다름", unknown: "못 읽음", unclear: "애매" };
   function autoResultHTML(r) {
@@ -338,289 +441,341 @@
   function adminConfirmText(form) {
     const op = form.elements.operation?.value;
     const chosen = (name) => form.elements[name]?.selectedOptions?.[0]?.textContent?.trim() || "";
-    const card = form.closest(".admin-card")?.querySelector("h3")?.textContent?.trim();
-    const who = card ? `‘${card}’` : "선택한 대상";
+    const who = form.dataset.label ? `‘${form.dataset.label}’` : "선택한 대상";
     const lines = {
       verification: `${who} 인증 심사 결과를 ‘${chosen("status")}’(으)로 저장할까요?`,
-      member_status: `${who} 회원 상태를 ‘${chosen("status")}’(으)로 바꿀까요?`,
+      member_status: `${who} 회원 상태를 ‘${chosen("status")}’${form.elements.status?.value === "suspended" ? `(${chosen("days")})` : ""}(으)로 바꿀까요?`,
+      member_withdraw: `${who} 회원을 강제 탈퇴시킬까요? 개인정보가 바로 지워지고 되돌릴 수 없어요.`,
+      report_block: `${who} 회원의 신고 기능을 ‘${chosen("days")}’(으)로 바꿀까요?`,
       nickname: `${who} 닉네임을 ‘${form.elements.nickname?.value || ""}’(으)로 강제로 바꿀까요?`,
       content: `${who}의 표시 상태를 ‘${chosen("status")}’(으)로 바꿀까요?`,
+      post_move: `${who} 글을 ‘${chosen("channel_id")}’ 채널로 옮길까요?`,
       report_resolve: `이 신고를 ‘${chosen("decision")}’(으)로 처리할까요?`,
       admin_role: `${chosen("id")} 회원을 ‘${chosen("role")}’ 할까요?`,
+      channel_save: `${who} 채널을 저장할까요?`,
+      company_save: `${who} 회사를 저장할까요?`,
       channel_delete: `${who} 채널을 삭제할까요? 되돌릴 수 없어요.`,
       company_delete: `${who} 회사를 삭제할까요? 되돌릴 수 없어요.`,
+      ai_settings: "AI 답변 설정을 저장할까요?",
       ai_publish: "이 AI 답변을 공개할까요?",
       ai_reject: "이 AI 답변을 반려할까요?",
+      ai_edit: "AI 답변 고친 내용을 저장할까요?",
+      ai_retry: "이 질문의 AI 답변을 다시 시도할까요?",
+      ai_regenerate: "AI 답변을 다시 만들까요? 지금 답변은 새 답변이 나올 때까지 숨겨집니다.",
+      banned_words: "금칙어 목록을 저장할까요?",
     };
     return lines[op] || "이 내용으로 저장할까요?";
   }
-  function adminForm(operation, id, content, label = "저장", extra = "") {
-    return `<form data-form="admin" class="admin-form"><input type="hidden" name="operation" value="${E(operation)}"><input type="hidden" name="id" value="${E(id || "")}">${extra}${content}${formEnd(label)}</form>`;
+  function adminForm(operation, id, content, label = "저장", extra = "", who = "") {
+    return `<form data-form="admin" class="admin-form" data-label="${E(who)}"><input type="hidden" name="operation" value="${E(operation)}"><input type="hidden" name="id" value="${E(id || "")}">${extra}${content}${formEnd(label)}</form>`;
   }
-  const reasonField = (value = "") =>
-    field("reason", "처리 사유", "text", value, 'required minlength="2" maxlength="500"');
-  function adminRemoval(kind, item, items) {
+  const reasonField = (value = "", required = true) =>
+    field("reason", "처리 사유", "text", value, `${required ? "required minlength=\"2\"" : ""} maxlength="500"`);
+  const adminMore = (sec, items) =>
+    (items || []).length >= 30
+      ? `<p class="more-wrap">${btn("더 보기", "admin-more", `data-section="${E(sec)}" data-testid="admin-more"`)}</p>`
+      : "";
+  const adminFilterChips = (sec, list, currentValue, extra = {}) =>
+    `<nav class="chips admin-filter" aria-label="상태로 보기">${list.map(([s, label]) => `<a class="chip ${currentValue === s ? "active" : ""}" href="${uri("admin/", { section: sec, ...extra, ...(s ? { status: s } : {}) })}">${E(label)}</a>`).join("")}</nav>`;
+  const adminSearch = (sec, placeholder, extra = "") =>
+    `<form class="search-form admin-search" action="/admin/"><input type="hidden" name="section" value="${E(sec)}">${params.get("status") ? `<input type="hidden" name="status" value="${E(params.get("status"))}">` : ""}${extra}<input name="q" value="${E(params.get("q") || "")}" aria-label="검색" placeholder="${E(placeholder)}"><button class="btn">검색</button></form>`;
+
+  // 채널 영문 주소는 한글 이름에서 자동으로 만든다(예: 영업화법 → yeongeophwabeop).
+  function slugify(name, taken = []) {
+    const I = ["g", "kk", "n", "d", "tt", "r", "m", "b", "pp", "s", "ss", "", "j", "jj", "ch", "k", "t", "p", "h"];
+    const V = ["a", "ae", "ya", "yae", "eo", "e", "yeo", "ye", "o", "wa", "wae", "oe", "yo", "u", "wo", "we", "wi", "yu", "eu", "ui", "i"];
+    const F = ["", "k", "k", "k", "n", "n", "n", "t", "l", "k", "m", "l", "l", "l", "p", "l", "m", "p", "p", "t", "t", "ng", "t", "t", "k", "t", "p", "t"];
+    let s = "";
+    for (const ch of String(name || "")) {
+      const c = ch.charCodeAt(0) - 0xac00;
+      if (c >= 0 && c < 11172) s += I[Math.floor(c / 588)] + V[Math.floor((c % 588) / 28)] + F[c % 28];
+      else if (/[a-z0-9]/i.test(ch)) s += ch.toLowerCase();
+      else s += "-";
+    }
+    s = s.replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 36) || "ch";
+    if (s.length < 2) s += "-ch";
+    let out = s,
+      n = 2;
+    while (taken.includes(out)) out = `${s}-${n++}`;
+    return out;
+  }
+
+  function channelFormHTML(c = {}) {
+    return adminForm(
+      "channel_save",
+      c.id,
+      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (자동으로 정해져요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? (channels.length + 1) * 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>채널 사용(끄면 회원에게 보이지 않아요)</label>`,
+      c.id ? "수정 저장" : "채널 추가",
+      "",
+      c.name || "새",
+    );
+  }
+  function companyFormHTML(c = {}) {
+    return adminForm(
+      "company_save",
+      c.id,
+      `${field("name", "회사 이름", "text", c.name || "", 'required minlength="2" maxlength="80"')}${select("kind", "회사 종류", companyKinds.map((k) => [k, k]), c.kind || "", 'required')}${area("description", "회사 설명", c.description || "", 'maxlength="1000"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>회사 사용(끄면 목록에서 숨겨져요)</label>`,
+      c.id ? "수정 저장" : "회사 추가",
+      "",
+      c.name || "새",
+    );
+  }
+  const companyKinds = ["보험사", "GA"];
+  function removalFormHTML(kind, item, items) {
     const isChannel = kind === "channel",
       label = isChannel ? "채널" : "회사",
       count = Number(isChannel ? item.post_count : item.reference_count) || 0;
     const targets = items.filter((x) => x.id !== item.id && x.enabled !== false);
-    const operation = isChannel ? "channel_delete" : "company_delete",
-      targetKey = isChannel ? "target_channel_id" : "target_company_id";
-    const summary = count > 0 ? `${label} ${isChannel ? "이동 후 삭제" : "병합·삭제"}` : `빈 ${label} 삭제`;
     const detail = isChannel
       ? `연결된 글 ${count}개`
       : `관련 글 ${Number(item.post_count) || 0}개 · 리뷰 ${Number(item.total_review_count) || 0}개 · 회원 ${Number(item.member_count) || 0}명`;
     if (count > 0 && !targets.length)
-      return `<details class="admin-delete"><summary>${summary}</summary><p class="notice">${detail}. 먼저 다른 활성 ${label}를 추가해 주세요. 자료를 옮길 대상이 있어야 삭제할 수 있습니다.</p></details>`;
+      return `<p class="notice">${detail}. 먼저 다른 사용 중인 ${label}를 추가해 주세요. 자료를 옮길 곳이 있어야 삭제할 수 있어요.</p>`;
     const target =
       count > 0
         ? select(
-            targetKey,
-            isChannel ? "옮길 채널 선택" : "병합할 회사 선택",
-            [["", "대상을 선택해 주세요"], ...targets.map((x) => [x.id, x.name])],
+            isChannel ? "target_channel_id" : "target_company_id",
+            isChannel ? "글을 옮길 채널" : "합칠 회사",
+            [["", "선택하세요"], ...targets.map((x) => [x.id, x.name])],
             "",
             "required",
           )
         : "";
-    const text =
-      count > 0
-        ? `${detail}. 선택한 ${label}로 자료를 모두 옮긴 뒤 이 ${label}를 삭제합니다.`
-        : `연결된 자료가 없어 이 ${label}를 바로 삭제할 수 있습니다.`;
-    return `<details class="admin-delete"><summary>${summary}</summary>${adminForm(operation, item.id, `<p class="notice">${E(text)} 삭제와 이동 내역은 감사 기록에 남습니다.</p>${target}${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_delete" required>‘${E(item.name)}’ ${label}의 삭제 내용을 확인했습니다.</label>`, count > 0 ? (isChannel ? "글 이동 후 채널 삭제" : "자료 병합 후 회사 삭제") : `${label} 삭제`)}</details>`;
-  }
-  function adminContent(items, target) {
-    return (
-      (items || [])
-        .map(
-          (p) =>
-            `<article class="admin-card"><h3>${E(p.title || p.body?.slice(0, 70) || "콘텐츠")}</h3><p class="small muted">${E(p.author_display || "")} · ${E(p.status)} · ${E(date(p.created_at))}</p><details><summary>내용 확인</summary><p class="body-text">${E(p.body)}</p></details>${adminForm(
-              "content",
-              p.id,
-              `${select(
-                "status",
-                "표시 상태",
-                [
-                  ["", "선택하세요"],
-                  ["published", "게시"],
-                  ["hidden", "숨김"],
-                  ["deleted", "삭제"],
-                ],
-                "",
-                "required",
-              )}${target === "post" ? `<label class="check-line"><input type="checkbox" name="pinned" ${p.pinned ? "checked" : ""}>공지로 고정</label><p></p>` : ""}${reasonField()}`,
-              "처리 저장",
-              `<input type="hidden" name="target" value="${target}">`,
-            )}</article>`,
-        )
-        .join("") || empty("관리할 콘텐츠가 없어요.", "등록되면 이곳에 표시됩니다.")
+    return adminForm(
+      isChannel ? "channel_delete" : "company_delete",
+      item.id,
+      `<p class="notice">${E(count > 0 ? `${detail}. 고른 ${label}로 자료를 모두 옮긴 뒤 이 ${label}를 삭제합니다.` : `연결된 자료가 없어 바로 삭제할 수 있어요.`)} 삭제 내역은 감사 기록에 남습니다.</p>${target}${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_delete" required>‘${E(item.name)}’ ${label} 삭제 내용을 확인했습니다.</label>`,
+      count > 0 ? (isChannel ? "글 옮기고 채널 삭제" : "자료 합치고 회사 삭제") : `${label} 삭제`,
+      "",
+      item.name,
     );
   }
+
+  // 목록 한 줄씩 그리는 함수(더 보기에서도 같이 씀)
+  const adminRows = {
+    verifications: (v) =>
+      `<article class="admin-card" data-testid="verification-item"><h3>${E(v.company_name)} · ${E(v.nickname)} ${memberFlags(v)}</h3><p class="small">상태: ${E(statusNames[v.status] || v.status)} · 신청 ${E(date(v.submitted_at))}</p><p>이름: ${E(v.name || "-")}<br>연락처: ${E(v.phone || "-")}<br>설계사 고유번호: ${E(v.registration_number || "미입력")}</p>${autoResultHTML(v.auto_result)}<div class="form-actions">${v.proof_path ? btn("증빙 사진 보기 (60초)", "proof", `data-id="${E(v.id)}" data-testid="proof-view"`) : '<span class="muted small">보관 중인 증빙이 없어요.</span>'}<a class="btn" href="${uri("admin/", { section: "members", id: v.id })}">회원 상세</a></div>${v.review_reason ? `<p class="notice small">현재 안내: ${E(v.review_reason)}</p>` : ""}${adminForm(
+        "verification",
+        v.id,
+        `${select(
+          "status",
+          "심사 결과",
+          [
+            ["", "선택하세요"],
+            ["verified", "승인 — 인증 완료"],
+            ["supplement", "보완 요청"],
+            ["rejected", "반려"],
+          ],
+          "",
+          "required",
+        )}${
+          v.company_id
+            ? ""
+            : `${select("company_id", "연결할 소속 회사 (승인할 때 필수)", [["", "선택하세요"], ...(current?.admin?.companies || []).map((c) => [c.id, c.name])], "")}<p class="hint">신청자가 직접 입력한 회사: ${E(v.company_name)}. 목록에 없으면 보험사·GA 관리에서 먼저 추가해 주세요.</p>`
+        }${reasonField("", false)}<p class="hint">보완 요청·반려는 사유가 필요해요. 사유는 신청자에게 알림으로 전해집니다.</p>`,
+        "심사 결과 저장",
+        "",
+        `${v.company_name} · ${v.nickname}`,
+      )}</article>`,
+    members: (m) =>
+      `<a class="admin-row" href="${uri("admin/", { section: "members", id: m.id })}" data-testid="member-row"><span class="row-main"><strong>${E(m.nickname || "(닉네임 없음)")}</strong> ${memberFlags(m)}</span><span class="row-sub">${E(m.company_name || "소속 미등록")} · ${E(m.role === "owner" ? "대표 관리자" : statusNames[m.status] || m.status)}${m.status === "verified" && m.verified_until ? ` · 인증 만료 ${E(new Date(m.verified_until).toLocaleDateString("ko-KR"))}` : ""}${m.suspended_until ? ` · 정지 끝 ${E(date(m.suspended_until))}` : ""} · 가입 ${E(date(m.created_at))}</span></a>`,
+    posts: (p) =>
+      `<details class="admin-row" data-testid="admin-post"><summary><span class="row-main"><strong>${E(p.title)}</strong> ${contentFlags(p)}</span><span class="row-sub">${E(p.channel_name || "")} · ${E(p.author_display || "")} · ${E(date(p.created_at))} · 좋아요 ${Number(p.likes) || 0} · 댓글 ${Number(p.comment_count) || 0}</span></summary><div class="row-detail"><p class="body-text">${E(String(p.body || "").slice(0, 600))}${String(p.body || "").length > 600 ? "…" : ""}</p><p><a class="text-link" href="${uri("post.html", { id: p.id })}" target="_blank" rel="noopener">글 화면에서 보기 →</a></p>${
+        p.pinned && p.status !== "deleted"
+          ? `<div class="form-actions"><span class="small muted">공지 순서</span>${btn("위로", "admin-order", `data-op="notice_order" data-dir="up" data-id="${E(p.id)}"`)}${btn("아래로", "admin-order", `data-op="notice_order" data-dir="down" data-id="${E(p.id)}"`)}</div>`
+          : ""
+      }${adminForm(
+        "content",
+        p.id,
+        `${select(
+          "status",
+          "표시 상태",
+          [
+            ["", "선택하세요"],
+            ["published", "게시"],
+            ["hidden", "숨김"],
+            ["deleted", "삭제"],
+          ],
+          "",
+          "required",
+        )}<label class="check-line"><input type="checkbox" name="pinned" ${p.pinned ? "checked" : ""}>공지로 고정</label>${reasonField()}`,
+        "상태 저장",
+        '<input type="hidden" name="target" value="post">',
+        p.title,
+      )}${adminForm(
+        "post_move",
+        p.id,
+        `${select("channel_id", "다른 채널로 옮기기", [["", "선택하세요"], ...(current?.admin?.channels || []).filter((c) => c.id !== p.channel_id).map((c) => [c.id, c.name + (c.enabled === false ? " (숨김)" : "")])], "", "required")}${reasonField()}`,
+        "채널 옮기기",
+        "",
+        p.title,
+      )}</div></details>`,
+    comments: (c) =>
+      `<details class="admin-row" data-testid="admin-comment"><summary><span class="row-main"><strong>${E(String(c.body || "").slice(0, 60))}</strong> ${contentFlags(c)}</span><span class="row-sub">글: ${E(c.post_title || "")} · ${E(c.author_display || "")} · ${E(date(c.created_at))}</span></summary><div class="row-detail"><p class="body-text">${E(c.body)}</p><p><a class="text-link" href="${uri("post.html", { id: c.post_id })}" target="_blank" rel="noopener">글 화면에서 보기 →</a></p>${adminForm(
+        "content",
+        c.id,
+        `${select("status", "표시 상태", [["", "선택하세요"], ["published", "게시"], ["hidden", "숨김"], ["deleted", "삭제"]], "", "required")}${reasonField()}`,
+        "상태 저장",
+        '<input type="hidden" name="target" value="comment">',
+        String(c.body || "").slice(0, 20),
+      )}</div></details>`,
+    reviews: (r) =>
+      `<details class="admin-row" data-testid="admin-review"><summary><span class="row-main"><strong>${E(r.title)}</strong> ${contentFlags(r)}</span><span class="row-sub">${E(r.company_name || "")} · ${E(r.author_display || "")} · ${E(date(r.created_at))}</span></summary><div class="row-detail"><p class="body-text">${E(r.body)}</p>${adminForm(
+        "content",
+        r.id,
+        `${select("status", "표시 상태", [["", "선택하세요"], ["published", "게시"], ["hidden", "숨김"], ["deleted", "삭제"]], "", "required")}${reasonField()}`,
+        "상태 저장",
+        '<input type="hidden" name="target" value="review">',
+        r.title,
+      )}</div></details>`,
+    reports: (r) => {
+      const t = r.target_info || {},
+        rep = r.reporter || {},
+        done = r.status !== "pending";
+      return `<details class="admin-row" data-testid="report-item" ${done ? "" : "open"}><summary><span class="row-main"><strong>${E(targetNames[r.target] || "콘텐츠")} 신고 · ${E(t.title || String(t.body || "").slice(0, 40) || "삭제된 대상")}</strong> ${badge(reportStatusNames[r.status] || r.status, done ? "muted" : "danger")}${Number(r.same_target_pending) > 1 ? badge(`같은 대상 신고 ${Number(r.same_target_pending)}건`, "warn") : ""}</span><span class="row-sub">신고자 ${E(rep.nickname || "-")}(${E(rep.company_name || "소속 미등록")}) · 지금까지 신고 ${Number(rep.total) || 0}회 · 복구로 끝난 신고 ${Number(rep.restored) || 0}회${rep.blocked_until && Date.parse(rep.blocked_until) > Date.now() ? " · 신고 제한 중" : ""} · ${E(date(r.created_at))}</span></summary><div class="row-detail"><p class="body-text"><b>신고 사유</b><br>${E(r.reason)}</p><div class="notice small"><b>대상 내용</b> (${E(contentStatusNames[t.status] || "확인 불가")} · ${E(t.author_display || "")})<br>${E(String(t.body || "").slice(0, 300))}${t.post_id ? `<br><a class="text-link" href="${uri("post.html", { id: t.post_id })}" target="_blank" rel="noopener">글 화면에서 보기 →</a>` : ""}</div>${
+        done
+          ? `<p class="small">처리 결과: ${E(reportStatusNames[r.status] || r.status)} · ${E(r.decision_reason || "")}${r.decided_by_name ? ` · 처리자 ${E(r.decided_by_name)}` : ""} · ${E(date(r.decided_at))}</p>`
+          : `${t.pinned ? '<p class="hint">운영 공지라 신고로 자동 가려지지 않았어요.</p>' : ""}${adminForm(
+              "report_resolve",
+              r.id,
+              `${select("decision", "처리 결정", [["", "선택하세요"], ["restore", "문제없음 — 게시 유지·복구"], ["maintain", "위반 확인 — 가림"]], "", "required")}${reasonField()}`,
+              "신고 처리 완료",
+            )}`
+      }<details class="sub-details"><summary>신고자 신고 기능 제한</summary>${adminForm(
+        "report_block",
+        rep.id,
+        `${select("days", "제한 기간", [["", "선택하세요"], ["7", "7일"], ["30", "30일"], ["90", "90일"], ["36500", "무기한"], ["0", "제한 풀기"]], "", "required")}${reasonField()}`,
+        "신고 제한 저장",
+        "",
+        rep.nickname || "신고자",
+      )}</details></div></details>`;
+    },
+    ai: (j) =>
+      `<details class="admin-row" data-testid="ai-item"><summary><span class="row-main"><strong>${E(j.post_title || "질문 글")}</strong> ${badge(aiStatusNames[j.status] || j.status, j.status === "failed" ? "danger" : j.status === "review" ? "warn" : "muted")}${j.answer_status ? badge(`답변 ${aiAnswerNames[j.answer_status] || j.answer_status}`, "") : ""}</span><span class="row-sub">${E(date(j.created_at))}${j.attempts ? ` · 시도 ${Number(j.attempts)}회` : ""}${j.error_code ? ` · ${E(aiErrorNames[j.error_code] || "처리 중 문제가 있었어요")}` : ""}</span></summary><div class="row-detail"><p><a class="text-link" href="${uri("post.html", { id: j.post_id })}" target="_blank" rel="noopener">질문 글 보기 →</a></p>${
+        j.answer
+          ? `${adminForm("ai_edit", j.id, area("body", "AI 답변 (고쳐서 저장할 수 있어요)", j.answer, 'required minlength="20" maxlength="15000"'), "고친 내용 저장")}<div class="form-actions">${adminForm("ai_publish", j.id, "", "검토 후 공개")}${adminForm("ai_reject", j.id, "", "답변 반려")}${adminForm("ai_regenerate", j.id, "", "다시 만들기")}</div>`
+          : '<p class="muted small">아직 만들어진 답변이 없어요.</p>'
+      }${["failed", "skipped"].includes(j.status) ? adminForm("ai_retry", j.id, "", "다시 시도") : ""}</div></details>`,
+    audit: (a) =>
+      `<div class="admin-row static" data-testid="audit-row"><span class="row-main"><strong>${E(a.actor_name || (a.detail?.by === "자동 판정" ? "자동 판정" : "시스템"))}</strong> · ${E(auditName(a.action))}${a.target ? ` · ${E(targetNames[a.target] || a.target)}` : ""}</span><span class="row-sub">${E(date(a.created_at))}${a.detail?.reason ? ` · 사유: ${E(a.detail.reason)}` : ""}${a.detail?.decision ? ` · ${E(autoNames[a.detail.decision] || a.detail.decision)}` : ""}${a.detail?.status && !a.detail?.decision ? ` · ${E(statusNames[a.detail.status] || contentStatusNames[a.detail.status] || a.detail.status)}` : ""} · 기록 ${E(a.id)}</span></div>`,
+  };
+
+  const adminRender = {
+    dashboard(d) {
+      const k = d.dashboard || {},
+        t = d.todo || {};
+      const todoTotal = (Number(t.verifications) || 0) + (Number(t.reports) || 0) + (Number(t.ai_review) || 0);
+      const labels = [
+        ["members", "가입 회원"],
+        ["verified", "인증 완료"],
+        ["pending", "인증 대기"],
+        ["today_posts", "오늘 글"],
+        ["today_comments", "오늘 댓글"],
+        ["expiring", "30일 안에 인증 만료"],
+      ];
+      const trend = d.trend || [];
+      const peak = Math.max(1, ...trend.flatMap((x) => [Number(x.members) || 0, Number(x.posts) || 0, Number(x.comments) || 0]));
+      const bar = (n, cls) => `<i class="${cls}" style="height:${Math.round(((Number(n) || 0) / peak) * 100)}%" title="${Number(n) || 0}"></i>`;
+      return `<section class="admin-todo ${todoTotal ? "has-todo" : ""}" data-testid="admin-todo"><h3>처리할 일 ${todoTotal}건</h3>${todoTotal ? `<div class="todo-links"><a href="/admin/?section=verifications&amp;status=pending">인증 심사 대기 ${Number(t.verifications) || 0}건${t.verifications_hold ? ` (자동 판정 보류 ${Number(t.verifications_hold)}건)` : ""}</a><a href="/admin/?section=reports">미처리 신고 ${Number(t.reports) || 0}건</a><a href="/admin/?section=ai">AI 답변 검토 ${Number(t.ai_review) || 0}건</a></div>` : '<p class="muted small">지금 처리할 일이 없어요.</p>'}</section><div class="status-list">${labels.map(([key, label]) => `<div><strong>${Number(k[key]) || 0}</strong><small>${label}</small></div>`).join("")}</div><p class="notice small" data-testid="dashboard-count-basis">집계 기준: 시험 계정·임시 견본은 빼고 셉니다. ${Number(k.expiring) ? `<a href="/admin/?section=members&amp;status=expiring">인증 만료 예정자 보기 →</a>` : ""}</p><section class="trend" aria-label="최근 14일 추이"><h3>최근 14일 가입·글·댓글</h3><div class="trend-legend"><span class="tm">가입</span><span class="tp">글</span><span class="tc">댓글</span></div><div class="trend-bars">${trend.map((x) => `<div class="trend-day" title="${E(x.day)} 가입 ${Number(x.members) || 0} · 글 ${Number(x.posts) || 0} · 댓글 ${Number(x.comments) || 0}"><div class="trend-stack">${bar(x.members, "tm")}${bar(x.posts, "tp")}${bar(x.comments, "tc")}</div><small>${E(String(x.day).slice(3))}</small></div>`).join("")}</div></section>`;
+    },
+    verifications(d) {
+      const c = d.counts || {};
+      return `${adminFilterChips("verifications", [["pending", `대기 ${Number(c.pending) || 0}`], ["supplement", `보완 요청 ${Number(c.supplement) || 0}`], ["rejected", `반려 ${Number(c.rejected) || 0}`], ["verified", `승인 ${Number(c.verified) || 0}`], ["all", "전체"]], d.status)}<div class="admin-list" data-admin-list="verifications">${(d.items || []).map(adminRows.verifications).join("") || empty("이 상태의 인증 신청이 없어요.", "위에서 다른 상태를 골라 보세요.")}</div>${adminMore("verifications", d.items)}`;
+    },
+    members(d) {
+      return `${adminSearch("members", "이름·이메일·닉네임·설계사 고유번호로 검색")}${adminFilterChips("members", [["", "전체"], ["verified", "인증 완료"], ["pending", "인증 대기"], ["unverified", "인증 전·반려·만료"], ["expiring", "만료 예정"], ["suspended", "정지"], ["withdrawn", "탈퇴"], ["admin", "관리자"], ["test", "시험"], ["sample", "견본"]], d.status, params.get("q") ? { q: params.get("q") } : {})}<div class="admin-list" data-admin-list="members">${(d.items || []).map(adminRows.members).join("") || empty("조건에 맞는 회원이 없어요.", "검색어나 상태를 바꿔 보세요.")}</div>${adminMore("members", d.items)}`;
+    },
+    member(d) {
+      const m = d.member || {};
+      const line = (label, value) => `<div class="profile-line"><span>${label}</span><span>${value}</span></div>`;
+      const reg = m.registration_number || (m.has_registration ? "심사 후 30일이 지나 원본 삭제됨(중복 확인용 값만 보관)" : "미등록");
+      const editable = m.role !== "owner" && m.status !== "withdrawn";
+      const ownerOnly = m.role === "admin" && !isOwner();
+      return `<p><a class="back-link" href="/admin/?section=members">← 회원 목록</a></p><article class="admin-card member-detail" data-testid="member-detail"><h3>${E(m.nickname || "(닉네임 없음)")} ${memberFlags(m)}</h3>${line("이름", E(m.name || "미등록 또는 정리됨"))}${line("닉네임", E(m.nickname || "-"))}${line("연락처", E(m.phone || "미등록 또는 정리됨"))}${line("설계사 고유번호", E(reg))}${line("소속 회사", E(m.company_name || "소속 미등록"))}${line("이메일", E(m.email || (m.auth_deleted ? "로그인 계정 삭제됨" : "-")))}${line("로그인 방식", E((m.providers || [m.provider]).filter(Boolean).map((x) => providerNames[x] || x).join(", ") || "-"))}${line("가입일", E(date(m.signed_up_at || m.created_at)))}${line("마지막 로그인", E(date(m.last_sign_in_at) || "-"))}${line("인증 상태", E(m.role === "owner" ? "대표 관리자 · 인증 면제" : m.status === "verified" && !validVerification(m) ? "인증 기간 만료 · 재인증 필요" : statusNames[m.status] || m.status))}${line("인증 만료일", E(m.verified_until ? new Date(m.verified_until).toLocaleDateString("ko-KR") : "-"))}${m.suspended_until ? line("정지 끝나는 때", E(date(m.suspended_until))) : ""}${m.report_blocked_until ? line("신고 제한", `${E(Date.parse(m.report_blocked_until) > Date.now() ? `${date(m.report_blocked_until)}까지` : "끝남")} · ${E(m.report_block_reason || "")}`) : ""}${line("쓴 글·댓글·리뷰", `글 ${Number(m.post_count) || 0} · 댓글 ${Number(m.comment_count) || 0} · 리뷰 ${Number(m.review_count) || 0}`)}${line("신고 이력", `한 신고 ${Number(m.reports_made) || 0}건(복구로 끝남 ${Number(m.reports_made_restored) || 0}) · 받은 신고 ${Number(m.reports_received) || 0}건`)}${m.review_reason ? `<p class="notice small">현재 안내: ${E(m.review_reason)}</p>` : ""}${autoResultHTML(m.auto_result)}<div class="form-actions">${m.has_proof ? btn("증빙 사진 보기 (60초)", "proof", `data-id="${E(m.id)}" data-testid="proof-view"`) : '<span class="muted small">보관 중인 증빙이 없어요.</span>'}${m.status === "pending" || m.status === "supplement" ? `<a class="btn" href="/admin/?section=verifications&amp;status=${E(m.status)}">인증 심사로</a>` : ""}</div>${
+        (m.report_history || []).length
+          ? `<details class="sub-details"><summary>신고 이력 ${m.report_history.length}건 보기</summary>${m.report_history.map((h) => `<p class="small">${h.kind === "made" ? "한 신고" : "받은 신고"} · ${E(targetNames[h.target] || h.target)} · ${E(reportStatusNames[h.status] || h.status)} · ${E(date(h.created_at))}<br>${E(h.reason)}</p>`).join("")}</details>`
+          : ""
+      }</article>${
+        !editable
+          ? `<p class="notice">${m.role === "owner" ? "대표 관리자는 정지·탈퇴시키거나 권한을 낮출 수 없어요." : "탈퇴한 회원이라 바꿀 수 있는 내용이 없어요."}</p>`
+          : ownerOnly
+            ? '<p class="notice">관리자 계정의 상태 변경·강제 탈퇴는 대표만 할 수 있어요.</p>'
+            : `<section class="admin-card"><h3>회원 상태 바꾸기</h3>${adminForm(
+                "member_status",
+                m.id,
+                `${select("status", "변경할 상태", [["", "선택하세요"], ["suspended", "이용 정지"], ["unverified", "정지 해제 — 재인증 필요"], ["verified", "정지 해제 — 기존 인증 유지"]], "", "required")}${select("days", "정지 기간 (이용 정지일 때)", [["7", "7일"], ["1", "1일"], ["3", "3일"], ["30", "30일"], ["90", "90일"], ["365", "1년"], ["0", "기간 없이(직접 풀 때까지)"]], "7")}${reasonField()}`,
+                "회원 상태 저장",
+                "",
+                m.nickname,
+              )}</section><section class="admin-card"><h3>닉네임 강제 변경</h3>${adminForm("nickname", m.id, `${field("nickname", "새 닉네임", "text", m.nickname || "", 'required minlength="2" maxlength="20"')}${reasonField()}`, "닉네임 변경", "", m.nickname)}</section><section class="admin-card"><h3>신고 기능 제한</h3><p class="hint">악의적으로 신고를 반복하는 회원의 신고를 막습니다.</p>${adminForm("report_block", m.id, `${select("days", "제한 기간", [["", "선택하세요"], ["7", "7일"], ["30", "30일"], ["90", "90일"], ["36500", "무기한"], ["0", "제한 풀기"]], "", "required")}${reasonField()}`, "신고 제한 저장", "", m.nickname)}</section><section class="admin-card danger-zone"><h3>강제 탈퇴</h3><p class="hint">개인정보와 증빙이 바로 지워지고 되돌릴 수 없어요. 남은 글은 ‘탈퇴한 회원’으로 표시됩니다.</p>${adminForm("member_withdraw", m.id, `${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_withdraw" required>‘${E(m.nickname || "이 회원")}’ 회원을 강제 탈퇴시키는 것을 확인했습니다.</label>`, "강제 탈퇴", "", m.nickname)}</section>`
+      }`;
+    },
+    posts(d) {
+      const chOpts = [["", "모든 채널"], ...(d.channels || []).map((c) => [c.id, c.name])];
+      return `${adminSearch("posts", "제목·본문 검색", d.channel_id ? `<input type="hidden" name="channel_id" value="${E(d.channel_id)}">` : "")}${adminFilterChips("posts", [["", "전체"], ["published", "게시 중"], ["hidden", "숨김"], ["deleted", "삭제됨"], ["notice", "공지(순서 바꾸기)"]], d.status, { ...(params.get("q") ? { q: params.get("q") } : {}), ...(d.channel_id ? { channel_id: d.channel_id } : {}) })}<form class="search-form admin-search" action="/admin/"><input type="hidden" name="section" value="posts">${d.status ? `<input type="hidden" name="status" value="${E(d.status)}">` : ""}${select("channel_id", "채널로 보기", chOpts, d.channel_id || "")}<button class="btn">보기</button></form><p class="hint">글을 누르면 내용·상태 바꾸기·채널 옮기기가 열려요. 운영팀 이름의 글·공지는 <a class="text-link" href="/write.html">글쓰기</a>에서 ‘보험라이브 운영팀 이름으로 쓰기’를 고르세요.</p><div class="admin-list" data-admin-list="posts">${(d.items || []).map(adminRows.posts).join("") || empty("조건에 맞는 글이 없어요.", "검색어나 상태를 바꿔 보세요.")}</div>${adminMore("posts", d.items)}`;
+    },
+    comments(d) {
+      return `${adminSearch("comments", "댓글 내용 검색")}${adminFilterChips("comments", [["", "전체"], ["published", "게시 중"], ["hidden", "숨김"], ["deleted", "삭제됨"]], d.status, params.get("q") ? { q: params.get("q") } : {})}<div class="admin-list" data-admin-list="comments">${(d.items || []).map(adminRows.comments).join("") || empty("조건에 맞는 댓글이 없어요.", "검색어나 상태를 바꿔 보세요.")}</div>${adminMore("comments", d.items)}`;
+    },
+    reviews(d) {
+      return `${adminSearch("reviews", "리뷰 제목·내용 검색")}${adminFilterChips("reviews", [["", "전체"], ["published", "게시 중"], ["hidden", "숨김"], ["deleted", "삭제됨"]], d.status, params.get("q") ? { q: params.get("q") } : {})}<div class="admin-list" data-admin-list="reviews">${(d.items || []).map(adminRows.reviews).join("") || empty("조건에 맞는 리뷰가 없어요.", "검색어나 상태를 바꿔 보세요.")}</div>${adminMore("reviews", d.items)}`;
+    },
+    reports(d) {
+      return `${adminFilterChips("reports", [["pending", "미처리만"], ["done", "처리 완료"], ["all", "전체"]], d.status)}<p class="hint">같은 대상에 서로 다른 회원 신고가 3건 이상 모이면 자동으로 임시 가려집니다. 처리하면 같은 대상의 미처리 신고가 함께 정리돼요.</p><div class="admin-list" data-admin-list="reports">${(d.items || []).map(adminRows.reports).join("") || empty(d.status === "pending" ? "미처리 신고가 없어요." : "신고가 없어요.", "신고가 들어오면 이곳과 알림으로 알려 드려요.")}</div>${adminMore("reports", d.items)}`;
+    },
+    channels(d) {
+      const list = d.channels || [];
+      return `<p>${btn("+ 채널 추가", "admin-dialog", 'data-kind="channel" data-mode="add" data-testid="channel-add"', true)}</p><div class="admin-list">${list.map((c, i) => `<div class="admin-row static manage-row" data-testid="channel-row"><span class="row-main">${channelDisc(c)}<strong>${E(c.name)}</strong> ${c.enabled !== false ? badge("사용 중", "ok") : badge("숨김", "muted")}</span><span class="row-sub">글 ${Number(c.post_count) || 0}개 · 팔로워 ${Number(c.followers) || 0}명 · ${E(String(c.description || "").slice(0, 60))}</span><span class="row-actions">${btn("▲", "admin-order", `data-op="channel_move" data-dir="up" data-id="${E(c.id)}" aria-label="${E(c.name)} 위로" ${i === 0 ? "disabled" : ""}`)}${btn("▼", "admin-order", `data-op="channel_move" data-dir="down" data-id="${E(c.id)}" aria-label="${E(c.name)} 아래로" ${i === list.length - 1 ? "disabled" : ""}`)}${btn("수정", "admin-dialog", `data-kind="channel" data-mode="edit" data-id="${E(c.id)}" data-testid="channel-edit"`)}${btn("삭제", "admin-dialog", `data-kind="channel" data-mode="delete" data-id="${E(c.id)}" data-danger="1" data-testid="channel-delete"`)}</span></div>`).join("") || empty("채널이 없어요.", "위의 ‘채널 추가’를 눌러 만들어 주세요.")}</div>`;
+    },
+    companies(d) {
+      const list = d.companies || [];
+      return `<p>${btn("+ 보험사·GA 추가", "admin-dialog", 'data-kind="company" data-mode="add" data-testid="company-add"', true)}</p>${adminSearch("companies", "회사 이름 찾기")}<div class="admin-list">${list
+        .filter((c) => !params.get("q") || c.name.includes(params.get("q")))
+        .map((c) => `<div class="admin-row static manage-row" data-testid="company-row"><span class="row-main"><strong>${E(c.name)}</strong> ${badge(c.kind || "보험사", "")} ${c.enabled !== false ? badge("사용 중", "ok") : badge("숨김", "muted")}</span><span class="row-sub">리뷰 ${Number(c.total_review_count) || 0} · 관련 글 ${Number(c.post_count) || 0} · 소속 회원 ${Number(c.member_count) || 0}</span><span class="row-actions">${btn("수정", "admin-dialog", `data-kind="company" data-mode="edit" data-id="${E(c.id)}"`)}${btn("삭제", "admin-dialog", `data-kind="company" data-mode="delete" data-id="${E(c.id)}" data-danger="1"`)}</span></div>`)
+        .join("") || empty("회사가 없어요.", "위의 ‘보험사·GA 추가’를 눌러 주세요.")}</div>`;
+    },
+    ai(d) {
+      const s = d.settings || {};
+      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">질문 글만 처리합니다. AI 답변은 관리자가 검토해 공개해야 보이며, 사람 댓글·인기 수치에 포함되지 않아요.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}>AI 답변 만들기 사용</label><p></p>${field("daily_limit", "하루 최대 생성 수", "number", s.ai_daily_limit || 30, 'required min="1" max="30"')}`, "AI 설정 저장")}</article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
+    },
+    settings(d) {
+      const words = d.settings?.banned_words || [];
+      return `<article class="admin-card"><h3>금칙어</h3><p class="hint">글·댓글·리뷰에 이 단어가 들어 있으면 올리지 못하고 안내가 나와요. 쉼표나 줄바꿈으로 구분합니다(최대 300개, 단어당 30자).</p>${adminForm("banned_words", "", area("words", "금칙어 목록", words.join(", "), 'maxlength="9000" data-testid="banned-words"'), "금칙어 저장")}</article>`;
+    },
+    audit(d) {
+      const hide = params.get("reads") !== "show";
+      return `<p class="notice small">감사 기록은 고치거나 지울 수 없어요. 처리자·행동·대상·사유를 확인할 수 있습니다.</p>${adminSearch("audit", "처리자·행동·대상·사유 검색", hide ? "" : '<input type="hidden" name="reads" value="show">')}<p class="small"><a class="text-link" href="${uri("admin/", { section: "audit", ...(params.get("q") ? { q: params.get("q") } : {}), ...(hide ? { reads: "show" } : {}) })}">${hide ? "열람 기록도 보기" : "열람 기록 숨기기"}</a></p><div class="admin-list" data-admin-list="audit">${(d.items || []).map(adminRows.audit).join("") || empty("기록이 없어요.", "검색어를 바꿔 보세요.")}</div>${adminMore("audit", d.items)}`;
+    },
+    admins(d) {
+      return `<p class="notice small">관리자 지정·회수는 대표만 할 수 있어요. 권한은 서버에서 확인합니다.</p><div class="admin-list">${(d.admins || []).map((a) => `<div class="admin-row static"><span class="row-main"><strong>${E(a.nickname || "닉네임 미등록")}</strong> ${a.role === "owner" ? badge("대표", "accent") : badge("관리자", "accent")} ${a.is_test ? badge("시험", "warn") : ""}</span><span class="row-sub">${E(a.company_name || "소속 미등록")} · ${E(a.role === "owner" ? "대표 관리자 · 모든 권한" : statusNames[a.status] || a.status)}</span></div>`).join("")}</div>${
+        isOwner()
+          ? `<article class="admin-card"><h3>관리자 지정·회수</h3>${adminForm(
+              "admin_role",
+              "",
+              `${select("id", "대상 회원 (탈퇴·정지 회원 제외)", [["", "선택하세요"], ...(d.candidates || []).map((m) => [m.id, `${m.nickname} · ${m.company_name || "소속 미등록"} (${statusNames[m.status] || m.status}${m.role === "admin" ? " · 관리자" : ""}${m.is_test ? " · 시험" : ""})`])], "", "required")}${select("role", "권한", [["", "선택하세요"], ["admin", "관리자로 지정"], ["member", "관리자 권한 회수"]], "", "required")}${reasonField()}`,
+              "권한 변경",
+            )}</article>`
+          : ""
+      }`;
+    },
+  };
+
   async function admin() {
     const denied = authorization("admin");
     if (denied) return denied;
-    const section = params.get("section") || "dashboard";
-    const q = params.get("q") || "";
-    const d = await read("admin", { section, q });
-    current = d;
-    channels = d.channels || [];
-    companies = d.companies || [];
-    let body = "";
-    if (section === "dashboard") {
-      const k = d.dashboard || {};
-      const rows = Object.entries(k);
-      const labels = {
-        members: "가입 회원",
-        member_count: "가입 회원",
-        total_members: "가입 회원",
-        pending: "인증 대기",
-        pending_count: "인증 대기",
-        pending_verifications: "인증 대기",
-        reports: "미처리 신고",
-        open_reports: "미처리 신고",
-        report_count: "미처리 신고",
-        today_posts: "오늘 글",
-        today_comments: "오늘 댓글",
-        verified: "인증 완료",
-        verified_count: "인증 완료",
-        users: "가입 회원",
-      };
-      const t = k.todo || {};
-      const todoTotal = (Number(t.verifications) || 0) + (Number(t.reports) || 0) + (Number(t.ai_review) || 0);
-      body = `<section class="admin-todo ${todoTotal ? "has-todo" : ""}" data-testid="admin-todo"><h3>처리할 일 ${todoTotal}건</h3>${todoTotal ? `<div class="todo-links"><a href="/admin/?section=verifications&amp;status=pending">인증 심사 대기 ${Number(t.verifications) || 0}건${t.verifications_hold ? ` (자동 판정 보류 ${Number(t.verifications_hold)}건)` : ""}</a><a href="/admin/?section=reports">미처리 신고 ${Number(t.reports) || 0}건</a><a href="/admin/?section=ai">AI 답변 검토 ${Number(t.ai_review) || 0}건</a></div>` : '<p class="muted small">지금 처리할 일이 없어요.</p>'}</section><div class="status-list">${rows
-        .filter(([key, v]) => key !== "todo" && (typeof v === "number" || typeof v === "string"))
-        .map(([key, val]) => `<div><strong>${E(val)}</strong><small>${E(labels[key] || key)}</small></div>`)
-        .join(
-          "",
-        )}</div><p class="notice" data-testid="dashboard-count-basis">${k.counts_exclude_test_and_sample === true ? "집계 기준: 시험 계정·시험 콘텐츠와 임시 견본을 제외합니다." : "집계 기준을 확인하고 있습니다."} 증빙 자료 열람과 운영 처리는 감사 기록에 남습니다.</p><div class="form-actions"><a class="btn btn-primary" href="/admin/?section=verifications">인증 심사</a><a class="btn" href="/admin/?section=reports">신고 처리</a></div>`;
-    } else if (section === "verifications") {
-      const vstatus = params.get("status") || "pending";
-      const vfilters = [
-        ["pending", "대기"],
-        ["supplement", "보완 요청"],
-        ["rejected", "반려"],
-        ["verified", "승인"],
-        ["all", "전체"],
-      ];
-      body =
-        `<nav class="chips admin-filter">${vfilters.map(([s, label]) => `<a class="chip ${vstatus === s ? "active" : ""}" href="${uri("admin/", { section: "verifications", status: s })}">${label} ${(d.verifications || []).filter((v) => s === "all" || v.status === s).length}</a>`).join("")}</nav>` +
-        ((d.verifications || [])
-          .filter((v) => vstatus === "all" || v.status === vstatus)
-          .map(
-            (v) =>
-              `<article class="admin-card" data-testid="verification-item"><h3>${E(v.company_name)} · ${E(v.nickname)}</h3><p class="small">상태: ${E(statusNames[v.status] || v.status)} · 신청 ${E(date(v.submitted_at))}</p><p>이름: ${E(v.name)}<br>연락처: ${E(v.phone)}<br>설계사 고유번호: ${E(v.registration_number || "미입력")}</p>${autoResultHTML(v.auto_result)}${v.proof_path ? btn("증빙 사진 보기 (60초)", "proof", `data-id="${E(v.id)}" data-testid="proof-view"`) : '<p class="muted">보관 중인 증빙이 없습니다.</p>'}${v.review_reason ? `<p class="notice">기존 처리: ${E(v.review_reason)}</p>` : ""}${adminForm(
-                "verification",
-                v.id,
-                `${select(
-                  "status",
-                  "심사 결과",
-                  [
-                    ["", "선택하세요"],
-                    ["verified", "승인 — 인증 완료"],
-                    ["supplement", "보완 요청"],
-                    ["rejected", "반려"],
-                  ],
-                  "",
-                  "required",
-                )}${
-                  v.company_id
-                    ? ""
-                    : `${select("company_id", "연결할 소속 회사 (승인할 때 필수)", [["", "선택하세요"], ...companies.filter((c) => c.enabled !== false).map((c) => [c.id, c.name])], "")}<p class="hint">신청자가 직접 입력한 회사: ${E(v.company_name)}. 목록에 없으면 보험사·GA 관리에서 먼저 추가해 주세요.</p>`
-                }${reasonField()}`,
-                "심사 결과 저장",
-              )}</article>`,
-          )
-          .join("") || empty("이 상태의 인증 신청이 없어요.", "위에서 다른 상태를 골라 보세요."));
-    }
-    else if (section === "members")
-      body = `<form class="search-form" action="/admin/"><input type="hidden" name="section" value="members"><input name="q" value="${E(q)}" aria-label="회원 검색" placeholder="닉네임·회사 검색"><button class="btn">검색</button></form>${
-        (d.members || [])
-          .map(
-            (m) =>
-              `<article class="admin-card"><h3>${E(m.company_name)} · ${E(m.nickname)}</h3><p class="small muted">${m.role === "owner" ? "대표 관리자 · 모든 권한 · 인증 면제" : `${E(statusNames[m.status] || m.status)} · ${m.role === "admin" ? "관리자" : "회원"}`}</p>${
-                m.role === "owner"
-                  ? '<p class="notice">대표 관리자는 정지하거나 권한을 낮출 수 없습니다.</p>'
-                  : m.status === "withdrawn"
-                    ? '<p class="notice">탈퇴한 회원이라 상태를 바꿀 수 없어요.</p>'
-                    : `<details><summary>상태 변경·정지 해제</summary>${adminForm(
-                      "member_status",
-                      m.id,
-                      `${select(
-                        "status",
-                        "변경할 상태",
-                        [
-                          ["", "선택하세요"],
-                          ["suspended", "이용 정지"],
-                          ["unverified", "정지 해제 — 재인증 필요"],
-                          ["verified", "정지 해제 — 기존 인증 확인"],
-                        ],
-                        "",
-                        "required",
-                      )}${reasonField()}`,
-                      "회원 상태 저장",
-                    )}</details>`
-              }${m.status === "withdrawn" ? "" : `<details style="margin-top:14px"><summary>닉네임 강제 변경</summary>${adminForm("nickname", m.id, `${field("nickname", "새 닉네임", "text", m.nickname || "", 'required minlength="2" maxlength="20"')}${reasonField()}`, "닉네임 변경")}</details>`}</article>`,
-          )
-          .join("") || empty("검색 결과가 없어요.", "검색어를 바꿔 확인해 주세요.")
-      }`;
-    else if (section === "posts") body = adminContent(d.posts, "post");
-    else if (section === "comments") body = adminContent(d.comments, "comment");
-    else if (section === "reviews") body = adminContent(d.reviews, "review");
-    else if (section === "reports")
-      body =
-        (d.reports || [])
-          .map(
-            (r) =>
-              `<article class="admin-card" data-testid="report-item"><h3>${E({ post: "글", comment: "댓글", review: "리뷰" }[r.target_type || r.target] || "콘텐츠")} 신고</h3><p class="small muted">${E(r.status || "접수")} · ${E(date(r.created_at))}</p><p class="body-text">${E(r.reason)}</p>${(() => {
-                const item = ({ post: d.posts, comment: d.comments, review: d.reviews }[r.target] || []).find(
-                  (x) => x.id === r.target_id,
-                );
-                return item
-                  ? `<details><summary>대상 콘텐츠 확인: ${E(item.title || "댓글")}</summary><p class="body-text">${E(item.body)}</p></details>`
-                  : "";
-              })()}${r.target_body ? `<details><summary>대상 내용</summary><p class="body-text">${E(r.target_body)}</p></details>` : ""}<p class="notice small">신고 접수 시 임시 가림합니다. 권리침해 여부와 소명을 검토해 복구 또는 위반에 따른 가림 유지를 결정하세요. 미결 임시조치는 30일 이내 검토합니다.</p>${r.resolution || r.decision ? `<p>처리 결과: ${E(r.resolution || r.decision)} · ${E(r.resolution_reason || r.decision_reason || "")}</p>` : ""}${adminForm(
-                "report_resolve",
-                r.id,
-                `${select(
-                  "decision",
-                  "처리 결정",
-                  [
-                    ["", "선택하세요"],
-                    ["restore", "복구 — 게시 다시 허용"],
-                    ["maintain", "위반 확인 — 가림 유지"],
-                  ],
-                  "",
-                  "required",
-                )}${reasonField()}`,
-                "신고 처리 완료",
-              )}</article>`,
-          )
-          .join("") || empty("접수된 신고가 없어요.", "신고가 접수되면 대상과 처리 상태가 표시됩니다.");
-    else if (section === "channels") {
-      const channelForm = (c) =>
-        adminForm(
-          "channel_save",
-          c.id,
-          `<div class="form-grid">${field("slug", "채널 코드", "text", c.slug || "", 'required pattern="[a-z0-9-]+" minlength="2" maxlength="40"')}${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40"')}</div>${area("description", "설명", c.description || "", 'required maxlength="500"')}${field("display_order", "표시 순서", "number", c.display_order ?? 0, 'required min="0" max="999"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>채널 사용</label>`,
-          "채널 저장",
-        );
-      body = `<details class="admin-card"><summary>채널 추가</summary>${channelForm({})}</details>${channels.map((c) => `<article class="admin-card"><h3>${E(c.name)}</h3>${channelForm(c)}${adminRemoval("channel", c, channels)}</article>`).join("")}`;
-    } else if (section === "companies") {
-      const companyForm = (c) =>
-        adminForm(
-          "company_save",
-          c.id,
-          `${field("name", "회사 이름", "text", c.name || "", 'required minlength="2" maxlength="80"')}${select(
-            "kind",
-            "회사 유형",
-            [
-              ["보험사", "보험사"],
-              ["GA", "GA"],
-            ],
-            c.kind || "보험사",
-          )}${area("description", "회사 설명", c.description || "", 'maxlength="1000"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>회사 사용</label>`,
-          "회사 저장",
-        );
-      body = `<details class="admin-card"><summary>보험사·GA 추가</summary>${companyForm({})}</details>${companies.map((c) => `<article class="admin-card"><h3>${E(c.name)}</h3>${companyForm(c)}${adminRemoval("company", c, companies)}</article>`).join("")}`;
-    } else if (section === "ai")
-      body = `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">질문 글만 처리합니다. AI는 사람 댓글·인기 수치에 포함되지 않고, 생성에 실패해도 글과 댓글은 그대로 이용할 수 있습니다.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${d.settings?.ai_enabled ? "checked" : ""}>AI 답변 생성 사용</label><p></p>${field("daily_limit", "하루 생성 상한", "number", d.settings?.ai_daily_limit || 30, 'required min="1" max="30"')}`, "AI 설정 저장")}</article><h2>생성 기록</h2>${(d.ai_jobs || []).map((j) => `<article class="admin-card"><h3>${E(j.title || j.post_title || "질문 답변")}</h3><p class="small muted">${E(j.status)} · 답변 ${E(j.answer_status || "준비 전")} · ${E(date(j.created_at))}</p>${j.error || j.error_code ? `<p class="error">${E(j.error_code || j.error)}</p>` : ""}${j.answer || j.body ? `<p class="body-text">${E(j.answer || j.body)}</p>` : ""}${j.answer ? `<details><summary>답변 공개·반려</summary>${adminForm("ai_publish", j.id, reasonField(), "검토 후 공개")}${adminForm("ai_reject", j.id, reasonField(), "답변 반려")}</details>` : ""}</article>`).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 등록되면 처리 대기 목록에 추가됩니다.")}`;
-    else if (section === "audit")
-      body = `<p class="notice">감사 기록은 수정·삭제할 수 없습니다. 조회·권한 변경·심사·신고·증빙 접근 기록을 확인합니다.</p>${(d.audit || []).map((a) => `<article class="admin-card"><h3>${E(a.action || a.operation || "운영 처리")}</h3><p class="small muted">${E(date(a.created_at))} · ${E(a.target_type || a.target || "")}</p><p>${E(a.reason || a.detail?.reason || a.details?.reason || "")}</p><p class="small muted">기록 번호: ${E(a.id)}</p></article>`).join("") || empty("아직 기록이 없어요.", "관리자 동작을 서버에서 기록합니다.")}`;
-    else if (section === "admins")
-      body = `<p class="notice">관리자 추가·회수는 대표 계정만 할 수 있습니다. 이메일 화면 비교가 아닌 서버 권한으로 검사합니다.</p>${(d.admins || []).map((a) => `<div class="admin-card"><strong>${E(a.nickname || "관리자")} · ${E(a.company_name || "운영")}</strong><p class="muted">${a.role === "owner" ? "대표 관리자 · 모든 권한" : "관리자"}</p></div>`).join("")}${
-        viewer?.role === "owner"
-          ? adminForm(
-              "admin_role",
-              "",
-              `${select(
-                "id",
-                "대상 회원",
-                [
-                  ["", "선택하세요"],
-                  ...(d.members || [])
-                    .filter((m) => m.role !== "owner" && !["withdrawn", "suspended"].includes(m.status))
-                    .map((m) => [
-                      m.id,
-                      `${m.company_name || "소속 미등록"} · ${m.nickname || "닉네임 미등록"} (${statusNames[m.status] || m.status}${m.role === "admin" ? " · 관리자" : ""})`,
-                    ]),
-                ],
-                "",
-                "required",
-              )}${select(
-                "role",
-                "권한",
-                [
-                  ["", "선택하세요"],
-                  ["admin", "관리자로 지정"],
-                  ["member", "관리자 권한 회수"],
-                ],
-                "",
-                "required",
-              )}${reasonField()}`,
-              "권한 변경",
-            )
-          : ""
-      }`;
-    return `<section class="section"><div class="section-head"><h1>관리자 모드</h1><span class="status-badge">${isOwner() ? "대표 관리자 · 모든 권한" : "관리자"}</span></div><nav class="admin-tabs" aria-label="관리 메뉴">${adminSections.map(([id, label]) => `<a class="chip ${section === id ? "active" : ""}" href="${uri("admin/", { section: id })}">${label}</a>`).join("")}</nav><h2>${E(adminSections.find(([s]) => s === section)?.[1] || "대시보드")}</h2>${body}</section>`;
+    const section = adminSections.some(([s]) => s === params.get("section")) ? params.get("section") : "dashboard";
+    const sec = section === "members" && params.get("id") ? "member" : section;
+    const args = { v: "2", section: sec, q: params.get("q") || "", status: params.get("status") || "", limit: 30 };
+    if (params.get("id")) args.id = params.get("id");
+    if (params.get("channel_id")) args.channel_id = params.get("channel_id");
+    if (sec === "audit" && params.get("reads") !== "show") args.hide_reads = "true";
+    const d = await read("admin", args);
+    current = { admin: d, args, offset: (d.items || []).length };
+    if (d.channels) channels = d.channels;
+    if (d.companies) companies = d.companies;
+    const t = d.todo || {};
+    const tabCount = { verifications: Number(t.verifications) || 0, reports: Number(t.reports) || 0, ai: Number(t.ai_review) || 0 };
+    return `<section class="section admin-page"><div class="section-head"><h1>관리자 모드</h1><span class="status-badge">${isOwner() ? "대표 관리자 · 모든 권한" : "관리자"}</span></div><nav class="admin-tabs" aria-label="관리 메뉴">${adminSections.map(([id, label]) => `<a class="chip ${section === id ? "active" : ""}" href="${uri("admin/", { section: id })}">${label}${tabCount[id] ? ` <span class="tab-count">${tabCount[id]}</span>` : ""}</a>`).join("")}</nav><h2>${E(adminSections.find(([s]) => s === section)?.[1] || "대시보드")}</h2>${adminRender[sec](d)}</section>`;
   }
   const policyDocs = {
     terms: `<h1>이용약관</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브</p><h2>1. 서비스와 가입</h2><p>보험라이브는 보험설계사들이 실무 지식과 개인 경험을 나누는 커뮤니티입니다. 성인 이용자는 Google 또는 이메일로 로그인할 수 있습니다. 설계사 인증을 마쳐야 회원 전용 글·댓글·AI 답변을 읽고 글을 작성할 수 있습니다. 가입 정보와 증빙은 본인의 현재 정보여야 합니다.</p><h2>2. 공개 범위</h2><p>공개 화면에는 소속 회사명과 닉네임 첫 글자 뒤 별표 3개만 표시합니다. 실무지식·커리어·운영팀 정리는 본문 전체, 경험·자유 글과 회사 리뷰는 앞부분 최대 300자를 공개합니다. 댓글·대댓글·AI 답변은 인증 회원에게만 제공됩니다. 본문 자체에 개인정보를 쓰면 작성자를 추정할 수 있으므로 게시 전에 확인해 주세요.</p><h2>3. 회원 콘텐츠와 책임</h2><p>게시물의 권리는 작성자에게 있습니다. 작성자는 서비스 안에서 콘텐츠를 저장·표시하고 신고를 처리하는 데 필요한 이용을 허락합니다. 회원의 글과 리뷰는 개인 의견이며 소속 회사나 운영팀의 공식 입장, 보험상품 가입 권유 또는 개별 계약에 대한 확정적인 판단이 아닙니다. 실제 계약·보장·지급 여부는 약관과 공식 자료로 확인해야 합니다.</p><h2>4. 금지 행위와 운영 조치</h2><p>허위사실·명예훼손·개인정보 공개·욕설·사칭·불법 자료·도배·무단 광고·계정 거래·악의적 신고·권한 우회는 금지합니다. 운영자는 사유를 기록하고 글 숨김·삭제, 인증 보완·반려, 일시 또는 지속적 이용 제한을 적용할 수 있습니다. 주요 결과는 서비스 내 알림과 내 정보에 안내합니다.</p><h2>5. 권리침해 신고와 임시조치</h2><p>사생활 침해·명예훼손 등 권리침해를 주장하는 회원은 글·댓글·리뷰의 신고 메뉴에서 대상과 침해 사실을 구체적으로 소명해 삭제 또는 조치를 요청할 수 있습니다. 신고는 설계사 인증을 마친 회원이 할 수 있으며 본인의 글은 신고할 수 없습니다. 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상 모이거나 운영자가 필요하다고 판단하면 접근을 임시 차단하고 신청인·게시자에게 서비스 내 알림으로 알리며 원래 게시물 위치에 조치 사실을 표시합니다. 운영 공지는 신고로 자동 가려지지 않고 운영자가 직접 검토합니다. 권리침해 판단이 어렵거나 다툼이 예상될 때 정보통신망법 제44조의2에 따른 임시조치는 30일 이내로 합니다. 운영자는 그 안에 소명을 검토해 복구 또는 위반에 따른 최종 가림·삭제를 결정합니다. 미결인 임시조치는 기간 종료 후 복구하고 당사자에게 알립니다. 조치 사유가 잘못되었다고 판단하면 해당 신고에 추가 소명을 적어 이의를 제기할 수 있습니다.</p><h2>6. 회사 리뷰와 AI</h2><p>회사 리뷰는 현재 소속이 인증된 회원이 회사별 365일에 1건 작성할 수 있으며 본인의 리뷰를 수정할 수 있습니다. 5개 이상의 유효 리뷰가 모이면 평균을 공개합니다. AI 참고 답변은 AI 작성 표시를 하며 정확성을 보장하지 않습니다. 사람 댓글과 인기 수치에 포함하지 않고 운영 검토와 설정에 따라 표시합니다.</p><h2>7. 탈퇴와 변경</h2><p>내 정보에서 탈퇴하면 회원 전용 접근을 즉시 차단하고 남은 콘텐츠의 작성자를 ‘탈퇴한 회원’으로 표시합니다. 삭제를 원하는 본인 글·댓글은 탈퇴 전에 삭제해 주세요. 관계 법령상 보관 의무가 없는 인증 정보는 삭제합니다. 약관 변경과 중요한 운영 변경은 공지로 안내합니다.</p>`,
@@ -1015,6 +1170,34 @@
         await act("notification_read", { id });
         location.href = el.href;
         return;
+      case "admin-more": {
+        const sec = el.dataset.section;
+        const d = await read("admin", { ...current.args, offset: current.offset });
+        const list = $(`[data-admin-list="${CSS.escape(sec)}"]`);
+        if (list) list.insertAdjacentHTML("beforeend", (d.items || []).map(adminRows[sec]).join(""));
+        current.offset += (d.items || []).length;
+        if ((d.items || []).length < 30) el.closest(".more-wrap")?.remove();
+        return;
+      }
+      case "admin-dialog": {
+        const kind = el.dataset.kind,
+          mode = el.dataset.mode;
+        const items = kind === "channel" ? current?.admin?.channels || [] : current?.admin?.companies || [];
+        const item = items.find((x) => x.id === id) || {};
+        const label = kind === "channel" ? "채널" : "보험사·GA";
+        const title = mode === "add" ? `${label} 추가` : mode === "edit" ? `${label} 수정 · ${item.name}` : `${label} 삭제 · ${item.name}`;
+        const form =
+          mode === "delete"
+            ? removalFormHTML(kind, item, items)
+            : kind === "channel"
+              ? channelFormHTML(mode === "add" ? {} : item)
+              : companyFormHTML(mode === "add" ? {} : item);
+        dialog(`<h2>${E(title)}</h2>${form}<p></p>${btn("닫기", "dialog-close")}`);
+        return;
+      }
+      case "admin-order":
+        await act("admin", { operation: el.dataset.op, id, direction: el.dataset.dir });
+        return refresh();
       case "proof": {
         const d = await act("admin", { operation: "proof_access", id, reason: "인증 심사를 위한 증빙 확인" });
         const { data, error } = await sb.storage.from("bl-proofs").createSignedUrl(d.path, 60);
@@ -1036,9 +1219,12 @@
     const data = new FormData(form),
       v = Object.fromEntries(data),
       type = form.dataset.form;
+    // 관리자의 운영팀 이름 글은 설계사 인증과 상관없이 쓸 수 있다(서버도 같은 규칙).
+    const teamPost = type === "post" && isAdmin() && data.has("as_team");
     if (
       (["post", "comment", "review"].includes(type) ||
         (type === "confirm" && ["post_delete", "comment_delete", "review_delete"].includes(v.action))) &&
+      !teamPost &&
       !(await requireWriting())
     )
       return;
@@ -1123,6 +1309,8 @@
           content_kind: v.content_kind,
           is_question: data.has("is_question"),
         };
+        if (form.elements.as_team) payload.as_team = data.has("as_team");
+        if (form.elements.pinned) payload.pinned = data.has("as_team") && data.has("pinned");
         if (v.id) payload.id = v.id;
         if (v.company_id) payload.company_id = v.company_id;
         const result = await act("post_save", payload);
@@ -1192,14 +1380,19 @@
       case "admin": {
         const payload = { ...v };
         if (!payload.id) delete payload.id;
+        delete payload.confirm_delete;
+        delete payload.confirm_withdraw;
         ["enabled", "pinned"].forEach((k) => {
           if (form.elements[k]) payload[k] = data.has(k);
         });
-        ["display_order", "daily_limit"].forEach((k) => {
-          if (k in payload) payload[k] = Number(payload[k]);
+        ["display_order", "daily_limit", "days"].forEach((k) => {
+          if (k in payload && payload[k] !== "") payload[k] = Number(payload[k]);
         });
+        if (payload.operation === "channel_save" && !payload.slug)
+          payload.slug = slugify(payload.name, (current?.admin?.channels || channels).map((c) => c.slug));
         await act("admin", payload);
-        notify("운영 처리를 저장하고 감사 기록에 남겼어요.");
+        closeDialog();
+        notify("저장했어요. 처리 내역은 감사 기록에 남았어요.");
         return refresh();
       }
     }
