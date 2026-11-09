@@ -1993,3 +1993,55 @@ dialog::backdrop {
     inset: -12px -4px;
   }
 }
+
+/* 2026-11-09 수정: 설계사 고유번호 ? 안내 */
+.label-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.help-tip {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #b9b4c7;
+  color: #6d6880;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.help-tip::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+.help-tip-text {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  max-width: 300px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--dark);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.help-tip:hover + .help-tip-text,
+.help-tip:focus-visible + .help-tip-text,
+.help-tip[aria-expanded="true"] + .help-tip-text {
+  display: block;
+}
+.proof-guide {
+  color: var(--ink) !important;
+  font-weight: 700 !important;
+}
