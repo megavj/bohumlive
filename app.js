@@ -10,6 +10,15 @@
       (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
     );
   const uri = (file, args = {}) => "/" + file + (Object.keys(args).length ? "?" + new URLSearchParams(args) : "");
+  const here = () => location.pathname + location.search;
+  // 버튼을 눌렀다가 로그인 화면으로 온 손님에게만 이유를 한 줄 보여 준다.
+  const loginReasons = {
+    like: "좋아요를 누르려면 먼저 로그인해 주세요.",
+    bookmark: "북마크하려면 먼저 로그인해 주세요.",
+    follow: "채널을 팔로우하려면 먼저 로그인해 주세요.",
+    report: "신고하려면 먼저 로그인해 주세요. 처리 결과는 알림으로 알려 드려요.",
+  };
+  const loginUrl = (returnTo = here(), why = "") => uri("login.html", { returnTo, ...(why ? { why } : {}) });
   const date = (v) =>
     v
       ? new Date(v).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
@@ -136,7 +145,7 @@
             ? "company"
             : "";
     $("#header").innerHTML =
-      `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></a><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="관심 있는 내용을 검색해 보세요" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${session ? `<div class="header-user"><a class="notification-link" href="/notifications.html" aria-label="알림">${icon("bell")}</a><a href="/me.html">내 정보</a></div>` : `<a class="header-login" href="${uri("join.html", { returnTo: location.pathname + location.search })}">로그인·가입</a>`}</div><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a><a class="${active === "company" ? "active" : ""}" href="/company.html">보험사 리뷰</a>${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
+      `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></a><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="관심 있는 내용을 검색해 보세요" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${session ? `<div class="header-user" data-testid="header-user"><a class="notification-link" href="/notifications.html" aria-label="알림">${icon("bell")}</a><a class="header-name" href="/me.html" title="내 정보">${E(displayName())}님</a><span class="header-sep" aria-hidden="true">·</span><button type="button" class="header-logout" data-do="logout" data-testid="header-logout">로그아웃</button></div>` : page === "login" ? "" : `<a class="header-login" href="${E(loginUrl())}">로그인·가입</a>`}</div><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a><a class="${active === "company" ? "active" : ""}" href="/company.html">보험사 리뷰</a>${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
     $("#footer").innerHTML =
       `<footer class="site-footer"><div class="footer-logo">보험<b style="color:var(--accent)">라이브</b></div><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html">개인정보처리방침</a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">이용 도움말·권리침해 신고</a></nav><p class="footer-note">보험라이브는 설계사의 경험과 실무 지식을 나누는 공간입니다. 회원의 글은 개인의 의견이며 회사의 공식 입장이나 보험상품 가입 권유가 아닙니다. 고객정보·주민등록번호·개인 연락처를 게시하지 마세요.</p><p class="footer-note">공개 준비 중 · 검색 노출을 차단하고 있습니다.</p></footer>`;
     $("#sidebar").innerHTML =
@@ -145,8 +154,10 @@
     if (page === "admin") $("#sidebar").hidden = true;
   }
   function authorization(kind = "verified") {
-    if (!session)
-      return `<section class="auth-box"><h1>로그인이 필요해요</h1><p class="muted">계정을 확인한 다음 이어서 이용할 수 있어요.</p><a class="btn btn-primary" href="${uri("join.html", { returnTo: location.pathname + location.search })}">로그인하기</a></section>`;
+    if (!session) {
+      location.replace(loginUrl());
+      return '<div class="loading" role="status">로그인 화면으로 이동합니다.</div>';
+    }
     if (kind === "admin" && !isAdmin())
       return empty("관리자만 사용할 수 있어요.", "권한은 서버에서 확인합니다. 내 정보에서 현재 상태를 확인해 주세요.");
     if (kind === "verified" && !isVerified())
@@ -200,7 +211,7 @@
     const ordered = comments
       .filter((c) => !c.parent_id)
       .flatMap((c) => [c, ...comments.filter((x) => x.parent_id === c.id)]);
-    return `<article><header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a><span class="tag">${E(kindNames[p.content_kind])}</span>${p.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(p)}</div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="meta"><span>${E(date(p.created_at))}</span><span>${icon("comment")} 사람 댓글 ${Number(p.comment_count) || 0}</span>${p.is_mine && isVerified() ? `<a href="${uri("write.html", { id: p.id })}">수정</a><button data-do="post-delete" data-id="${E(p.id)}">삭제</button>` : ""}<button class="push" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button></div></header><div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? '<div class="guest-lock"><h2>여기부터 인증 회원에게만 공개</h2><p>설계사 인증 후 나머지 본문과 동료의 댓글을 읽을 수 있어요.</p><a class="btn btn-primary" href="/verify.html">설계사 인증하기</a></div>' : ""}<div class="post-actions"><button data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 ${Number(p.likes) || 0}</button><button data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" data-testid="post-bookmark">${icon("bookmark")} ${p.bookmarked ? "저장됨" : "북마크"}</button><button data-do="share" class="share-button" aria-label="글 링크 복사">${icon("share")}</button></div>${p.company_id ? `<section class="related-companies"><h2>관련 회사</h2><a class="related-company" href="${uri("company.html", { id: p.company_id })}"><span class="company-mark">${E(p.company_name)}</span><p>${E(p.company_name)}<br><span class="muted small">회사 정보와 리뷰 보기</span></p></a></section>` : ""}<section class="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count) || 0}</h2>${isVerified() ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="고객정보 없이 동료의 경험을 나눠 주세요." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>` : canReadMember() ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>' : `<div class="guest-lock">${icon("lock")}<h2>댓글과 AI 답변은 인증 회원에게 공개돼요</h2><p>${session ? `현재 상태: ${E(statusLabel())}` : "로그인 후 설계사 인증을 완료해 주세요."}</p><a class="btn btn-primary" href="${viewer?.status === "suspended" ? "/help.html" : "/verify.html"}">${viewer?.status === "suspended" ? "이용 정지 안내" : "설계사 인증하기"}</a></div>`}</div>${canReadMember() ? (ordered.length ? ordered.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.")) : ""}${d.ai_reply ? `<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>` : ""}</section></article>`;
+    return `<article><header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a><span class="tag">${E(kindNames[p.content_kind])}</span>${p.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(p)}</div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="meta"><span>${E(date(p.created_at))}</span><span>${icon("comment")} 사람 댓글 ${Number(p.comment_count) || 0}</span>${p.is_mine && isVerified() ? `<a href="${uri("write.html", { id: p.id })}">수정</a><button data-do="post-delete" data-id="${E(p.id)}">삭제</button>` : ""}<button class="push" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button></div></header><div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? '<div class="guest-lock"><h2>여기부터 인증 회원에게만 공개</h2><p>설계사 인증 후 나머지 본문과 동료의 댓글을 읽을 수 있어요.</p>${verifyLink()}</div>' : ""}<div class="post-actions"><button data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 ${Number(p.likes) || 0}</button><button data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" data-testid="post-bookmark">${icon("bookmark")} ${p.bookmarked ? "저장됨" : "북마크"}</button><button data-do="share" class="share-button" aria-label="글 링크 복사">${icon("share")}</button></div>${p.company_id ? `<section class="related-companies"><h2>관련 회사</h2><a class="related-company" href="${uri("company.html", { id: p.company_id })}"><span class="company-mark">${E(p.company_name)}</span><p>${E(p.company_name)}<br><span class="muted small">회사 정보와 리뷰 보기</span></p></a></section>` : ""}<section class="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count) || 0}</h2>${isVerified() ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="고객정보 없이 동료의 경험을 나눠 주세요." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>` : canReadMember() ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>' : `<div class="guest-lock">${icon("lock")}<h2>댓글과 AI 답변은 인증 회원에게 공개돼요</h2><p>${session ? `현재 상태: ${E(statusLabel())}` : "로그인 후 설계사 인증을 완료해 주세요."}</p>${viewer?.status === "suspended" ? '<a class="btn btn-primary" href="/help.html">이용 정지 안내</a>' : verifyLink()}</div>`}</div>${canReadMember() ? (ordered.length ? ordered.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.")) : ""}${d.ai_reply ? `<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>` : ""}</section></article>`;
   }
   async function write() {
     const denied = authorization();
@@ -229,9 +240,13 @@
     )}${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}</div><label class="check-line"><input type="checkbox" name="is_question" ${p.is_question ? "checked" : ""}>동료에게 묻는 질문입니다. AI 참고 답변이 함께 생성될 수 있어요.</label><div style="height:20px"></div>${field("title", "제목", "text", p.title || "", 'required minlength="2" maxlength="150" data-testid="post-title"')}${area("body", "본문", p.body || "", 'required minlength="5" maxlength="10000" data-testid="post-body-input"')}<section class="preview-box"><h3>공개 미리보기</h3><p class="small muted" id="public-preview-hint"></p><div class="body-text" id="public-preview"></div></section><label class="check-line"><input type="checkbox" name="checked_preview" required>공개 범위와 미리보기를 확인했습니다.</label>${formEnd(p.id ? "수정 저장" : "글 등록")}</form></section>`;
   }
   async function login() {
+    if (session && params.get("returnTo")) {
+      location.replace(safeReturn());
+      return '<div class="loading" role="status">이전 화면으로 이동합니다.</div>';
+    }
     if (session)
       return `<section class="auth-box"><h1>로그인되어 있어요</h1><p>${E(statusLabel())}</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a><p></p>${btn("로그아웃", "logout")}</section>`;
-    return `<section class="auth-box"><a class="back-link" href="/index.html">← 보험라이브 홈</a><h1>로그인 · 회원가입</h1><p class="muted">처음 오셨다면 아래 방법으로 로그인하면 <b>자동으로 회원가입</b>됩니다. 별도 가입 절차는 없어요.</p>${/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|Telegram|; wv\)/i.test(navigator.userAgent) ? '<p class="hint" style="color:#b4235a;margin:10px 0">카카오톡·텔레그램 등 앱 안에서는 Google 로그인이 막힐 수 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(크롬·사파리)를 눌러 주세요. 이메일 로그인은 여기서도 됩니다.</p>' : ""}${btn("Google로 계속하기", "google", `data-testid="google-login" ${window.BL_CONFIG?.googleReady === false ? 'disabled aria-disabled="true"' : ""}`, true)}<p class="hint" style="margin-top:10px">${window.BL_CONFIG?.googleReady === false ? "Google 로그인 연결 준비 중입니다. 아래 이메일로 계속해 주세요." : "이메일 발송 한도 없이 로그인할 수 있는 Google 로그인을 권장합니다."}</p><div class="separator">또는 이메일로 로그인</div><form data-form="email" id="email-form">${field("email", "이메일 주소", "email", "", 'required autocomplete="email" placeholder="name@example.com" data-testid="login-email"')}${formEnd("로그인 메일 받기")}</form><div id="otp-area" hidden><form data-form="otp"><h2 style="margin-top:24px">인증번호로 확인</h2><p class="small muted">메일에 인증번호가 있다면 입력해 주세요. 로그인 링크로도 접속할 수 있습니다.</p>${field("token", "이메일 인증번호", "text", "", 'required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"')}${formEnd("인증번호 확인")}</form></div><p class="hint" style="margin-top:20px">${window.BL_CONFIG?.customSMTP === false ? "이메일 로그인은 현재 사전 등록된 운영자 이메일만 지원하며 서비스 전체 시간당 2건으로 제한됩니다. 일반 가입을 위한 메일 연결을 준비하고 있습니다." : window.BL_CONFIG?.emailRateLimit ? `로그인 메일은 서비스 전체 시간당 ${Number(window.BL_CONFIG.emailRateLimit)}건 한도가 적용됩니다. 잠시 기다린 뒤 다시 요청해 주세요.` : "이메일 발송에는 한도가 적용됩니다. 기본 발송기는 시간당 2건이며 허용된 주소만 지원합니다. 별도 메일 서버 연결 시 한도가 달라질 수 있습니다."}</p><p class="small muted">이용 전 <a class="text-link" href="/terms.html">이용약관</a>과 <a class="text-link" href="/privacy.html">개인정보처리방침</a>을 확인해 주세요. 로그인만으로 회사 인증이 완료되지는 않습니다.</p></section>`;
+    return `<section class="auth-box"><a class="back-link" href="/index.html">← 보험라이브 홈</a><h1>로그인</h1><p class="small muted login-first">처음이면 로그인할 때 자동으로 가입돼요. 따로 가입할 필요가 없어요.</p>${loginReasons[params.get("why")] ? `<p class="notice" data-testid="login-reason">${E(loginReasons[params.get("why")])}</p>` : ""}${/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|Telegram|; wv\)/i.test(navigator.userAgent) ? '<p class="hint" style="color:#b4235a;margin:10px 0">카카오톡·텔레그램 등 앱 안에서는 Google 로그인이 막힐 수 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(크롬·사파리)를 눌러 주세요. 이메일 로그인은 여기서도 됩니다.</p>' : ""}${btn("Google로 계속하기", "google", `data-testid="google-login" ${window.BL_CONFIG?.googleReady === false ? 'disabled aria-disabled="true"' : ""}`, true)}<p class="hint" style="margin-top:10px">${window.BL_CONFIG?.googleReady === false ? "Google 로그인 연결 준비 중입니다. 아래 이메일로 계속해 주세요." : "이메일 발송 한도 없이 로그인할 수 있는 Google 로그인을 권장합니다."}</p><div class="separator">또는 이메일로 로그인</div><form data-form="email" id="email-form">${field("email", "이메일 주소", "email", "", 'required autocomplete="email" placeholder="name@example.com" data-testid="login-email"')}${formEnd("로그인 메일 받기")}</form><div id="otp-area" hidden><form data-form="otp"><h2 style="margin-top:24px">인증번호로 확인</h2><p class="small muted">메일에 인증번호가 있다면 입력해 주세요. 로그인 링크로도 접속할 수 있습니다.</p>${field("token", "이메일 인증번호", "text", "", 'required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"')}${formEnd("인증번호 확인")}</form></div><p class="hint" style="margin-top:20px">${window.BL_CONFIG?.customSMTP === false ? "이메일 로그인은 현재 사전 등록된 운영자 이메일만 지원하며 서비스 전체 시간당 2건으로 제한됩니다. 일반 가입을 위한 메일 연결을 준비하고 있습니다." : window.BL_CONFIG?.emailRateLimit ? `로그인 메일은 서비스 전체 시간당 ${Number(window.BL_CONFIG.emailRateLimit)}건 한도가 적용됩니다. 잠시 기다린 뒤 다시 요청해 주세요.` : "이메일 발송에는 한도가 적용됩니다. 기본 발송기는 시간당 2건이며 허용된 주소만 지원합니다. 별도 메일 서버 연결 시 한도가 달라질 수 있습니다."}</p><p class="small muted">이용 전 <a class="text-link" href="/terms.html">이용약관</a>과 <a class="text-link" href="/privacy.html">개인정보처리방침</a>을 확인해 주세요. 로그인만으로 회사 인증이 완료되지는 않습니다.</p></section>`;
   }
   async function verify() {
     const denied = authorization("login");
@@ -301,7 +316,7 @@
     const c = d.company;
     if (!c) return empty("회사 정보를 찾을 수 없어요.", "보험사·GA 목록에서 다시 선택해 주세요.");
     const canReview = c.enabled !== false && (isOwner() || (isVerified() && mine?.profile?.company_id === id));
-    return `<div class="company-cover"></div><section class="company-hero"><a class="back-link" href="/company.html">← 보험사·GA 목록</a><div class="section-head"><h1>${E(c.name)}</h1><span class="company-mark">${E(c.kind || "보험사")}</span></div><p class="muted">${E(c.description || "설계사 동료가 나누는 근무 경험입니다.")}</p><div class="metrics"><div><strong>${Number(c.review_count) || 0}개</strong>리뷰</div><div><strong>${c.average != null ? Number(c.average).toFixed(1) : "모으는 중"}</strong>종합 별점</div><div><strong>5항목</strong>설계사 관점</div><div><strong>1년 1건</strong>회사별 작성</div></div>${c.average != null ? `<div class="rating-grid">${scoreNames.map((s, i) => `<div class="review-score"><span>${s}</span><span>${Number(c.scores?.[i] || 0).toFixed(1)} / 5</span></div>`).join("")}</div>` : '<p class="notice">유효한 리뷰가 5개 이상 모이면 전체·항목별 평균 별점을 공개합니다.</p>'}<p></p>${canReview ? btn("리뷰 작성", "review-new", `data-id="${E(c.id)}" data-testid="review-create"`, true) : isOwner() ? '<p class="hint">숨김 처리된 회사입니다. 관리자에서 회사를 공개한 후 리뷰를 작성할 수 있어요.</p>' : `<p class="hint">현재 소속 회사가 인증된 회원만 리뷰를 작성할 수 있어요.</p><a class="btn" href="${viewer?.status === "suspended" ? "/help.html" : "/verify.html"}">${viewer?.status === "suspended" ? "이용 정지 안내" : "내 소속 인증하기"}</a>`}</section><nav class="company-tabs"><a class="active" href="#company-reviews">리뷰</a><a href="#company-posts">관련 글</a></nav><section id="company-reviews">${d.reviews?.length ? d.reviews.map(reviewHTML).join("") : empty("아직 등록된 리뷰가 없어요.", "현재 소속 회사에 대한 첫 경험을 남겨 주세요.")}</section><section id="company-posts"><h2 class="section">${E(c.name)} 관련 글</h2>${feeds(d.posts, true)}</section>`;
+    return `<div class="company-cover"></div><section class="company-hero"><a class="back-link" href="/company.html">← 보험사·GA 목록</a><div class="section-head"><h1>${E(c.name)}</h1><span class="company-mark">${E(c.kind || "보험사")}</span></div><p class="muted">${E(c.description || "설계사 동료가 나누는 근무 경험입니다.")}</p><div class="metrics"><div><strong>${Number(c.review_count) || 0}개</strong>리뷰</div><div><strong>${c.average != null ? Number(c.average).toFixed(1) : "모으는 중"}</strong>종합 별점</div><div><strong>5항목</strong>설계사 관점</div><div><strong>1년 1건</strong>회사별 작성</div></div>${c.average != null ? `<div class="rating-grid">${scoreNames.map((s, i) => `<div class="review-score"><span>${s}</span><span>${Number(c.scores?.[i] || 0).toFixed(1)} / 5</span></div>`).join("")}</div>` : '<p class="notice">유효한 리뷰가 5개 이상 모이면 전체·항목별 평균 별점을 공개합니다.</p>'}<p></p>${canReview ? btn("리뷰 작성", "review-new", `data-id="${E(c.id)}" data-testid="review-create"`, true) : isOwner() ? '<p class="hint">숨김 처리된 회사입니다. 관리자에서 회사를 공개한 후 리뷰를 작성할 수 있어요.</p>' : `<p class="hint">현재 소속 회사가 인증된 회원만 리뷰를 작성할 수 있어요.</p>${viewer?.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : session ? '<a class="btn" href="/verify.html">내 소속 인증하기</a>' : verifyLink("btn")}`}</section><nav class="company-tabs"><a class="active" href="#company-reviews">리뷰</a><a href="#company-posts">관련 글</a></nav><section id="company-reviews">${d.reviews?.length ? d.reviews.map(reviewHTML).join("") : empty("아직 등록된 리뷰가 없어요.", "현재 소속 회사에 대한 첫 경험을 남겨 주세요.")}</section><section id="company-posts"><h2 class="section">${E(c.name)} 관련 글</h2>${feeds(d.posts, true)}</section>`;
   }
   const adminSections = [
     ["dashboard", "대시보드"],
@@ -647,19 +662,70 @@
     $("#display-preview").textContent = `${name || "회사명"} · ${nick}***`;
     form.elements.company_name.required = form.elements.company_id.value === "custom";
   }
-  function safeReturn() {
-    const value = params.get("returnTo");
-    if (
-      value &&
-      value.startsWith("/") &&
-      !value.startsWith("//") &&
-      !value.includes("\\") &&
-      !value.startsWith("/join") &&
-      !value.startsWith("/login")
-    )
-      return value;
-    return "/me.html";
+  function safeReturn(value = params.get("returnTo")) {
+    try {
+      if (!value || !String(value).startsWith("/")) return "/me.html";
+      const target = new URL(value, location.origin);
+      if (target.origin !== location.origin || /^\/(join|login|auth)(\.html)?$/.test(target.pathname)) return "/me.html";
+      return target.pathname + target.search + target.hash;
+    } catch {
+      return "/me.html";
+    }
   }
+  // 구글·메일 링크로 다녀와도 원래 화면으로 돌아가도록 기기에 잠시 기억한다.
+  function rememberReturn() {
+    const target = safeReturn();
+    try {
+      localStorage.setItem("bl_return_to", target);
+    } catch {}
+    return target;
+  }
+  function afterLoginTarget() {
+    let stored = null;
+    try {
+      stored = localStorage.getItem("bl_return_to");
+      localStorage.removeItem("bl_return_to");
+    } catch {}
+    return safeReturn(params.get("returnTo") || stored);
+  }
+  function verifyLink(cls = "btn btn-primary") {
+    return session
+      ? `<a class="${cls}" href="/verify.html">설계사 인증하기</a>`
+      : `<a class="${cls}" href="${E(loginUrl("/verify.html"))}">로그인하고 인증하기</a>`;
+  }
+  const displayName = () => viewer?.nickname || session?.user?.email?.split("@")[0] || "회원";
+  // 통신이 실패해도 이 기기의 로그인 기록은 반드시 지운다.
+  function clearLocalSession() {
+    try {
+      Object.keys(localStorage)
+        .filter((k) => /^sb-.+-auth-token/.test(k))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {}
+    session = null;
+    viewer = null;
+    mine = null;
+  }
+  async function logout(message = "로그아웃했어요.") {
+    let failed = false;
+    try {
+      const { error } = await sb.auth.signOut({ scope: "local" });
+      failed = !!error;
+    } catch {
+      failed = true;
+    }
+    clearLocalSession();
+    closeDialog();
+    try {
+      sessionStorage.setItem(
+        "bl_flash",
+        failed ? "인터넷 연결이 불안정해 서버에는 알리지 못했지만, 이 기기에서는 로그아웃했어요." : message,
+      );
+    } catch {}
+    // 화면 상태를 완전히 비우기 위해 새로 연다. 로그인이 필요한 화면이면 홈으로 간다.
+    if (["me", "notifications", "write", "verify", "admin", "login", "auth"].includes(page)) location.replace("/index.html");
+    else location.reload();
+  }
+  let accountChecked = false;
   async function refresh() {
     const stamp = ++renderId;
     current = null;
@@ -669,13 +735,21 @@
       session = r.data.session;
       viewer = null;
       mine = null;
+      if (session && !accountChecked) {
+        const { data, error } = await sb.auth.getUser();
+        if (!error && data?.user) accountChecked = true;
+        else if (error && [401, 403, 404].includes(error.status)) {
+          // 서버에서 지워졌거나 만료된 계정의 기록이 기기에 남은 경우
+          await sb.auth.signOut({ scope: "local" }).catch(() => {});
+          clearLocalSession();
+          notify("로그인이 만료되었어요. 다시 로그인해 주세요.");
+        }
+      }
       if (session) {
         mine = await read("me");
         if (viewer?.status === "withdrawn") {
-          await sb.auth.signOut({ scope: "local" });
-          session = null;
-          viewer = null;
-          mine = null;
+          await sb.auth.signOut({ scope: "local" }).catch(() => {});
+          clearLocalSession();
         }
       }
       let html;
@@ -696,8 +770,9 @@
           admin,
           auth: async () =>
             session
-              ? `<section class="auth-box"><h1>로그인을 확인했어요</h1><p>내 정보에서 계정과 이용 권한을 확인해 주세요.</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a></section>`
-              : `<section class="auth-box"><h1>로그인을 완료하지 못했어요</h1><p>${/exchange|server_error/i.test(location.search + location.hash) ? "Google 로그인 연결에 문제가 있어 운영팀이 확인 중입니다. 잠시 이메일 로그인을 이용해 주세요." : /error/.test(location.search + location.hash) ? "로그인이 취소되었거나 링크가 만료되었어요. 다시 시도해 주세요." : "링크가 만료되었거나 이미 사용되었을 수 있습니다."}</p><a class="btn btn-primary" href="/join.html">다시 로그인</a></section>`,
+              ? (location.replace(afterLoginTarget()),
+                `<section class="auth-box"><h1>로그인을 확인했어요</h1><p>이어서 하던 화면으로 이동합니다.</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a></section>`)
+              : `<section class="auth-box"><h1>로그인을 완료하지 못했어요</h1><p>${/exchange|server_error/i.test(location.search + location.hash) ? "Google 로그인 연결에 문제가 있어 운영팀이 확인 중입니다. 잠시 이메일 로그인을 이용해 주세요." : /error/.test(location.search + location.hash) ? "로그인이 취소되었거나 링크가 만료되었어요. 다시 시도해 주세요." : "링크가 만료되었거나 이미 사용되었을 수 있습니다."}</p><a class="btn btn-primary" href="/login.html">다시 로그인</a></section>`,
           missing: async () =>
             `<section class="section"><h1>페이지를 찾을 수 없어요</h1><p>주소를 확인하거나 홈에서 다시 시작해 주세요.</p><a class="btn btn-primary" href="/index.html">홈으로</a></section>`,
         };
@@ -715,12 +790,12 @@
         `<section class="section"><h1>잠시 연결을 확인해 주세요</h1><p class="error" role="alert">${E(safeError(err))}</p>${btn("다시 시도", "refresh", "", true)} <a class="btn" href="/index.html">홈으로</a></section>`;
     }
   }
-  async function requireWriting() {
+  async function requireWriting(why = "") {
     if (session) mine = await read("me");
     if (isVerified()) return true;
     closeDialog();
     if (!session) {
-      location.href = uri("join.html", { returnTo: location.pathname + location.search });
+      location.href = loginUrl(here(), why);
       return false;
     }
     await refresh();
@@ -745,7 +820,7 @@
         "comment-delete",
         "review-delete",
       ].includes(action) &&
-      !(await requireWriting())
+      !(await requireWriting(action === "toggle" ? el.dataset.kind : ""))
     )
       return;
     if (action === "report" && session && !isActive()) {
@@ -763,17 +838,15 @@
           return;
         }
         return await sb.auth
-          .signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/auth.html" } })
+          .signInWithOAuth({
+            provider: "google",
+            options: { redirectTo: location.origin + uri("auth.html", { returnTo: rememberReturn() }) },
+          })
           .then(({ error }) => {
             if (error) throw error;
           });
       case "logout":
-        await sb.auth.signOut({ scope: "local" });
-        session = null;
-        viewer = null;
-        mine = null;
-        closeDialog();
-        return refresh();
+        return logout();
       case "toggle":
         await act("toggle", { target: el.dataset.target, id, kind: el.dataset.kind });
         return refresh();
@@ -789,8 +862,7 @@
         return;
       case "report":
         if (!session) {
-          notify("신고 접수와 처리 안내를 위해 로그인해 주세요.");
-          location.href = uri("join.html", { returnTo: location.pathname + location.search });
+          location.href = loginUrl(here(), "report");
           return;
         }
         return reportDialog(el.dataset.target, id);
@@ -884,7 +956,10 @@
       case "email": {
         const { error } = await sb.auth.signInWithOtp({
           email: v.email.trim(),
-          options: { emailRedirectTo: location.origin + "/auth.html", shouldCreateUser: true },
+          options: {
+            emailRedirectTo: location.origin + uri("auth.html", { returnTo: rememberReturn() }),
+            shouldCreateUser: true,
+          },
         });
         if (error) throw error;
         $("#otp-area").hidden = false;
@@ -895,7 +970,7 @@
         const email = $("#email-form").elements.email.value.trim();
         const { error } = await sb.auth.verifyOtp({ email, token: v.token.trim(), type: "email" });
         if (error) throw error;
-        location.href = safeReturn();
+        location.href = afterLoginTarget();
         return;
       }
       case "verification": {
@@ -992,10 +1067,8 @@
         await act(v.action, v.id ? { id: v.id } : {});
         closeDialog();
         if (v.action === "withdraw") {
-          await sb.auth.signOut({ scope: "local" });
-          session = null;
-          viewer = null;
-          mine = null;
+          await sb.auth.signOut({ scope: "local" }).catch(() => {});
+          clearLocalSession();
           location.href = "/index.html";
         } else if (v.action === "post_delete") location.href = "/channel.html";
         else {
@@ -1139,10 +1212,17 @@
         setTimeout(refresh, 0);
       } else if (event === "SIGNED_IN" && page === "auth") {
         session = newSession;
-        setTimeout(() => location.replace("/me.html"), 0);
+        setTimeout(() => location.replace(afterLoginTarget()), 0);
       } else if (event === "TOKEN_REFRESHED") setTimeout(revalidate, 0);
     });
     await refresh();
+    try {
+      const flash = sessionStorage.getItem("bl_flash");
+      if (flash) {
+        sessionStorage.removeItem("bl_flash");
+        notify(flash);
+      }
+    } catch {}
   }
   boot();
 })();

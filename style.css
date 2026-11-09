@@ -1953,3 +1953,43 @@ dialog::backdrop {
     height: 48px;
   }
 }
+
+/* 2026-11-09 수정: 로그인 상태 머리글 */
+.header-user .header-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+  color: var(--ink);
+}
+.header-user .header-sep {
+  color: #b5b2bf;
+}
+.header-user .header-logout {
+  padding: 4px 0;
+  color: #68717e;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.login-first {
+  margin: -8px 0 16px;
+}
+@media (max-width: 799px) {
+  .header-user .header-name {
+    max-width: 64px;
+    font-size: 12px;
+  }
+  .header-user .header-sep {
+    display: none;
+  }
+  .header-user .header-logout {
+    font-size: 11px;
+    position: relative;
+  }
+  .header-user .header-logout::before {
+    content: "";
+    position: absolute;
+    inset: -12px -4px;
+  }
+}
