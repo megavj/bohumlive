@@ -2350,3 +2350,44 @@ dialog::backdrop {
 .btn[data-danger] {
   color: var(--danger);
 }
+
+/* 2026-11-09 수정: 채널 색(실제 채널 주소와 맞춤), 완전익명 표시, 채널 소개 두 줄 */
+.topic-disc.career {
+  background: #fdeee8;
+  color: #c4683f;
+}
+.topic-disc.product,
+.topic-disc.products {
+  background: #f5f0e8;
+  color: #b88a56;
+}
+.topic-disc.sales-talk {
+  background: #fff4dc;
+  color: #b8860b;
+}
+.topic-disc.exclusive {
+  background: #e9f1fb;
+  color: #3f6fb0;
+}
+.topic-disc.anonymous {
+  background: #ececef;
+  color: #4b4a55;
+}
+.topic-disc.free,
+.topic-disc.talk {
+  background: #f6eefb;
+  color: #a275c7;
+}
+.anon-tag {
+  background: #ececef;
+  color: #4b4a55;
+  font-size: 11px;
+  vertical-align: 2px;
+}
+.channel-card p:not(.follow-count) {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

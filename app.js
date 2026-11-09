@@ -143,7 +143,7 @@
     $("#footer").innerHTML =
       `<footer class="site-footer"><div class="footer-logo">보험<b style="color:var(--accent)">라이브</b></div><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html">개인정보처리방침</a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">이용 도움말·권리침해 신고</a></nav><p class="footer-note">보험라이브는 설계사의 경험과 실무 지식을 나누는 공간입니다. 회원의 글은 개인의 의견이며 회사의 공식 입장이나 보험상품 가입 권유가 아닙니다. 고객정보·주민등록번호·개인 연락처를 게시하지 마세요.</p><p class="footer-note">공개 준비 중 · 검색 노출을 차단하고 있습니다.</p></footer>`;
     $("#sidebar").innerHTML =
-      `<section class="sidebar-block"><h2>동료의 경험이 필요할 때</h2><p class="muted">궁금한 내용을 질문하고<br>설계사 동료의 답변을 만나 보세요.</p><a class="btn btn-primary" href="/write.html">${icon("edit")} 글쓰기</a></section><section class="sidebar-block"><h2>함께 지키는 약속</h2><p class="muted small">회사는 그대로, 닉네임은 첫 글자만 표시해요. 고객정보나 동료의 개인정보가 담기지 않았는지 확인해 주세요.</p><a class="text-link" href="/rules.html" target="_blank" rel="noopener">운영정책 보기 →</a></section>${session ? `<section class="sidebar-block"><h2>${isOwner() ? "나의 권한" : "나의 인증 상태"}</h2><p>${E(statusLabel())}</p><a class="text-link" href="/me.html" target="_blank" rel="noopener">내 정보 확인 →</a></section>` : ""}`;
+      `<section class="sidebar-block"><h2>동료의 경험이 필요할 때</h2><p class="muted">궁금한 내용을 질문하고<br>설계사 동료의 답변을 만나 보세요.</p><a class="btn btn-primary" href="/write.html">${icon("edit")} 글쓰기</a></section><section class="sidebar-block"><h2>함께 지키는 약속</h2><p class="muted small">회사는 그대로, 닉네임은 첫 글자만 표시해요(완전익명 채널은 ‘익명’). 고객정보나 동료의 개인정보가 담기지 않았는지 확인해 주세요.</p><a class="text-link" href="/rules.html" target="_blank" rel="noopener">운영정책 보기 →</a></section>${session ? `<section class="sidebar-block"><h2>${isOwner() ? "나의 권한" : "나의 인증 상태"}</h2><p>${E(statusLabel())}</p><a class="text-link" href="/me.html" target="_blank" rel="noopener">내 정보 확인 →</a></section>` : ""}`;
     $("#main").classList.toggle("admin-main", page === "admin");
     if (page === "admin") $("#sidebar").hidden = true;
   }
@@ -175,7 +175,7 @@
     channels = d.channels || [];
     const follow = params.get("filter") === "following";
     const list = follow ? channels.filter((c) => c.following) : channels;
-    return `<section class="explore"><h1>채널 탐색</h1><p class="muted">관심 있는 주제를 팔로우하고 동료의 이야기를 만나 보세요.</p><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card">${channelDisc(c)}<div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a></h2><p>${E(c.description)}</p><p class="follow-count">팔로워 ${Number(c.followers) || 0}명</p></div><button type="button" class="follow-small" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}</section>`;
+    return `<section class="explore"><h1>채널 탐색</h1><p class="muted">관심 있는 주제를 팔로우하고 동료의 이야기를 만나 보세요.</p><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card">${channelDisc(c)}<div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h2><p>${E(c.description)}</p><p class="follow-count">팔로워 ${Number(c.followers) || 0}명</p></div><button type="button" class="follow-small" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}</section>`;
   }
   async function postList() {
     const q = params.get("q") || "";
@@ -188,7 +188,7 @@
     const d = await read("posts", { ...(id ? { channel_id: id } : {}), ...(q ? { q } : {}), sort, limit: 50 });
     const posts = d.posts || [];
     const isSearch = page === "search";
-    return `<section class="section"><div class="section-head"><h1>${isSearch ? "검색 결과" : E(channel?.name || "모든 글")}</h1><a class="btn btn-primary btn-small" href="${uri("write.html", id ? { channel: id } : {})}">글쓰기</a></div>${isSearch ? `<form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="muted small">${q ? `“${E(q)}” 검색 결과 ${posts.length}개` : "검색어를 입력해 주세요."}</p>` : `<p class="muted">${E(channel?.description || "설계사의 경험과 실무 이야기를 함께 나눠요.")}</p>${channel ? btn(channel.following ? "팔로잉" : "팔로우", "toggle", `data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}"`) : ""}`}</section><nav class="tabs"><a class="${sort === "latest" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "latest" })}">최신순</a><a class="${sort === "popular" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "popular" })}">인기순</a></nav>${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : feeds(posts)}`;
+    return `<section class="section"><div class="section-head"><h1>${isSearch ? "검색 결과" : E(channel?.name || "모든 글")}${channel?.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h1><a class="btn btn-primary btn-small" href="${uri("write.html", id ? { channel: id } : {})}">글쓰기</a></div>${isSearch ? `<form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="muted small">${q ? `“${E(q)}” 검색 결과 ${posts.length}개` : "검색어를 입력해 주세요."}</p>` : `<p class="muted">${E(channel?.description || "설계사의 경험과 실무 이야기를 함께 나눠요.")}</p>${channel?.anonymous ? '<p class="notice small">이 채널의 글과 댓글은 회사명·닉네임 없이 ‘익명’으로만 보여요. 운영자는 신고 처리 때만 기록을 남기고 작성자를 확인합니다.</p>' : ""}${channel ? btn(channel.following ? "팔로잉" : "팔로우", "toggle", `data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}"`) : ""}`}</section><nav class="tabs"><a class="${sort === "latest" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "latest" })}">최신순</a><a class="${sort === "popular" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "popular" })}">인기순</a></nav>${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : feeds(posts)}`;
   }
   function commentHTML(c) {
     return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${E(c.author_display)} ${c.is_mine ? '<span class="author-badge">내 댓글</span>' : ""} ${sampleBadge(c)}</div><p class="body-text">${E(c.body)}</p><div class="meta"><span>${E(date(c.created_at))}</span><button data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : ""}>${icon("heart")} ${Number(c.likes) || 0}</button>${!c.parent_id && isVerified() ? `<button data-do="reply" data-id="${E(c.id)}">답글</button>` : ""}${c.is_mine && isVerified() ? `<button data-do="comment-edit" data-id="${E(c.id)}">수정</button><button data-do="comment-delete" data-id="${E(c.id)}">삭제</button>` : ""}${c.is_mine ? "" : `<button data-do="report" data-target="comment" data-id="${E(c.id)}">신고</button>`}</div><div data-reply-slot="${E(c.id)}"></div></article>`;
@@ -235,7 +235,7 @@
       isAdmin()
         ? `<div class="team-box"><label class="check-line"><input type="checkbox" name="as_team" data-testid="as-team" ${p.as_team || !isVerified() ? "checked" : ""} ${isVerified() ? "" : "required"}>‘보험라이브 운영팀’ 이름으로 쓰기 (작성자 대신 운영팀으로 표시)</label>${p.id ? "" : '<label class="check-line"><input type="checkbox" name="pinned" data-testid="as-notice">공지로 고정 (운영팀 이름일 때만)</label>'}${isVerified() ? "" : '<p class="hint">설계사 인증 전 관리자는 운영팀 이름으로만 쓸 수 있어요.</p>'}</div>`
         : ""
-    }<div style="height:20px"></div>${field("title", "제목", "text", p.title || "", 'required minlength="2" maxlength="150" data-testid="post-title"')}${area("body", "본문", p.body || "", 'required minlength="5" maxlength="10000" data-testid="post-body-input"')}<section class="preview-box"><h3>공개 미리보기</h3><p class="small muted" id="public-preview-hint"></p><div class="body-text" id="public-preview"></div></section><label class="check-line"><input type="checkbox" name="checked_preview" required>공개 범위와 미리보기를 확인했습니다.</label>${formEnd(p.id ? "수정 저장" : "글 등록")}</form></section>`;
+    }<div style="height:20px"></div>${field("title", "제목", "text", p.title || "", 'required minlength="2" maxlength="150" data-testid="post-title"')}${area("body", "본문", p.body || "", 'required minlength="5" maxlength="10000" data-testid="post-body-input"')}<p class="notice anon-note" id="anon-note" hidden>완전 익명 채널이에요. 회사명·닉네임 없이 ‘익명’으로 표시되고, 작성자를 짐작할 수 없도록 관련 회사는 고를 수 없어요.</p><section class="preview-box"><h3>공개 미리보기</h3><p class="small muted" id="public-preview-hint"></p><div class="body-text" id="public-preview"></div></section><label class="check-line"><input type="checkbox" name="checked_preview" required>공개 범위와 미리보기를 확인했습니다.</label>${formEnd(p.id ? "수정 저장" : "글 등록")}</form></section>`;
   }
   async function login() {
     if (session && params.get("returnTo")) {
@@ -382,6 +382,7 @@
     admin_content: "콘텐츠 상태 변경",
     admin_report_resolve: "신고 처리",
     admin_post_move: "글 채널 옮기기",
+    admin_reveal_author: "익명 작성자 확인",
     admin_notice_order: "공지 순서 변경",
     admin_channel_save: "채널 저장",
     admin_channel_move: "채널 순서 변경",
@@ -453,6 +454,7 @@
       p.status && p.status !== "published" ? badge(contentStatusNames[p.status] || p.status, "danger") : "",
       p.pinned ? badge("공지", "accent") : "",
       p.as_team ? badge("운영팀 이름", "accent") : "",
+      p.anonymous ? badge("익명", "") : "",
       p.is_sample ? badge("견본", "warn") : "",
       p.is_test ? badge("시험", "warn") : "",
     ].join("");
@@ -490,6 +492,7 @@
       ai_edit: "AI 답변 고친 내용을 저장할까요?",
       ai_retry: "이 질문의 AI 답변을 다시 시도할까요?",
       ai_regenerate: "AI 답변을 다시 만들까요? 지금 답변은 새 답변이 나올 때까지 숨겨집니다.",
+      reveal_author: "익명 작성자를 확인할까요? 확인한 사실과 사유가 감사 기록에 남습니다.",
       banned_words: "금칙어 목록을 저장할까요?",
     };
     return lines[op] || "이 내용으로 저장할까요?";
@@ -528,11 +531,13 @@
     return out;
   }
 
+  const revealForm = (target, id) =>
+    `<details class="sub-details"><summary>익명 작성자 확인 (감사 기록에 남아요)</summary>${adminForm("reveal_author", id, `${field("reason", "확인 사유", "text", "", 'required minlength="2" maxlength="200" placeholder="예: 신고 처리를 위한 확인"')}`, "작성자 확인", `<input type="hidden" name="target" value="${target}">`)}</details>`;
   function channelFormHTML(c = {}) {
     return adminForm(
       "channel_save",
       c.id,
-      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (자동으로 정해져요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? Math.max(0, ...channels.map((x) => Number(x.display_order) || 0)) + 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>채널 사용(끄면 회원에게 보이지 않아요)</label>`,
+      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (자동으로 정해져요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? Math.max(0, ...channels.map((x) => Number(x.display_order) || 0)) + 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>채널 사용(끄면 회원에게 보이지 않아요)</label><label class="check-line"><input type="checkbox" name="anonymous" data-testid="channel-anonymous" ${c.anonymous ? "checked" : ""}>완전 익명 채널(회사명·닉네임 없이 ‘익명’으로 표시)</label><p class="hint">완전 익명을 켜면 이 채널의 글·댓글이 익명으로 바뀌고, 나중에 꺼도 이미 익명인 글은 익명으로 남아요.</p>`,
       c.id ? "수정 저장" : "채널 추가",
       "",
       c.name || "새",
@@ -612,7 +617,7 @@
         p.pinned && p.status !== "deleted"
           ? `<div class="form-actions"><span class="small muted">공지 순서</span>${btn("위로", "admin-order", `data-op="notice_order" data-dir="up" data-id="${E(p.id)}"`)}${btn("아래로", "admin-order", `data-op="notice_order" data-dir="down" data-id="${E(p.id)}"`)}</div>`
           : ""
-      }${adminForm(
+      }${p.anonymous ? revealForm("post", p.id) : ""}${adminForm(
         "content",
         p.id,
         `${select(
@@ -639,7 +644,7 @@
         p.title,
       )}</div></details>`,
     comments: (c) =>
-      `<details class="admin-row" data-testid="admin-comment"><summary><span class="row-main"><strong>${E(String(c.body || "").slice(0, 60))}</strong> ${contentFlags(c)}</span><span class="row-sub">글: ${E(c.post_title || "")} · ${E(c.author_display || "")} · ${E(date(c.created_at))}</span></summary><div class="row-detail"><p class="body-text">${E(c.body)}</p><p><a class="text-link" href="${uri("post.html", { id: c.post_id })}" target="_blank" rel="noopener">글 화면에서 보기 →</a></p>${adminForm(
+      `<details class="admin-row" data-testid="admin-comment"><summary><span class="row-main"><strong>${E(String(c.body || "").slice(0, 60))}</strong> ${contentFlags(c)}</span><span class="row-sub">글: ${E(c.post_title || "")} · ${E(c.author_display || "")} · ${E(date(c.created_at))}</span></summary><div class="row-detail"><p class="body-text">${E(c.body)}</p><p><a class="text-link" href="${uri("post.html", { id: c.post_id })}" target="_blank" rel="noopener">글 화면에서 보기 →</a></p>${c.anonymous ? revealForm("comment", c.id) : ""}${adminForm(
         "content",
         c.id,
         `${select("status", "표시 상태", [["", "선택하세요"], ["published", "게시"], ["hidden", "숨김"], ["deleted", "삭제"]], "", "required")}${reasonField()}`,
@@ -806,10 +811,10 @@
     return `<section class="section admin-page"><div class="section-head"><h1>관리자 모드</h1><span class="status-badge">${isOwner() ? "대표 관리자 · 모든 권한" : "관리자"}</span></div><nav class="admin-tabs" aria-label="관리 메뉴">${adminSections.map(([id, label]) => `<a class="chip ${section === id ? "active" : ""}" href="${uri("admin/", { section: id })}">${label}${tabCount[id] ? ` <span class="tab-count">${tabCount[id]}</span>` : ""}</a>`).join("")}</nav><h2>${E(adminSections.find(([s]) => s === section)?.[1] || "대시보드")}</h2>${adminRender[sec](d)}</section>`;
   }
   const policyDocs = {
-    terms: `<h1>이용약관</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브</p><h2>1. 서비스와 가입</h2><p>보험라이브는 보험설계사들이 실무 지식과 개인 경험을 나누는 커뮤니티입니다. 성인 이용자는 Google 또는 이메일로 로그인할 수 있습니다. 설계사 인증을 마쳐야 회원 전용 글·댓글·AI 답변을 읽고 글을 작성할 수 있습니다. 가입 정보와 증빙은 본인의 현재 정보여야 합니다.</p><h2>2. 공개 범위</h2><p>공개 화면에는 소속 회사명과 닉네임 첫 글자 뒤 별표 3개만 표시합니다. 실무지식·커리어·운영팀 정리는 본문 전체, 경험·자유 글과 회사 리뷰는 앞부분 최대 300자를 공개합니다. 댓글·대댓글·AI 답변은 인증 회원에게만 제공됩니다. 본문 자체에 개인정보를 쓰면 작성자를 추정할 수 있으므로 게시 전에 확인해 주세요.</p><h2>3. 회원 콘텐츠와 책임</h2><p>게시물의 권리는 작성자에게 있습니다. 작성자는 서비스 안에서 콘텐츠를 저장·표시하고 신고를 처리하는 데 필요한 이용을 허락합니다. 회원의 글과 리뷰는 개인 의견이며 소속 회사나 운영팀의 공식 입장, 보험상품 가입 권유 또는 개별 계약에 대한 확정적인 판단이 아닙니다. 실제 계약·보장·지급 여부는 약관과 공식 자료로 확인해야 합니다.</p><h2>4. 금지 행위와 운영 조치</h2><p>허위사실·명예훼손·개인정보 공개·욕설·사칭·불법 자료·도배·무단 광고·계정 거래·악의적 신고·권한 우회는 금지합니다. 운영자는 사유를 기록하고 글 숨김·삭제, 인증 보완·반려, 일시 또는 지속적 이용 제한을 적용할 수 있습니다. 주요 결과는 서비스 내 알림과 내 정보에 안내합니다.</p><h2>5. 권리침해 신고와 임시조치</h2><p>사생활 침해·명예훼손 등 권리침해를 주장하는 회원은 글·댓글·리뷰의 신고 메뉴에서 대상과 침해 사실을 구체적으로 소명해 삭제 또는 조치를 요청할 수 있습니다. 신고는 설계사 인증을 마친 회원이 할 수 있으며 본인의 글은 신고할 수 없습니다. 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상 모이거나 운영자가 필요하다고 판단하면 접근을 임시 차단하고 신청인·게시자에게 서비스 내 알림으로 알리며 원래 게시물 위치에 조치 사실을 표시합니다. 운영 공지는 신고로 자동 가려지지 않고 운영자가 직접 검토합니다. 권리침해 판단이 어렵거나 다툼이 예상될 때 정보통신망법 제44조의2에 따른 임시조치는 30일 이내로 합니다. 운영자는 그 안에 소명을 검토해 복구 또는 위반에 따른 최종 가림·삭제를 결정합니다. 미결인 임시조치는 기간 종료 후 복구하고 당사자에게 알립니다. 조치 사유가 잘못되었다고 판단하면 해당 신고에 추가 소명을 적어 이의를 제기할 수 있습니다.</p><h2>6. 회사 리뷰와 AI</h2><p>회사 리뷰는 현재 소속이 인증된 회원이 회사별 365일에 1건 작성할 수 있으며 본인의 리뷰를 수정할 수 있습니다. 5개 이상의 유효 리뷰가 모이면 평균을 공개합니다. AI 참고 답변은 AI 작성 표시를 하며 정확성을 보장하지 않습니다. 사람 댓글과 인기 수치에 포함하지 않고 운영 검토와 설정에 따라 표시합니다.</p><h2>7. 탈퇴와 변경</h2><p>내 정보에서 탈퇴하면 회원 전용 접근을 즉시 차단하고 남은 콘텐츠의 작성자를 ‘탈퇴한 회원’으로 표시합니다. 삭제를 원하는 본인 글·댓글은 탈퇴 전에 삭제해 주세요. 관계 법령상 보관 의무가 없는 인증 정보는 삭제합니다. 약관 변경과 중요한 운영 변경은 공지로 안내합니다.</p>`,
-    privacy: `<h1>개인정보처리방침</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브 운영팀</p><h2>1. 수집하는 정보와 목적</h2><p>로그인에는 이메일 주소와 로그인 제공자가 발급하는 계정 식별정보를 사용합니다. 설계사 인증에는 이름, 닉네임, 현재 소속 회사, 연락처, 설계사 고유번호와 증빙 사진 1장을 받습니다. 목적은 계정 확인, 설계사·소속 심사, 부정 이용 방지, 회원 문의와 신고 처리입니다. 주민등록번호는 수집하지 않습니다. 증빙에 주민등록번호·주소·고객정보가 있으면 업로드 전에 가려 주세요.</p><h2>2. 공개 정보와 접근 권한</h2><p>공개 화면에 회사명과 닉네임 첫 글자·별표 3개만 표시합니다. 실명, 연락처, 설계사 고유번호, 증빙 사진은 공개하지 않습니다. 증빙은 비공개 저장소에 보관하고 담당 관리자만 60초 동안 유효한 서명 주소로 확인합니다. 제출한 증빙 사진은 운영팀 Mac의 기기 안 글자인식(Apple Vision)으로 이름·설계사 고유번호·소속 회사를 읽어 신청 내용과 자동으로 비교하며, 사진과 읽은 내용을 외부 AI나 다른 서비스로 보내지 않습니다. 자동 판정 결과(승인·반려·보류)는 운영자가 확인하고 바꿀 수 있습니다. 관리자의 열람과 처리 행동은 감사 기록으로 남깁니다. 공개 회원 명부나 회원별 공개 프로필을 제공하지 않습니다.</p><h2>3. 보유 기간과 파기</h2><p>계정과 공개 닉네임·현재 소속·인증 상태는 회원 유지 기간 동안 사용합니다. 인증 증빙과 심사 원본 개인정보는 승인·반려 등 처리 후 30일이 지나면 삭제 대상으로 지정하며 정리 작업에서 파일과 원본 정보를 제거합니다. 신청하지 않은 업로드 파일은 24시간 뒤 삭제 대상이 됩니다. 탈퇴 시 접근을 즉시 차단하고 개인정보와 증빙을 삭제 대상으로 전환합니다. 회원의 남은 글·댓글은 신원과의 공개 연결을 끊고 ‘탈퇴한 회원’으로 표시합니다. 법적 보존 의무가 발생한 정보는 법령이 정한 범위와 기간에 한해 별도로 보관합니다.</p><h2>4. 처리에 사용하는 서비스</h2><p>웹 화면은 GitHub Pages, 계정 인증·데이터베이스·비공개 파일 저장은 Supabase를 사용합니다. Google 로그인 선택 시 Google의 계정 확인 절차를 거칩니다. 이메일 로그인 시 로그인 확인 메일 발송에만 이메일 주소를 사용합니다. 서비스 제공자의 처리 설비가 해외에 있을 수 있으며 처리 위치와 제공자 정책은 각 서비스의 공개 정책에 따릅니다. 광고 추적, 외부 광고 이미지, 제3자 분석 스크립트를 넣지 않습니다.</p><h2>5. AI 참고 답변</h2><p>질문형 글을 선택한 경우 게시물의 제목과 본문을 Mac 처리기에서 기존 구독의 AI 도구로 처리할 수 있습니다. 회원의 실명·연락처·증빙을 답변 생성 입력에 포함하지 않습니다. 질문에도 고객 개인정보나 민감한 계약자료를 적지 마세요.</p><h2>6. 이용자의 권리와 문의</h2><p>내 정보에서 현재 상태, 내 글·댓글·북마크·알림을 확인하고 닉네임을 변경할 수 있습니다. 소속 변경은 새 증빙과 함께 재인증을 신청해 주세요. 탈퇴는 내 정보의 회원 탈퇴로 직접 처리할 수 있습니다. 개인정보가 포함된 글·댓글은 해당 콘텐츠의 신고 메뉴에서 구체적인 대상과 삭제 요청 사유를 남길 수 있습니다. 운영자는 이를 확인해 접근 제한·정정·삭제를 처리합니다.</p><h2>7. 보호 조치와 로그인 유지</h2><p>데이터베이스에서 회원 상태와 역할을 검사해 공개·회원·관리자 정보를 분리하고, 전송 구간은 HTTPS를 사용합니다. 로그인 유지를 위해 브라우저 저장소에 인증 세션을 보관합니다. 공용 기기에서는 사용 후 로그아웃해 주세요. 정지·탈퇴·세션 만료 시 서버가 회원 전용 요청을 거부하며 화면도 상태를 다시 확인합니다.</p>`,
-    rules: `<h1>커뮤니티 운영정책</h1><p class="document-meta">시행일: 2026년 11월 7일</p><h2>경험은 솔직하게, 사람은 존중해 주세요</h2><p>직접 겪은 사실과 의견을 구분하고 자료의 기준일을 함께 적어 주세요. 타인·회사에 대한 허위사실, 명예훼손, 위협, 혐오와 비방은 허용하지 않습니다. 리뷰와 회원 글은 작성자 개인 의견입니다.</p><h2>개인정보와 고객자료를 올리지 마세요</h2><p>본인이나 타인의 실명·연락처·주소·주민등록번호·계약번호·질병정보·고객 사진, 개인을 추정할 수 있는 조합 정보를 공개하지 마세요. 회사 이름은 실제 명칭으로 표시하지만 지점·직급·담당 고객 등 개인을 특정하는 상세정보는 게시하지 않습니다.</p><h2>반복 게시와 영업을 제한합니다</h2><p>인증 회원은 글 하루 10개, 글 사이 60초, 댓글 하루 50개, 댓글 사이 10초 간격을 지켜야 합니다. 서버에서 제한을 적용합니다. 같은 내용 반복, 무단 광고·모집·판매, 계정 거래, 자동화 도배, 악의적 신고는 제재 대상입니다. 신고도 회원당 하루 10건으로 제한합니다.</p><h2>신고 → 운영자 판단(필요하면 임시 가림)</h2><p>설계사 인증 회원은 각 글·댓글·리뷰에서 신고 사유를 선택하고 대상과 침해 사실을 구체적으로 적어 신고할 수 있습니다(내 글은 신고할 수 없음). 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상 모이면 운영자 판단 전까지 임시로 가리고 신고자와 작성자에게 알립니다. 운영 공지는 신고로 자동 가려지지 않습니다. 운영자는 사실관계·소명을 확인해 복구하거나 위반이 확인된 경우 가림을 유지·삭제합니다. 권리침해 다툼을 위한 임시조치는 최대 30일이며 미결 건은 기간 종료 후 복구합니다. 신고 자체가 위반 확정을 뜻하지 않습니다.</p><h2>처리 결과와 이의신청</h2><p>콘텐츠 숨김·삭제, 인증 보완·반려, 일시 정지 또는 반복 위반 계정 정지를 적용할 수 있습니다. 사유는 내 정보와 알림에 표시합니다. 이의가 있으면 해당 대상의 신고 메뉴에서 ‘처리 결과 이의신청’을 선택하고 기존 조치와 추가 소명을 적어 주세요. 운영자는 검토 사유와 결과를 기록합니다.</p><h2>AI와 회사 리뷰</h2><p>AI 참고 답변은 사람의 답변과 구분하여 표시하며 전문적인 확정 판단으로 사용하지 마세요. 현재 인증된 회사의 리뷰만 작성할 수 있고, 실제 근무 경험 없이 평가하거나 리뷰를 거래·조작하는 행위를 금지합니다.</p>`,
-    help: `<h1>이용 도움말</h1><h2>이용하는 순서</h2><ol><li>Google 또는 이메일로 로그인합니다.</li><li>설계사 인증에서 이름·소속·연락처·설계사 고유번호와 증빙 사진 1장을 제출합니다.</li><li>내 정보와 알림에서 심사 결과를 확인합니다.</li><li>인증 후 글·댓글·북마크·리뷰를 이용합니다.</li></ol><h2>공개 표시</h2><p>예를 들어 닉네임 ‘바른설계’이고 소속이 삼성생명이면 ‘삼성생명 · 바***’로 보입니다. 소속 변경 시 재인증을 신청해야 합니다.</p><h2>권리침해 신고와 이의신청</h2><p>설계사 인증 회원은 글·댓글·리뷰의 신고 버튼에서 대상, 사유와 침해 사실을 적어 신고할 수 있어요. 주민등록번호나 불필요한 개인 정보는 기재하지 마세요. 운영자가 검토해 서비스 내 알림으로 결과를 안내하며, 같은 콘텐츠에 신고가 3건 이상 모이면 검토 전까지 임시로 가립니다. 이미 조치된 글의 공개 주소를 알고 있다면 아래에서 대상 번호와 소명을 입력할 수 있습니다.</p><form data-form="report"><div class="form-grid">${select(
+    terms: `<h1>이용약관</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브</p><h2>1. 서비스와 가입</h2><p>보험라이브는 보험설계사들이 실무 지식과 개인 경험을 나누는 커뮤니티입니다. 성인 이용자는 Google 또는 이메일로 로그인할 수 있습니다. 설계사 인증을 마쳐야 회원 전용 글·댓글·AI 답변을 읽고 글을 작성할 수 있습니다. 가입 정보와 증빙은 본인의 현재 정보여야 합니다.</p><h2>2. 공개 범위</h2><p>공개 화면에는 소속 회사명과 닉네임 첫 글자 뒤 별표 3개만 표시합니다. 완전익명 채널의 글·댓글은 회사명·닉네임 없이 ‘익명’으로만 표시하며, 운영자는 신고 처리 등 필요한 경우에만 사유를 기록하고 작성자를 확인합니다. 실무지식·커리어·운영팀 정리는 본문 전체, 경험·자유 글과 회사 리뷰는 앞부분 최대 300자를 공개합니다. 댓글·대댓글·AI 답변은 인증 회원에게만 제공됩니다. 본문 자체에 개인정보를 쓰면 작성자를 추정할 수 있으므로 게시 전에 확인해 주세요.</p><h2>3. 회원 콘텐츠와 책임</h2><p>게시물의 권리는 작성자에게 있습니다. 작성자는 서비스 안에서 콘텐츠를 저장·표시하고 신고를 처리하는 데 필요한 이용을 허락합니다. 회원의 글과 리뷰는 개인 의견이며 소속 회사나 운영팀의 공식 입장, 보험상품 가입 권유 또는 개별 계약에 대한 확정적인 판단이 아닙니다. 실제 계약·보장·지급 여부는 약관과 공식 자료로 확인해야 합니다.</p><h2>4. 금지 행위와 운영 조치</h2><p>허위사실·명예훼손·개인정보 공개·욕설·사칭·불법 자료·도배·무단 광고·계정 거래·악의적 신고·권한 우회는 금지합니다. 운영자는 사유를 기록하고 글 숨김·삭제, 인증 보완·반려, 일시 또는 지속적 이용 제한을 적용할 수 있습니다. 주요 결과는 서비스 내 알림과 내 정보에 안내합니다.</p><h2>5. 권리침해 신고와 임시조치</h2><p>사생활 침해·명예훼손 등 권리침해를 주장하는 회원은 글·댓글·리뷰의 신고 메뉴에서 대상과 침해 사실을 구체적으로 소명해 삭제 또는 조치를 요청할 수 있습니다. 신고는 설계사 인증을 마친 회원이 할 수 있으며 본인의 글은 신고할 수 없습니다. 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상 모이거나 운영자가 필요하다고 판단하면 접근을 임시 차단하고 신청인·게시자에게 서비스 내 알림으로 알리며 원래 게시물 위치에 조치 사실을 표시합니다. 운영 공지는 신고로 자동 가려지지 않고 운영자가 직접 검토합니다. 권리침해 판단이 어렵거나 다툼이 예상될 때 정보통신망법 제44조의2에 따른 임시조치는 30일 이내로 합니다. 운영자는 그 안에 소명을 검토해 복구 또는 위반에 따른 최종 가림·삭제를 결정합니다. 미결인 임시조치는 기간 종료 후 복구하고 당사자에게 알립니다. 조치 사유가 잘못되었다고 판단하면 해당 신고에 추가 소명을 적어 이의를 제기할 수 있습니다.</p><h2>6. 회사 리뷰와 AI</h2><p>회사 리뷰는 현재 소속이 인증된 회원이 회사별 365일에 1건 작성할 수 있으며 본인의 리뷰를 수정할 수 있습니다. 5개 이상의 유효 리뷰가 모이면 평균을 공개합니다. AI 참고 답변은 AI 작성 표시를 하며 정확성을 보장하지 않습니다. 사람 댓글과 인기 수치에 포함하지 않고 운영 검토와 설정에 따라 표시합니다.</p><h2>7. 탈퇴와 변경</h2><p>내 정보에서 탈퇴하면 회원 전용 접근을 즉시 차단하고 남은 콘텐츠의 작성자를 ‘탈퇴한 회원’으로 표시합니다. 삭제를 원하는 본인 글·댓글은 탈퇴 전에 삭제해 주세요. 관계 법령상 보관 의무가 없는 인증 정보는 삭제합니다. 약관 변경과 중요한 운영 변경은 공지로 안내합니다.</p>`,
+    privacy: `<h1>개인정보처리방침</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브 운영팀</p><h2>1. 수집하는 정보와 목적</h2><p>로그인에는 이메일 주소와 로그인 제공자가 발급하는 계정 식별정보를 사용합니다. 설계사 인증에는 이름, 닉네임, 현재 소속 회사, 연락처, 설계사 고유번호와 증빙 사진 1장을 받습니다. 목적은 계정 확인, 설계사·소속 심사, 부정 이용 방지, 회원 문의와 신고 처리입니다. 주민등록번호는 수집하지 않습니다. 증빙에 주민등록번호·주소·고객정보가 있으면 업로드 전에 가려 주세요.</p><h2>2. 공개 정보와 접근 권한</h2><p>공개 화면에 회사명과 닉네임 첫 글자·별표 3개만 표시합니다(완전익명 채널은 ‘익명’으로만 표시하고, 운영자의 작성자 확인은 사유와 함께 감사 기록에 남깁니다). 실명, 연락처, 설계사 고유번호, 증빙 사진은 공개하지 않습니다. 증빙은 비공개 저장소에 보관하고 담당 관리자만 60초 동안 유효한 서명 주소로 확인합니다. 제출한 증빙 사진은 운영팀 Mac의 기기 안 글자인식(Apple Vision)으로 이름·설계사 고유번호·소속 회사를 읽어 신청 내용과 자동으로 비교하며, 사진과 읽은 내용을 외부 AI나 다른 서비스로 보내지 않습니다. 자동 판정 결과(승인·반려·보류)는 운영자가 확인하고 바꿀 수 있습니다. 관리자의 열람과 처리 행동은 감사 기록으로 남깁니다. 공개 회원 명부나 회원별 공개 프로필을 제공하지 않습니다.</p><h2>3. 보유 기간과 파기</h2><p>계정과 공개 닉네임·현재 소속·인증 상태는 회원 유지 기간 동안 사용합니다. 인증 증빙과 심사 원본 개인정보는 승인·반려 등 처리 후 30일이 지나면 삭제 대상으로 지정하며 정리 작업에서 파일과 원본 정보를 제거합니다. 신청하지 않은 업로드 파일은 24시간 뒤 삭제 대상이 됩니다. 탈퇴 시 접근을 즉시 차단하고 개인정보와 증빙을 삭제 대상으로 전환합니다. 회원의 남은 글·댓글은 신원과의 공개 연결을 끊고 ‘탈퇴한 회원’으로 표시합니다. 법적 보존 의무가 발생한 정보는 법령이 정한 범위와 기간에 한해 별도로 보관합니다.</p><h2>4. 처리에 사용하는 서비스</h2><p>웹 화면은 GitHub Pages, 계정 인증·데이터베이스·비공개 파일 저장은 Supabase를 사용합니다. Google 로그인 선택 시 Google의 계정 확인 절차를 거칩니다. 이메일 로그인 시 로그인 확인 메일 발송에만 이메일 주소를 사용합니다. 서비스 제공자의 처리 설비가 해외에 있을 수 있으며 처리 위치와 제공자 정책은 각 서비스의 공개 정책에 따릅니다. 광고 추적, 외부 광고 이미지, 제3자 분석 스크립트를 넣지 않습니다.</p><h2>5. AI 참고 답변</h2><p>질문형 글을 선택한 경우 게시물의 제목과 본문을 Mac 처리기에서 기존 구독의 AI 도구로 처리할 수 있습니다. 회원의 실명·연락처·증빙을 답변 생성 입력에 포함하지 않습니다. 질문에도 고객 개인정보나 민감한 계약자료를 적지 마세요.</p><h2>6. 이용자의 권리와 문의</h2><p>내 정보에서 현재 상태, 내 글·댓글·북마크·알림을 확인하고 닉네임을 변경할 수 있습니다. 소속 변경은 새 증빙과 함께 재인증을 신청해 주세요. 탈퇴는 내 정보의 회원 탈퇴로 직접 처리할 수 있습니다. 개인정보가 포함된 글·댓글은 해당 콘텐츠의 신고 메뉴에서 구체적인 대상과 삭제 요청 사유를 남길 수 있습니다. 운영자는 이를 확인해 접근 제한·정정·삭제를 처리합니다.</p><h2>7. 보호 조치와 로그인 유지</h2><p>데이터베이스에서 회원 상태와 역할을 검사해 공개·회원·관리자 정보를 분리하고, 전송 구간은 HTTPS를 사용합니다. 로그인 유지를 위해 브라우저 저장소에 인증 세션을 보관합니다. 공용 기기에서는 사용 후 로그아웃해 주세요. 정지·탈퇴·세션 만료 시 서버가 회원 전용 요청을 거부하며 화면도 상태를 다시 확인합니다.</p>`,
+    rules: `<h1>커뮤니티 운영정책</h1><p class="document-meta">시행일: 2026년 11월 7일</p><h2>경험은 솔직하게, 사람은 존중해 주세요</h2><p>직접 겪은 사실과 의견을 구분하고 자료의 기준일을 함께 적어 주세요. 타인·회사에 대한 허위사실, 명예훼손, 위협, 혐오와 비방은 허용하지 않습니다. 리뷰와 회원 글은 작성자 개인 의견입니다.</p><h2>영업화법은 정직하게</h2><p>허위·과장·부당권유 화법, 고객정보·녹취 게시는 금지합니다.</p><h2>개인정보와 고객자료를 올리지 마세요</h2><p>본인이나 타인의 실명·연락처·주소·주민등록번호·계약번호·질병정보·고객 사진, 개인을 추정할 수 있는 조합 정보를 공개하지 마세요. 회사 이름은 실제 명칭으로 표시하지만 지점·직급·담당 고객 등 개인을 특정하는 상세정보는 게시하지 않습니다.</p><h2>반복 게시와 영업을 제한합니다</h2><p>인증 회원은 글 하루 10개, 글 사이 60초, 댓글 하루 50개, 댓글 사이 10초 간격을 지켜야 합니다. 서버에서 제한을 적용합니다. 같은 내용 반복, 무단 광고·모집·판매, 계정 거래, 자동화 도배, 악의적 신고는 제재 대상입니다. 신고도 회원당 하루 10건으로 제한합니다.</p><h2>신고 → 운영자 판단(필요하면 임시 가림)</h2><p>설계사 인증 회원은 각 글·댓글·리뷰에서 신고 사유를 선택하고 대상과 침해 사실을 구체적으로 적어 신고할 수 있습니다(내 글은 신고할 수 없음). 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상 모이면 운영자 판단 전까지 임시로 가리고 신고자와 작성자에게 알립니다. 운영 공지는 신고로 자동 가려지지 않습니다. 운영자는 사실관계·소명을 확인해 복구하거나 위반이 확인된 경우 가림을 유지·삭제합니다. 권리침해 다툼을 위한 임시조치는 최대 30일이며 미결 건은 기간 종료 후 복구합니다. 신고 자체가 위반 확정을 뜻하지 않습니다.</p><h2>처리 결과와 이의신청</h2><p>콘텐츠 숨김·삭제, 인증 보완·반려, 일시 정지 또는 반복 위반 계정 정지를 적용할 수 있습니다. 사유는 내 정보와 알림에 표시합니다. 이의가 있으면 해당 대상의 신고 메뉴에서 ‘처리 결과 이의신청’을 선택하고 기존 조치와 추가 소명을 적어 주세요. 운영자는 검토 사유와 결과를 기록합니다.</p><h2>AI와 회사 리뷰</h2><p>AI 참고 답변은 사람의 답변과 구분하여 표시하며 전문적인 확정 판단으로 사용하지 마세요. 현재 인증된 회사의 리뷰만 작성할 수 있고, 실제 근무 경험 없이 평가하거나 리뷰를 거래·조작하는 행위를 금지합니다.</p>`,
+    help: `<h1>이용 도움말</h1><h2>이용하는 순서</h2><ol><li>Google 또는 이메일로 로그인합니다.</li><li>설계사 인증에서 이름·소속·연락처·설계사 고유번호와 증빙 사진 1장을 제출합니다.</li><li>내 정보와 알림에서 심사 결과를 확인합니다.</li><li>인증 후 글·댓글·북마크·리뷰를 이용합니다.</li></ol><h2>공개 표시</h2><p>예를 들어 닉네임 ‘바른설계’이고 소속이 삼성생명이면 ‘삼성생명 · 바***’로 보입니다. ‘완전익명’ 채널에서는 회사명·닉네임 없이 ‘익명’으로 보여요. 소속 변경 시 재인증을 신청해야 합니다.</p><h2>권리침해 신고와 이의신청</h2><p>설계사 인증 회원은 글·댓글·리뷰의 신고 버튼에서 대상, 사유와 침해 사실을 적어 신고할 수 있어요. 주민등록번호나 불필요한 개인 정보는 기재하지 마세요. 운영자가 검토해 서비스 내 알림으로 결과를 안내하며, 같은 콘텐츠에 신고가 3건 이상 모이면 검토 전까지 임시로 가립니다. 이미 조치된 글의 공개 주소를 알고 있다면 아래에서 대상 번호와 소명을 입력할 수 있습니다.</p><form data-form="report"><div class="form-grid">${select(
       "target",
       "대상 종류",
       [
@@ -886,6 +891,10 @@
     if (form) {
       const kind = form.elements.content_kind.value,
         body = form.elements.body.value;
+      const anon = !!channels.find((c) => c.id === form.elements.channel_id.value)?.anonymous || !!current?.post?.anonymous;
+      $("#anon-note").hidden = !anon;
+      form.elements.company_id.disabled = anon;
+      if (anon) form.elements.company_id.value = "";
       const partial = kind === "experience";
       $("#public-preview").textContent = partial ? Array.from(body).slice(0, 300).join("") : body;
       $("#public-preview-hint").textContent = partial
@@ -1410,7 +1419,7 @@
         if (!payload.id) delete payload.id;
         delete payload.confirm_delete;
         delete payload.confirm_withdraw;
-        ["enabled", "pinned"].forEach((k) => {
+        ["enabled", "pinned", "anonymous"].forEach((k) => {
           if (form.elements[k]) payload[k] = data.has(k);
         });
         ["display_order", "daily_limit", "days"].forEach((k) => {
@@ -1418,7 +1427,14 @@
         });
         if (payload.operation === "channel_save" && !payload.slug)
           payload.slug = slugify(payload.name, (current?.admin?.channels || channels).map((c) => c.slug));
-        await act("admin", payload);
+        const done = await act("admin", payload);
+        if (payload.operation === "reveal_author") {
+          const a = done.author || {};
+          dialog(
+            `<h2>익명 작성자</h2><p>${E(a.nickname || "닉네임 없음")} · ${E(a.company_name || "소속 미등록")} · ${E(statusNames[a.status] || "")}</p><p class="hint">확인한 사실과 사유가 감사 기록에 남았어요. 다른 사람에게 알리지 마세요.</p><div class="modal-actions"><a class="btn" href="${uri("admin/", { section: "members", id: a.member_id })}">회원 상세</a>${btn("닫기", "dialog-close")}</div>`,
+          );
+          return;
+        }
         closeDialog();
         notify("저장했어요. 처리 내역은 감사 기록에 남았어요.");
         return refresh();
