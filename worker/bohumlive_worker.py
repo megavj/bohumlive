@@ -26,14 +26,21 @@ import urllib.error
 import urllib.request
 import uuid
 
+import proof_check
+
 
 MODEL = "claude-opus-5-5"
 EFFORT = "high"
-VERSION = "2026-11-07.1"
+VERSION = "2026-11-09.1"
 PROOF_BUCKET = "bl-proofs"
 MAX_SECONDS = 240
 MAX_ANSWER = 6000
 STATE = Path.home() / "Library/Application Support/Bohumlive"
+OCR_SOURCE = Path(__file__).resolve().parent / "ocr" / "bl_ocr.swift"
+OCR_BINARY = Path(__file__).resolve().parent / "ocr" / "bl_ocr"
+PROOF_PATH = r"[0-9a-fA-F-]{36}/[0-9a-fA-F-]{36}\.(?:jpg|jpeg|png|webp)"
+MAX_PROOF_BYTES = 6 * 1024 * 1024
+PROOF_CHECKS_PER_RUN = 3
 DEFAULT_URL = "https://behqpqucmnehzinssnxr.supabase.co"
 STOP = False
 
@@ -164,6 +171,26 @@ class Backend:
         if not isinstance(result, dict):
             raise WorkerError("backend_invalid_response")
         return result
+
+    def download_proof(self, path: str) -> bytes:
+        # Private bucket object, read with the service key only to check it on this Mac.
+        if not isinstance(path, str) or not re.fullmatch(PROOF_PATH, path):
+            raise WorkerError("invalid_proof_path")
+        req = urllib.request.Request(
+            self.url + "/storage/v1/object/" + PROOF_BUCKET + "/" + path,
+            headers={"apikey": self.credential, "Authorization": "Bearer " + self.credential},
+            method="GET",
+        )
+        try:
+            with self.opener.open(req, timeout=30) as response:
+                data = response.read(MAX_PROOF_BYTES + 1)
+        except urllib.error.HTTPError as exc:
+            raise WorkerError("proof_missing" if exc.code in (400, 404) else "proof_download_failed") from None
+        except (urllib.error.URLError, TimeoutError, OSError):
+            raise WorkerError("backend_unreachable") from None
+        if not data or len(data) > MAX_PROOF_BYTES:
+            raise WorkerError("proof_invalid_size")
+        return data
 
     def delete_proofs(self, paths: list[str]) -> None:
         # Only opaque UUID-based paths in the designated private bucket.
@@ -366,6 +393,92 @@ def maintenance(backend: Backend) -> None:
         raise WorkerError("maintenance_incomplete")
 
 
+def ensure_ocr() -> Path:
+    """Apple Vision text recognition binary, built locally from the bundled Swift source."""
+    try:
+        if OCR_BINARY.is_file() and OCR_BINARY.stat().st_mtime >= OCR_SOURCE.stat().st_mtime:
+            return OCR_BINARY
+        tmp = OCR_BINARY.with_name("bl_ocr.build-" + str(os.getpid()))
+        result = subprocess.run(["/usr/bin/swiftc", "-O", "-o", str(tmp), str(OCR_SOURCE)],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=240, check=False)
+        if result.returncode or not tmp.is_file():
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+            raise WorkerError("ocr_unavailable")
+        os.replace(tmp, OCR_BINARY)
+        return OCR_BINARY
+    except (OSError, subprocess.TimeoutExpired):
+        raise WorkerError("ocr_unavailable") from None
+
+
+def read_proof_text(binary: Path, image: bytes, suffix: str) -> dict:
+    """Run OCR on a private temporary copy; the copy is removed immediately."""
+    work = STATE / "ocr"
+    work.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(work, 0o700)
+    fd, name = tempfile.mkstemp(dir=work, suffix=suffix)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(image)
+        result = subprocess.run([str(binary), name], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                timeout=90, check=False)
+        if result.returncode:
+            raise WorkerError("ocr_failed")
+        data = json.loads(result.stdout.decode("utf-8"))
+        if not isinstance(data, dict) or not isinstance(data.get("lines"), list):
+            raise WorkerError("ocr_failed")
+        return data
+    except (OSError, subprocess.TimeoutExpired, ValueError, UnicodeError):
+        raise WorkerError("ocr_failed") from None
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(name)
+
+
+def verify_proofs(backend: Backend) -> None:
+    """Auto-check submitted proofs: approve / reject / hold for an administrator."""
+    queue = backend.rpc("proof_queue")
+    items = queue.get("items") or []
+    companies = [c for c in (queue.get("companies") or []) if isinstance(c, dict)]
+    if not isinstance(items, list) or not items:
+        return
+    counts = {"approve": 0, "reject": 0, "hold": 0, "retry": 0}
+    try:
+        binary = ensure_ocr()
+    except WorkerError:
+        binary = None
+    for item in items[:PROOF_CHECKS_PER_RUN]:
+        if STOP or not isinstance(item, dict):
+            break
+        path = item.get("proof_path")
+        try:
+            if binary is None:
+                raise WorkerError("ocr_failed")
+            image = backend.download_proof(path)
+            suffix = "." + path.rsplit(".", 1)[-1].lower()
+            verdict = proof_check.judge(read_proof_text(binary, image, suffix), item, companies)
+            del image
+        except WorkerError as exc:
+            if exc.code in ("backend_unreachable", "proof_download_failed"):
+                counts["retry"] += 1
+                continue
+            verdict = {"decision": "hold", "fields": {}, "read": {},
+                       "reasons": ["unreadable" if exc.code in ("proof_missing", "proof_invalid_size") else "ocr_failed"]}
+        payload = {"id": item.get("id"), "proof_path": path, "decision": verdict["decision"],
+                   "reasons": verdict.get("reasons", []), "fields": verdict.get("fields", {}),
+                   "read": verdict.get("read", {})}
+        if verdict.get("company_id"):
+            payload["company_id"] = verdict["company_id"]
+        try:
+            decided = backend.rpc("proof_judgment", payload).get("decision")
+        except WorkerError:
+            counts["retry"] += 1
+            continue
+        counts[decided if decided in counts else "hold"] += 1
+    log("proof_check_completed", **counts)
+
+
 def process_one(backend: Backend) -> None:
     claimed = backend.rpc("claim", {"worker_id": str(uuid.uuid4())})
     job = claimed.get("job")
@@ -426,8 +539,12 @@ def main() -> int:
                 status = backend.rpc("status")
                 credential = keychain("timcook-claude-oauth-token")
                 del credential
+                try:
+                    ocr_ready = bool(ensure_ocr())
+                except WorkerError:
+                    ocr_ready = False
                 log("dry_run_ok", ai_enabled=bool(status.get("ai_enabled")),
-                    subscription_credential_available=True,
+                    subscription_credential_available=True, ocr_available=ocr_ready,
                     cli_available=bool(shutil.which("claude") or (Path.home() / ".local/bin/claude").is_file()))
                 return 0
             # AI continues even when an individual cleanup operation is blocked.
@@ -438,6 +555,13 @@ def main() -> int:
                 log("maintenance_blocked", code=exc.code)
                 partial = True
             if not args.maintenance_only and not STOP:
+                # 증빙 자동 판정이 막혀도 AI 답변과 정리는 계속한다. 보류 건은 관리자 화면·알림으로 처리된다.
+                try:
+                    verify_proofs(backend)
+                except WorkerError as exc:
+                    log("proof_check_blocked", code=exc.code)
+                except Exception:
+                    log("proof_check_blocked", code="unexpected_internal_error")
                 process_one(backend)
             return 1 if partial else 0
     except WorkerError as exc:

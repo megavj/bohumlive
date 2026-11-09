@@ -2045,3 +2045,28 @@ dialog::backdrop {
   color: var(--ink) !important;
   font-weight: 700 !important;
 }
+
+/* 2026-11-09 수정: 증빙 자동 판정 결과 */
+.auto-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  font-size: 13px;
+}
+.auto-result.auto-approve {
+  border-color: #b9d8c6;
+  background: #f1f8f4;
+}
+.auto-result.auto-reject {
+  border-color: #ecc2c8;
+  background: #fdf3f4;
+}
+.auto-result.auto-hold {
+  border-color: #ecd9a8;
+  background: #fffaf0;
+}
