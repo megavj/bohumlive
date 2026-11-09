@@ -1,137 +1,1148 @@
 (() => {
-'use strict';
-const $ = (s, root=document) => root.querySelector(s);
-const $$ = (s, root=document) => [...root.querySelectorAll(s)];
-const page = document.body.dataset.page;
-const params = new URLSearchParams(location.search);
-const E = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const uri = (file, args={}) => '/' + file + (Object.keys(args).length ? '?' + new URLSearchParams(args) : '');
-const date = v => v ? new Date(v).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-const statusNames={unverified:'설계사 인증 전',pending:'인증 대기',supplement:'보완 필요',verified:'인증 완료',rejected:'반려',suspended:'이용 정지',withdrawn:'탈퇴한 회원'};
-const kindNames={practice:'실무지식',career:'커리어',experience:'경험·자유',weekly:'운영팀 정리'};
-const scoreNames=['수수료·시책','교육','전산','심사·지급','지점 분위기'];
-let sb, session=null, viewer=null, mine=null, channels=[], companies=[], current=null, renderId=0, toastTimer, proofPreview;
-const isActive=()=>!!viewer&&!['suspended','withdrawn'].includes(viewer.status);
-const isOwner=()=>viewer?.role==='owner'&&isActive()&&viewer.verification_exempt!==false;
-const isAdmin=()=>['admin','owner'].includes(viewer?.role)&&isActive()&&viewer.can_admin!==false;
-const validVerification=p=>p?.status==='verified'&&Date.parse(p.verified_until)>Date.now();
-const isVerified=()=>isOwner()||(validVerification(viewer)&&viewer.can_write!==false);
-const canReadMember=()=>isVerified()||isAdmin();
-const statusLabel=(p=viewer)=>isOwner()?'대표 관리자 · 모든 권한':p?.status==='verified'&&!validVerification(p)?'인증 기간 만료 · 재인증 필요':statusNames[p?.status]||'계정 확인 중';
-const sampleBadge=p=>p?.is_sample?'<span class="tag sample-badge">임시 견본</span>':'';
-const icon=(name)=>{const paths={search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',heart:'<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',comment:'<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8Z"/>',bookmark:'<path d="M19 21l-7-4-7 4V3h14z"/>',bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',edit:'<path d="m16 3 5 5-12 12-6 1 1-6zM14 5l5 5"/>',share:'<path d="M12 16V3m-5 5 5-5 5 5M4 14v7h16v-7"/>',lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/>'};return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name]||paths.comment}</svg>`;};
-const btn=(label,action,attrs='',primary=false)=>`<button type="button" class="btn ${primary?'btn-primary':''}" data-do="${E(action)}" ${attrs}>${label}</button>`;
-const empty=(title='아직 올라온 글이 없어요.',sub='동료와 나누고 싶은 경험이나 질문을 남겨 주세요.')=>`<div class="empty"><strong>${E(title)}</strong>${E(sub)}</div>`;
-function notify(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
-function safeError(error){const msg=String(error?.message||'');if(/fetch|network|Failed|Load failed/i.test(msg))return '연결하지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.';if(/rate|over_email_send_rate_limit|429/i.test(msg))return '요청이 너무 많아요. 잠시 후 다시 시도해 주세요. 이메일은 무료 발송 한도가 적용됩니다.';if(/Email address not authorized|email_address_not_authorized/i.test(msg))return '기본 이메일 발송기는 사전 등록된 운영자 이메일만 지원합니다. 일반 가입 연결을 준비하고 있습니다.';if(/provider.*enabled|Unsupported provider/i.test(msg))return '이 로그인 방식은 아직 연결되지 않았어요. 다른 로그인 방법을 이용해 주세요.';if(/JWT|expired|session|로그인/i.test(msg))return '로그인이 만료되었거나 로그인이 필요해요. 다시 로그인해 주세요.';if(/permission|권한|관리자|인증|정지|탈퇴|하루|간격|한도|본인|소속|필수|글자|존재|처리|별점|리뷰|중복|신고|등록|증빙|파일|반려|형식|길이|일반|변경|대상|보완|제한|허용|입력|일치|삭제|채널|회사|글|댓글/.test(msg)&&msg.length<260&&!/eyJ|secret|token|password|service_role/i.test(msg))return msg;return '요청을 처리하지 못했어요. 새로고침 후 다시 시도해 주세요.';}
-async function read(scope,args={}){const {data,error}=await sb.rpc('bl_read',{p_scope:scope,p_args:args});if(error)throw error;if(data?.viewer!==undefined)viewer=data.viewer;return data||{};}
-async function act(action,payload={}){const {data,error}=await sb.rpc('bl_action',{p_action:action,p_payload:payload});if(error)throw error;return data||{};}
-let fieldSeq=0;
-function field(name,label,type='text',value='',extra=''){const fid=name+'-'+(++fieldSeq);return `<div class="field"><label for="${E(fid)}">${E(label)}</label><input id="${E(fid)}" name="${E(name)}" type="${E(type)}" value="${E(value)}" ${extra}></div>`;}
-function area(name,label,value='',extra=''){const fid=name+'-'+(++fieldSeq);return `<div class="field"><label for="${E(fid)}">${E(label)}</label><textarea id="${E(fid)}" name="${E(name)}" ${extra}>${E(value)}</textarea></div>`;}
-function select(name,label,options,value='',extra=''){const fid=name+'-'+(++fieldSeq);return `<div class="field"><label for="${E(fid)}">${E(label)}</label><select id="${E(fid)}" name="${E(name)}" ${extra}>${options.map(o=>`<option value="${E(o[0])}" ${String(o[0])===String(value)?'selected':''}>${E(o[1])}</option>`).join('')}</select></div>`;}
-const formEnd=(label='저장')=>`<p class="error field-error" data-form-error role="alert"></p><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="submit">${E(label)}</button></div>`;
-const companyOptions=()=>[['','회사를 선택해 주세요'],...companies.filter(c=>c.enabled!==false).map(c=>[c.id,c.name]),['custom','직접 입력']];
-function layout(){const active=page==='home'?'home':['channels','channel','write','post','search'].includes(page)?'channels':page==='company'?'company':'';
- $('#header').innerHTML=`<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></a><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="관심 있는 내용을 검색해 보세요" value="${page==='search'?E(params.get('q')||''):''}" maxlength="100"><button aria-label="검색">${icon('search')}</button></form>${session?`<div class="header-user"><a class="notification-link" href="/notifications.html" aria-label="알림">${icon('bell')}</a><a href="/me.html">내 정보</a></div>`:`<a class="header-login" href="${uri('join.html',{returnTo:location.pathname+location.search})}">로그인·가입</a>`}</div><nav class="primary-nav" aria-label="주 메뉴"><a class="${active==='home'?'active':''}" href="/index.html">홈</a><a class="${active==='channels'?'active':''}" href="/channels.html">채널</a><a class="${active==='company'?'active':''}" href="/company.html">보험사 리뷰</a>${isAdmin()?`<a class="${page==='admin'?'active':''}" href="/admin/" data-testid="admin-nav">관리자</a>`:''}</nav>${isOwner()?'<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>':''}</div></header>`;
- $('#footer').innerHTML=`<footer class="site-footer"><div class="footer-logo">보험<b style="color:var(--accent)">라이브</b></div><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html">개인정보처리방침</a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">이용 도움말·권리침해 신고</a></nav><p class="footer-note">보험라이브는 설계사의 경험과 실무 지식을 나누는 공간입니다. 회원의 글은 개인의 의견이며 회사의 공식 입장이나 보험상품 가입 권유가 아닙니다. 고객정보·주민등록번호·개인 연락처를 게시하지 마세요.</p><p class="footer-note">공개 준비 중 · 검색 노출을 차단하고 있습니다.</p></footer>`;
- $('#sidebar').innerHTML=`<section class="sidebar-block"><h2>동료의 경험이 필요할 때</h2><p class="muted">궁금한 내용을 질문하고<br>설계사 동료의 답변을 만나 보세요.</p><a class="btn btn-primary" href="/write.html">${icon('edit')} 글쓰기</a></section><section class="sidebar-block"><h2>함께 지키는 약속</h2><p class="muted small">회사는 그대로, 닉네임은 첫 글자만 표시해요. 고객정보나 동료의 개인정보가 담기지 않았는지 확인해 주세요.</p><a class="text-link" href="/rules.html">운영정책 보기 →</a></section>${session?`<section class="sidebar-block"><h2>${isOwner()?'나의 권한':'나의 인증 상태'}</h2><p>${E(statusLabel())}</p><a class="text-link" href="/me.html">내 정보 확인 →</a></section>`:''}`;
- $('#main').classList.toggle('admin-main',page==='admin');if(page==='admin')$('#sidebar').hidden=true;
-}
-function authorization(kind='verified'){if(!session)return `<section class="auth-box"><h1>로그인이 필요해요</h1><p class="muted">계정을 확인한 다음 이어서 이용할 수 있어요.</p><a class="btn btn-primary" href="${uri('join.html',{returnTo:location.pathname+location.search})}">로그인하기</a></section>`;if(kind==='admin'&&!isAdmin())return empty('관리자만 사용할 수 있어요.','권한은 서버에서 확인합니다. 내 정보에서 현재 상태를 확인해 주세요.');if(kind==='verified'&&!isVerified())return `<section class="section"><h1>설계사 인증 후 이용할 수 있어요</h1><p class="notice">현재 상태: ${E(statusLabel())}${mine?.profile?.review_reason?`<br>${E(mine.profile.review_reason)}`:''}</p>${viewer?.status==='suspended'?'<p>정지 상태에서는 공개 글만 읽을 수 있습니다.</p><a class="btn" href="/help.html">운영 안내</a>':'<a class="btn btn-primary" href="/verify.html">인증 신청·보완하기</a>'}</section>`;return '';}
-function feed(post,compact=false){return `<article class="feed-item ${compact?'compact-item':''} ${post.pinned?'feed-notice':''}" data-testid="post-item"><a class="feed-channel" href="${uri('channel.html',{id:post.channel_id})}">${post.pinned?'<span class="tag">공지</span>':''}${E(post.channel_name||'커뮤니티')} <span class="tag">${E(kindNames[post.content_kind]||'글')}</span>${post.is_question?'<span class="tag">질문</span>':''}${sampleBadge(post)}</a><a class="feed-title" href="${uri('post.html',{id:post.id})}">${E(post.title)}</a>${compact?'':`<p class="feed-excerpt">${E(post.body)}</p><p class="author">${E(post.author_display||'운영팀')}</p>`}<div class="meta"><span>${icon('heart')} ${Number(post.likes)||0}</span><span>${icon('comment')} ${Number(post.comment_count)||0}</span><span>${E(date(post.created_at))}</span></div></article>`;}
-const feeds=(posts,compact=false)=>posts?.length?posts.map(p=>feed(p,compact)).join(''):empty();
-const channelDisc=c=>`<span class="topic-disc ${E(c.slug)}">${E(c.name?.slice(0,1)||'보')}</span>`;
-async function home(){const d=await read('home');channels=d.channels||[];companies=d.companies||[];const posts=d.posts||[];return `${d.notices?.length?`<section class="home-section"><h2 class="section-title">운영 안내</h2>${feeds(d.notices,true)}</section><div class="divider"></div>`:''}<section class="home-section"><h1 class="section-title">토픽 베스트</h1>${feeds(posts.slice(0,10),true)}<a class="more-row" href="/channel.html?sort=popular">더보기</a></section><div class="divider"></div><section class="home-section"><h2 class="section-title">지금 많이 읽는 글</h2>${feeds(d.popular||[],true)}<a class="more-row" href="/channel.html?sort=popular">더보기</a></section><div class="divider"></div>${channels.map(c=>`<section class="home-section"><div class="home-channel-heading"><h2 class="section-title"><a class="row" href="${uri('channel.html',{id:c.id})}"><span class="topic-disc mini ${E(c.slug)}">${E(c.name.slice(0,1))}</span>${E(c.name)}</a></h2><a href="${uri('channel.html',{id:c.id})}">더보기</a></div>${feeds(posts.filter(p=>p.channel_id===c.id).slice(0,5),true)}</section><div class="divider"></div>`).join('')}`;}
-async function channelList(){const d=await read('channels');channels=d.channels||[];const follow=params.get('filter')==='following';const list=follow?channels.filter(c=>c.following):channels;return `<section class="explore"><h1>채널 탐색</h1><p class="muted">관심 있는 주제를 팔로우하고 동료의 이야기를 만나 보세요.</p><nav class="chips"><a class="chip ${!follow?'active':''}" href="/channels.html">모든 채널</a><a class="chip ${follow?'active':''}" href="/channels.html?filter=following">팔로우</a></nav><div class="channel-cards">${list.map(c=>`<article class="channel-card">${channelDisc(c)}<div class="channel-card-info"><h2><a href="${uri('channel.html',{id:c.id})}">${E(c.name)}</a></h2><p>${E(c.description)}</p><p class="follow-count">팔로워 ${Number(c.followers)||0}명</p></div><button type="button" class="follow-small" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}">${c.following?'팔로잉':'팔로우'}</button></article>`).join('')}</div>${!list.length?empty('아직 팔로우한 채널이 없어요.','모든 채널에서 관심 있는 주제를 선택해 주세요.'):''}</section>`;}
-async function postList(){const q=params.get('q')||'';let id=params.get('id')||'';const cd=await read('channels');channels=cd.channels||[];if(!id&&params.get('channel'))id=channels.find(c=>c.slug===params.get('channel'))?.id||'';const channel=channels.find(c=>c.id===id);const sort=params.get('sort')==='popular'?'popular':'latest';const d=await read('posts',{...(id?{channel_id:id}:{}),...(q?{q}:{}),sort,limit:50});const posts=d.posts||[];const isSearch=page==='search';return `<section class="section"><div class="section-head"><h1>${isSearch?'검색 결과':E(channel?.name||'모든 글')}</h1><a class="btn btn-primary btn-small" href="${uri('write.html',id?{channel:id}:{})}">글쓰기</a></div>${isSearch?`<form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="muted small">${q?`“${E(q)}” 검색 결과 ${posts.length}개`:'검색어를 입력해 주세요.'}</p>`:`<p class="muted">${E(channel?.description||'설계사의 경험과 실무 이야기를 함께 나눠요.')}</p>${channel?btn(channel.following?'팔로잉':'팔로우','toggle',`data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}"`):''}`}</section><nav class="tabs"><a class="${sort==='latest'?'active':''}" href="${uri(isSearch?'search.html':'channel.html',{...(id?{id}:{}),...(q?{q}:{}),sort:'latest'})}">최신순</a><a class="${sort==='popular'?'active':''}" href="${uri(isSearch?'search.html':'channel.html',{...(id?{id}:{}),...(q?{q}:{}),sort:'popular'})}">인기순</a></nav>${isSearch&&!q?empty('궁금한 내용을 찾아보세요.','제목과 공개 범위에 맞는 본문을 검색합니다.'):feeds(posts)}`;}
-function commentHTML(c){return `<article class="comment-item ${c.parent_id?'comment-reply':''}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${E(c.author_display)} ${c.is_mine?'<span class="author-badge">내 댓글</span>':''} ${sampleBadge(c)}</div><p class="body-text">${E(c.body)}</p><div class="meta"><span>${E(date(c.created_at))}</span><button data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" ${c.is_mine?'disabled title="내 댓글에는 좋아요를 누를 수 없어요"':''}>${icon('heart')} ${Number(c.likes)||0}</button>${!c.parent_id&&isVerified()?`<button data-do="reply" data-id="${E(c.id)}">답글</button>`:''}${c.is_mine&&isVerified()?`<button data-do="comment-edit" data-id="${E(c.id)}">수정</button><button data-do="comment-delete" data-id="${E(c.id)}">삭제</button>`:''}<button data-do="report" data-target="comment" data-id="${E(c.id)}">신고</button></div><div data-reply-slot="${E(c.id)}"></div></article>`;}
-async function post(){const id=params.get('id');if(!id)return empty('글을 선택해 주세요.','홈이나 채널에서 읽을 글을 선택할 수 있어요.');const d=await read('post',{id});current=d;const p=d.post;if(!p)return `<section class="section"><h1>${d.unavailable_reason==='temporary_hidden'?'운영 검토를 위해 임시 가림한 글입니다':'글을 표시할 수 없어요'}</h1><p class="notice">이 글은 삭제되었거나 신고 접수에 따른 운영 검토로 가려졌습니다. 임시조치는 접수 후 최대 30일 안에 검토합니다.${d.hidden_until?`<br>검토 예정: ${E(date(d.hidden_until))}`:''}</p><a class="btn" href="/channel.html">다른 글 보기</a><a class="btn" href="/help.html">신고·이의신청 안내</a>${session?btn('내 글 조치에 이의신청','appeal',`data-target="post" data-id="${E(id)}"`):''}</section>`;
- const comments=d.comments||[];const ordered=comments.filter(c=>!c.parent_id).flatMap(c=>[c,...comments.filter(x=>x.parent_id===c.id)]);
- return `<article><header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri('channel.html',{id:p.channel_id})}">${E(p.channel_name)}</a><span class="tag">${E(kindNames[p.content_kind])}</span>${p.is_question?'<span class="tag">질문</span>':''}${sampleBadge(p)}</div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="meta"><span>${E(date(p.created_at))}</span><span>${icon('comment')} 사람 댓글 ${Number(p.comment_count)||0}</span>${p.is_mine&&isVerified()?`<a href="${uri('write.html',{id:p.id})}">수정</a><button data-do="post-delete" data-id="${E(p.id)}">삭제</button>`:''}<button class="push" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button></div></header><div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated?'<div class="guest-lock"><h2>여기부터 인증 회원에게만 공개</h2><p>설계사 인증 후 나머지 본문과 동료의 댓글을 읽을 수 있어요.</p><a class="btn btn-primary" href="/verify.html">설계사 인증하기</a></div>':''}<div class="post-actions"><button data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine?'disabled title="내 글에는 좋아요를 누를 수 없어요"':''} data-testid="post-like">${icon('heart')} 좋아요 ${Number(p.likes)||0}</button><button data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" data-testid="post-bookmark">${icon('bookmark')} ${p.bookmarked?'저장됨':'북마크'}</button><button data-do="share" class="share-button" aria-label="글 링크 복사">${icon('share')}</button></div>${p.company_id?`<section class="related-companies"><h2>관련 회사</h2><a class="related-company" href="${uri('company.html',{id:p.company_id})}"><span class="company-mark">${E(p.company_name)}</span><p>${E(p.company_name)}<br><span class="muted small">회사 정보와 리뷰 보기</span></p></a></section>`:''}<section class="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count)||0}</h2>${isVerified()?`<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="고객정보 없이 동료의 경험을 나눠 주세요." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>`:canReadMember()?'<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>':`<div class="guest-lock">${icon('lock')}<h2>댓글과 AI 답변은 인증 회원에게 공개돼요</h2><p>${session?`현재 상태: ${E(statusLabel())}`:'로그인 후 설계사 인증을 완료해 주세요.'}</p><a class="btn btn-primary" href="${viewer?.status==='suspended'?'/help.html':'/verify.html'}">${viewer?.status==='suspended'?'이용 정지 안내':'설계사 인증하기'}</a></div>`}</div>${canReadMember()?(ordered.length?ordered.map(commentHTML).join(''):empty('아직 동료의 댓글이 없어요.','첫 경험이나 의견을 남겨 주세요.')):''}${d.ai_reply?`<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>`:''}</section></article>`;
-}
-async function write(){const denied=authorization();if(denied)return denied;const ds=await Promise.all([read('channels'),read('companies')]);channels=(ds[0].channels||[]).filter(c=>c.enabled!==false);companies=(ds[1].companies||[]).filter(c=>c.enabled!==false);let p={};if(params.get('id')){p=(await read('post',{id:params.get('id')})).post||{};if(!p.is_mine)return empty('내 글만 수정할 수 있어요.','글 목록에서 작성한 글을 확인해 주세요.');}current={post:p};return `<section class="section"><h1>${p.id?'글 수정':'글쓰기'}</h1><p class="notice">회원 글은 개인 의견입니다. 고객의 이름·연락처·계약번호나 타인을 특정할 수 있는 내용을 쓰지 마세요.</p><form data-form="post" id="post-form"><input type="hidden" name="id" value="${E(p.id||'')}"><div class="form-grid">${select('channel_id','채널',channels.map(c=>[c.id,c.name]),p.channel_id||params.get('channel'),'required')}${select('content_kind','공개 범위',Object.entries(kindNames).filter(([k])=>k!=='weekly'||isAdmin()),p.content_kind||'experience','required')}${select('company_id','관련 회사 (선택)',[['','선택하지 않음'],...companies.map(c=>[c.id,c.name])],p.company_id||'')}</div><label class="check-line"><input type="checkbox" name="is_question" ${p.is_question?'checked':''}>동료에게 묻는 질문입니다. AI 참고 답변이 함께 생성될 수 있어요.</label><div style="height:20px"></div>${field('title','제목','text',p.title||'','required minlength="2" maxlength="150" data-testid="post-title"')}${area('body','본문',p.body||'','required minlength="5" maxlength="10000" data-testid="post-body-input"')}<section class="preview-box"><h3>공개 미리보기</h3><p class="small muted" id="public-preview-hint"></p><div class="body-text" id="public-preview"></div></section><label class="check-line"><input type="checkbox" name="checked_preview" required>공개 범위와 미리보기를 확인했습니다.</label>${formEnd(p.id?'수정 저장':'글 등록')}</form></section>`;}
-async function login(){if(session)return `<section class="auth-box"><h1>로그인되어 있어요</h1><p>${E(statusLabel())}</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a><p></p>${btn('로그아웃','logout')}</section>`;return `<section class="auth-box"><a class="back-link" href="/index.html">← 보험라이브 홈</a><h1>로그인 · 회원가입</h1><p class="muted">처음 오셨다면 아래 방법으로 로그인하면 <b>자동으로 회원가입</b>됩니다. 별도 가입 절차는 없어요.</p>${/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|Telegram|; wv\)/i.test(navigator.userAgent)?'<p class="hint" style="color:#b4235a;margin:10px 0">카카오톡·텔레그램 등 앱 안에서는 Google 로그인이 막힐 수 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(크롬·사파리)를 눌러 주세요. 이메일 로그인은 여기서도 됩니다.</p>':''}${btn('Google로 계속하기','google',`data-testid="google-login" ${window.BL_CONFIG?.googleReady===false?'disabled aria-disabled="true"':''}`,true)}<p class="hint" style="margin-top:10px">${window.BL_CONFIG?.googleReady===false?'Google 로그인 연결 준비 중입니다. 아래 이메일로 계속해 주세요.':'이메일 발송 한도 없이 로그인할 수 있는 Google 로그인을 권장합니다.'}</p><div class="separator">또는 이메일로 로그인</div><form data-form="email" id="email-form">${field('email','이메일 주소','email','','required autocomplete="email" placeholder="name@example.com" data-testid="login-email"')}${formEnd('로그인 메일 받기')}</form><div id="otp-area" hidden><form data-form="otp"><h2 style="margin-top:24px">인증번호로 확인</h2><p class="small muted">메일에 인증번호가 있다면 입력해 주세요. 로그인 링크로도 접속할 수 있습니다.</p>${field('token','이메일 인증번호','text','','required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"')}${formEnd('인증번호 확인')}</form></div><p class="hint" style="margin-top:20px">${window.BL_CONFIG?.customSMTP===false?'이메일 로그인은 현재 사전 등록된 운영자 이메일만 지원하며 서비스 전체 시간당 2건으로 제한됩니다. 일반 가입을 위한 메일 연결을 준비하고 있습니다.':window.BL_CONFIG?.emailRateLimit?`로그인 메일은 서비스 전체 시간당 ${Number(window.BL_CONFIG.emailRateLimit)}건 한도가 적용됩니다. 잠시 기다린 뒤 다시 요청해 주세요.`:"이메일 발송에는 한도가 적용됩니다. 기본 발송기는 시간당 2건이며 허용된 주소만 지원합니다. 별도 메일 서버 연결 시 한도가 달라질 수 있습니다."}</p><p class="small muted">이용 전 <a class="text-link" href="/terms.html">이용약관</a>과 <a class="text-link" href="/privacy.html">개인정보처리방침</a>을 확인해 주세요. 로그인만으로 회사 인증이 완료되지는 않습니다.</p></section>`;}
-async function verify(){const denied=authorization('login');if(denied)return denied;if(isOwner())return `<section class="section"><h1>대표 관리자 · 모든 권한</h1><p class="notice success">대표 관리자는 설계사 인증이 면제됩니다. 글·댓글·리뷰와 모든 운영 기능을 이용할 수 있어요.</p><a class="btn btn-primary" href="/admin/">관리자로 이동</a><a class="btn" href="/me.html">내 정보</a></section>`;if(viewer?.status==='suspended'||viewer?.status==='withdrawn')return authorization();companies=(await read('companies')).companies||[];const p=mine?.profile||{};return `<section class="section"><h1>설계사 인증 신청</h1><p class="notice">현재 상태: ${E(statusLabel(p))}${p.review_reason?`<br>운영자 안내: ${E(p.review_reason)}`:''}</p><p class="muted">현재 소속과 설계사 자격을 확인합니다. 이름·연락처·증빙은 공개되지 않고 담당 운영자만 확인합니다.</p><form data-form="verification"><div class="form-grid">${field('name','이름','text','','required maxlength="60" autocomplete="name" data-testid="verification-name"')}${field('nickname','닉네임','text',p.nickname||'','required minlength="2" maxlength="20" data-testid="verification-nickname"')}${select('company_id','현재 소속 회사',companyOptions(),p.company_id||'','required data-testid="verification-company"')}${field('company_name','소속 회사 직접 입력','text','','maxlength="100" placeholder="목록에서 직접 입력을 선택한 경우"')}${field('phone','연락처','tel','','required maxlength="30" autocomplete="tel" data-testid="verification-phone"')}${field('registration_number','설계사 등록번호 (선택)','text','','maxlength="40"')}<div class="field full"><label for="proof">증빙 사진 1장</label><input id="proof" type="file" name="proof" accept="image/jpeg,image/png,image/webp" required data-testid="verification-proof"><span class="hint">위촉증·명함·사원증 중 1장, JPG·PNG·WebP, 5MB 이하. 주민등록번호·주소·고객정보는 가린 뒤 올려 주세요. 증빙은 최대 5장까지 보관하며 신청하지 않은 업로드 파일은 24시간 뒤 삭제 대상이 됩니다.</span><img id="proof-preview" class="preview-image" alt="선택한 인증 증빙 미리보기" hidden></div></div><p class="notice">공개 표시: <strong id="display-preview">회사명 · 닉***</strong></p><label class="check-line"><input type="checkbox" name="privacy_consent" required>인증 심사 목적으로 이름·연락처·소속·증빙을 수집하는 데 동의합니다. 증빙과 심사 원본은 처리 후 30일이 지나면 삭제 대상이 됩니다. <a class="text-link" href="/privacy.html">자세히</a></label>${formEnd('인증 신청 보내기')}</form></section>`;}
-async function myPage(){
- const denied=authorization('login');if(denied)return denied;
- const d=mine||await read('me');current=d;const p=d.profile||{},owner=isOwner();
- const tab=params.get('tab')||'profile',tabs=[['profile','내 정보'],['posts','내 글'],['comments','내 댓글'],['bookmarks','북마크'],['reviews','내 리뷰']];let body='';
- if(tab==='posts')body=feeds(d.posts);
- else if(tab==='bookmarks')body=feeds(d.bookmarks);
- else if(tab==='comments')body=d.comments?.length?d.comments.map(c=>`<article class="feed-item"><a href="${uri('post.html',{id:c.post_id})}"><p class="body-text">${E(c.body)}</p><span class="muted small">${E(date(c.created_at))} · 원문 보기 →</span></a></article>`).join(''):empty('아직 작성한 댓글이 없어요.','동료의 글에 의견을 남겨 보세요.');
- else if(tab==='reviews')body=d.reviews?.length?d.reviews.map(r=>reviewHTML(r)).join(''):empty('아직 작성한 리뷰가 없어요.',owner?'회사에 대한 경험을 남길 수 있어요.':'인증된 현재 소속 회사의 리뷰를 남길 수 있어요.');
- else body=`<section class="section"><h2>${owner?'현재 권한':'현재 인증 상태'}</h2><p class="notice ${isVerified()?'success':''}">${E(statusLabel(p))}${!owner&&p.review_reason?`<br>${E(p.review_reason)}`:''}</p>${owner?'<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>':''}<div class="profile-line"><span>공개 표시</span><span>${E(p.company_name||'소속 미등록')} · ${E((p.nickname||'닉').slice(0,1))}***</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked||'미등록')}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked||'미등록')}</span></div><div class="profile-line"><span>${owner?'설계사 인증':'인증 유효기간'}</span><span>${owner?'인증 면제':E(p.verified_until?new Date(p.verified_until).toLocaleDateString('ko-KR'):'인증 전')}</span></div><p></p>${owner?'<a class="btn btn-primary" href="/admin/">관리자 모드</a>':p.status==='suspended'?'<a class="btn" href="/help.html">이용 정지 안내</a>':`<a class="btn btn-primary" href="/verify.html">${isVerified()?'소속 변경·재인증':'인증 신청·보완'}</a><p class="hint">소속을 변경하면 재인증 대기로 전환되어 공개 글만 볼 수 있습니다.</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${isActive()?`<form data-form="profile">${field('nickname','새 닉네임','text',p.nickname||'','required minlength="2" maxlength="20"')}${formEnd('닉네임 저장')}</form>`:'<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>'}<div class="divider" style="margin:28px -20px"></div><div class="form-actions">${btn('로그아웃','logout')}${isAdmin()&&!owner?'<a class="btn" href="/admin/">관리자 모드</a>':''}${!owner?btn('회원 탈퇴','withdraw'):''}</div><p class="hint" style="margin-top:16px">${owner?'대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다.':'탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요.'}</p></section>`;
- return `<section class="section"><h1>내 정보</h1><p class="muted">${E(statusLabel(p))}</p></section><nav class="tabs">${tabs.map(([id,label])=>`<a class="${tab===id?'active':''}" href="${uri('me.html',{tab:id})}">${label}</a>`).join('')}</nav>${body}`;
-}
-async function notifications(){const denied=authorization('login');if(denied)return denied;const d=mine||await read('me');const list=d.notifications||[];return `<section class="section"><div class="section-head"><h1>알림</h1>${btn('모두 읽음','notifications-read','class="btn btn-small"')}</div><p class="muted">내 글의 댓글과 인증·운영 처리 결과를 확인해요.</p></section>${list.length?list.map(n=>`<article class="notification-item ${n.read_at||n.is_read?'':'unread'}"><h2>${E(n.title||n.message||n.kind||'새 알림')}</h2>${n.body?`<p>${E(n.body)}</p>`:''}<div class="meta"><span>${E(date(n.created_at))}</span>${n.post_id?`<a data-do="notification-open" data-id="${E(n.id)}" href="${uri('post.html',{id:n.post_id})}">글 보기 →</a>`:''}${!n.read_at&&!n.is_read?`<button data-do="notification-read" data-id="${E(n.id)}">읽음 표시</button>`:''}</div></article>`).join(''):empty('새로운 알림이 없어요.','동료가 내 글에 댓글을 남기면 알려드릴게요.')}`;}
-function reviewHTML(r){return `<article class="review" data-testid="review-item"><div class="section-head"><h3>${E(r.title)} ${sampleBadge(r)}</h3>${r.is_mine&&isVerified()?`<div class="form-actions">${btn('수정','review-edit',`data-id="${E(r.id)}"`)}${btn('삭제','review-delete',`data-id="${E(r.id)}"`)}</div>`:''}</div><p class="author">${E(r.author_display)} · ${E(date(r.created_at))}</p><div class="review-scores">${scoreNames.map((s,i)=>`<div class="review-score"><span>${s}</span><span class="stars">${'★'.repeat(Number(r.scores?.[i])||0)}</span></div>`).join('')}</div><p class="body-text" style="margin-top:16px">${E(r.body)}</p>${r.is_truncated?'<p class="hint">나머지 리뷰는 인증 후 읽을 수 있어요.</p>':''}<button class="text-link small" data-do="report" data-target="review" data-id="${E(r.id)}">리뷰 신고</button></article>`;}
-async function company(){companies=(await read('companies')).companies||[];const id=params.get('id');if(!id)return `<section class="explore"><h1>보험사·GA 리뷰</h1><p class="muted">현재 소속이 인증된 동료들의 경험을 모읍니다. 5개 이상의 리뷰가 쌓이면 평균 별점을 공개합니다.</p><div class="channel-cards">${companies.map(c=>`<a class="channel-card" href="${uri('company.html',{id:c.id})}"><span class="company-mark">${E(c.name)}</span><div class="channel-card-info"><h2>${E(c.name)}</h2><p>${E(c.kind||'보험사')}</p><span class="small">${c.average!=null?`<span class="stars">★</span> ${Number(c.average).toFixed(1)}`:'리뷰 모으는 중'} · 리뷰 ${Number(c.review_count)||0}개</span></div></a>`).join('')}</div>${companies.length?'':empty('등록된 회사가 없어요.','운영자가 회사 목록을 준비하고 있습니다.')}</section>`;
- const d=await read('company',{id});current=d;const c=d.company;if(!c)return empty('회사 정보를 찾을 수 없어요.','보험사·GA 목록에서 다시 선택해 주세요.');const canReview=c.enabled!==false&&(isOwner()||(isVerified()&&mine?.profile?.company_id===id));return `<div class="company-cover"></div><section class="company-hero"><a class="back-link" href="/company.html">← 보험사·GA 목록</a><div class="section-head"><h1>${E(c.name)}</h1><span class="company-mark">${E(c.kind||'보험사')}</span></div><p class="muted">${E(c.description||'설계사 동료가 나누는 근무 경험입니다.')}</p><div class="metrics"><div><strong>${Number(c.review_count)||0}개</strong>리뷰</div><div><strong>${c.average!=null?Number(c.average).toFixed(1):'모으는 중'}</strong>종합 별점</div><div><strong>5항목</strong>설계사 관점</div><div><strong>1년 1건</strong>회사별 작성</div></div>${c.average!=null?`<div class="rating-grid">${scoreNames.map((s,i)=>`<div class="review-score"><span>${s}</span><span>${Number(c.scores?.[i]||0).toFixed(1)} / 5</span></div>`).join('')}</div>`:'<p class="notice">유효한 리뷰가 5개 이상 모이면 전체·항목별 평균 별점을 공개합니다.</p>'}<p></p>${canReview?btn('리뷰 작성','review-new',`data-id="${E(c.id)}" data-testid="review-create"`,true):isOwner()?'<p class="hint">숨김 처리된 회사입니다. 관리자에서 회사를 공개한 후 리뷰를 작성할 수 있어요.</p>':`<p class="hint">현재 소속 회사가 인증된 회원만 리뷰를 작성할 수 있어요.</p><a class="btn" href="${viewer?.status==='suspended'?'/help.html':'/verify.html'}">${viewer?.status==='suspended'?'이용 정지 안내':'내 소속 인증하기'}</a>`}</section><nav class="company-tabs"><a class="active" href="#company-reviews">리뷰</a><a href="#company-posts">관련 글</a></nav><section id="company-reviews">${d.reviews?.length?d.reviews.map(reviewHTML).join(''):empty('아직 등록된 리뷰가 없어요.','현재 소속 회사에 대한 첫 경험을 남겨 주세요.')}</section><section id="company-posts"><h2 class="section">${E(c.name)} 관련 글</h2>${feeds(d.posts,true)}</section>`;
-}
-const adminSections=[['dashboard','대시보드'],['verifications','인증 심사'],['members','회원'],['posts','글'],['comments','댓글'],['reports','신고'],['channels','채널'],['companies','보험사·GA'],['reviews','리뷰'],['ai','AI 답변'],['audit','감사 기록'],['admins','관리자']];
-function adminForm(operation,id,content,label='저장',extra=''){return `<form data-form="admin" class="admin-form"><input type="hidden" name="operation" value="${E(operation)}"><input type="hidden" name="id" value="${E(id||'')}">${extra}${content}${formEnd(label)}</form>`;}
-const reasonField=(value='')=>field('reason','처리 사유','text',value,'required minlength="2" maxlength="500"');
-function adminRemoval(kind,item,items){
- const isChannel=kind==='channel',label=isChannel?'채널':'회사',count=Number(isChannel?item.post_count:item.reference_count)||0;
- const targets=items.filter(x=>x.id!==item.id&&x.enabled!==false);
- const operation=isChannel?'channel_delete':'company_delete',targetKey=isChannel?'target_channel_id':'target_company_id';
- const summary=count>0?`${label} ${isChannel?'이동 후 삭제':'병합·삭제'}`:`빈 ${label} 삭제`;
- const detail=isChannel?`연결된 글 ${count}개`: `관련 글 ${Number(item.post_count)||0}개 · 리뷰 ${Number(item.total_review_count)||0}개 · 회원 ${Number(item.member_count)||0}명`;
- if(count>0&&!targets.length)return `<details class="admin-delete"><summary>${summary}</summary><p class="notice">${detail}. 먼저 다른 활성 ${label}를 추가해 주세요. 자료를 옮길 대상이 있어야 삭제할 수 있습니다.</p></details>`;
- const target=count>0?select(targetKey,isChannel?'옮길 채널 선택':'병합할 회사 선택',[['','대상을 선택해 주세요'],...targets.map(x=>[x.id,x.name])],'','required'):'';
- const text=count>0?`${detail}. 선택한 ${label}로 자료를 모두 옮긴 뒤 이 ${label}를 삭제합니다.`:`연결된 자료가 없어 이 ${label}를 바로 삭제할 수 있습니다.`;
- return `<details class="admin-delete"><summary>${summary}</summary>${adminForm(operation,item.id,`<p class="notice">${E(text)} 삭제와 이동 내역은 감사 기록에 남습니다.</p>${target}${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_delete" required>‘${E(item.name)}’ ${label}의 삭제 내용을 확인했습니다.</label>`,count>0?(isChannel?'글 이동 후 채널 삭제':'자료 병합 후 회사 삭제'):`${label} 삭제`)}</details>`;
-}
-function adminContent(items,target){return (items||[]).map(p=>`<article class="admin-card"><h3>${E(p.title||p.body?.slice(0,70)||'콘텐츠')}</h3><p class="small muted">${E(p.author_display||'')} · ${E(p.status)} · ${E(date(p.created_at))}</p><details><summary>내용 확인</summary><p class="body-text">${E(p.body)}</p></details>${adminForm('content',p.id,`${select('status','표시 상태',[['published','게시'],['hidden','숨김'],['deleted','삭제']],p.status||'published')}${target==='post'?`<label class="check-line"><input type="checkbox" name="pinned" ${p.pinned?'checked':''}>공지로 고정</label><p></p>`:''}${reasonField()}`,'처리 저장',`<input type="hidden" name="target" value="${target}">`)}</article>`).join('')||empty('관리할 콘텐츠가 없어요.','등록되면 이곳에 표시됩니다.');}
-async function admin(){const denied=authorization('admin');if(denied)return denied;const section=params.get('section')||'dashboard';const q=params.get('q')||'';const d=await read('admin',{section,q});current=d;channels=d.channels||[];companies=d.companies||[];let body='';
- if(section==='dashboard'){const k=d.dashboard||{};const rows=Object.entries(k);const labels={members:'가입 회원',member_count:'가입 회원',total_members:'가입 회원',pending:'인증 대기',pending_count:'인증 대기',pending_verifications:'인증 대기',reports:'미처리 신고',open_reports:'미처리 신고',report_count:'미처리 신고',today_posts:'오늘 글',today_comments:'오늘 댓글',verified:'인증 완료',verified_count:'인증 완료',users:'가입 회원'};body=`<div class="status-list">${rows.filter(([,v])=>typeof v==='number'||typeof v==='string').map(([key,val])=>`<div><strong>${E(val)}</strong><small>${E(labels[key]||key)}</small></div>`).join('')}</div><p class="notice" data-testid="dashboard-count-basis">${k.counts_exclude_test_and_sample===true?'집계 기준: 시험 계정·시험 콘텐츠와 임시 견본을 제외합니다.':'집계 기준을 확인하고 있습니다.'} 증빙 자료 열람과 운영 처리는 감사 기록에 남습니다.</p><div class="form-actions"><a class="btn btn-primary" href="/admin/?section=verifications">인증 심사</a><a class="btn" href="/admin/?section=reports">신고 처리</a></div>`;}
- else if(section==='verifications')body=(d.verifications||[]).map(v=>`<article class="admin-card" data-testid="verification-item"><h3>${E(v.company_name)} · ${E(v.nickname)}</h3><p class="small">상태: ${E(statusNames[v.status]||v.status)} · 신청 ${E(date(v.submitted_at))}</p><p>이름: ${E(v.name)}<br>연락처: ${E(v.phone)}<br>등록번호: ${E(v.registration_number||'미입력')}</p>${v.proof_path?btn('증빙 사진 보기 (60초)','proof',`data-id="${E(v.id)}" data-testid="proof-view"`):'<p class="muted">보관 중인 증빙이 없습니다.</p>'}${v.review_reason?`<p class="notice">기존 처리: ${E(v.review_reason)}</p>`:''}${adminForm('verification',v.id,`${select('status','심사 결과',[['verified','승인 — 인증 완료'],['supplement','보완 요청'],['rejected','반려']],'verified')}${reasonField()}`,'심사 결과 저장')}</article>`).join('')||empty('인증 심사 신청이 없어요.','새 신청이 들어오면 이곳에서 검토할 수 있습니다.');
- else if(section==='members')body=`<form class="search-form" action="/admin/"><input type="hidden" name="section" value="members"><input name="q" value="${E(q)}" aria-label="회원 검색" placeholder="닉네임·회사 검색"><button class="btn">검색</button></form>${(d.members||[]).map(m=>`<article class="admin-card"><h3>${E(m.company_name)} · ${E(m.nickname)}</h3><p class="small muted">${m.role==='owner'?'대표 관리자 · 모든 권한 · 인증 면제':`${E(statusNames[m.status]||m.status)} · ${m.role==='admin'?'관리자':'회원'}`}</p>${m.role==='owner'?'<p class="notice">대표 관리자는 정지하거나 권한을 낮출 수 없습니다.</p>':`<details><summary>상태 변경·정지 해제</summary>${adminForm('member_status',m.id,`${select('status','변경할 상태',[['suspended','이용 정지'],['unverified','정지 해제 — 재인증 필요'],['verified','정지 해제 — 기존 인증 확인']],m.status)}${reasonField()}`,'회원 상태 저장')}</details>`}<details style="margin-top:14px"><summary>닉네임 강제 변경</summary>${adminForm('nickname',m.id,`${field('nickname','새 닉네임','text',m.nickname||'','required minlength="2" maxlength="20"')}${reasonField()}`,'닉네임 변경')}</details></article>`).join('')||empty('검색 결과가 없어요.','검색어를 바꿔 확인해 주세요.')}`;
- else if(section==='posts')body=adminContent(d.posts,'post');else if(section==='comments')body=adminContent(d.comments,'comment');else if(section==='reviews')body=adminContent(d.reviews,'review');
- else if(section==='reports')body=(d.reports||[]).map(r=>`<article class="admin-card" data-testid="report-item"><h3>${E(({post:'글',comment:'댓글',review:'리뷰'})[r.target_type||r.target]||'콘텐츠')} 신고</h3><p class="small muted">${E(r.status||'접수')} · ${E(date(r.created_at))}</p><p class="body-text">${E(r.reason)}</p>${(()=>{const item=({post:d.posts,comment:d.comments,review:d.reviews}[r.target]||[]).find(x=>x.id===r.target_id);return item?`<details><summary>대상 콘텐츠 확인: ${E(item.title||'댓글')}</summary><p class="body-text">${E(item.body)}</p></details>`:'';})()}${r.target_body?`<details><summary>대상 내용</summary><p class="body-text">${E(r.target_body)}</p></details>`:''}<p class="notice small">신고 접수 시 임시 가림합니다. 권리침해 여부와 소명을 검토해 복구 또는 위반에 따른 가림 유지를 결정하세요. 미결 임시조치는 30일 이내 검토합니다.</p>${r.resolution||r.decision?`<p>처리 결과: ${E(r.resolution||r.decision)} · ${E(r.resolution_reason||r.decision_reason||'')}</p>`:''}${adminForm('report_resolve',r.id,`${select('decision','처리 결정',[['restore','복구 — 게시 다시 허용'],['maintain','위반 확인 — 가림 유지']])}${reasonField()}`,'신고 처리 완료')}</article>`).join('')||empty('접수된 신고가 없어요.','신고가 접수되면 대상과 처리 상태가 표시됩니다.');
- else if(section==='channels'){const channelForm=c=>adminForm('channel_save',c.id,`<div class="form-grid">${field('slug','채널 코드','text',c.slug||'','required pattern="[a-z0-9-]+" minlength="2" maxlength="40"')}${field('name','채널 이름','text',c.name||'','required minlength="2" maxlength="40"')}</div>${area('description','설명',c.description||'','required maxlength="500"')}${field('display_order','표시 순서','number',c.display_order??0,'required min="0" max="999"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled!==false?'checked':''}>채널 사용</label>`,'채널 저장');body=`<details class="admin-card"><summary>채널 추가</summary>${channelForm({})}</details>${channels.map(c=>`<article class="admin-card"><h3>${E(c.name)}</h3>${channelForm(c)}${adminRemoval('channel',c,channels)}</article>`).join('')}`;}
- else if(section==='companies'){const companyForm=c=>adminForm('company_save',c.id,`${field('name','회사 이름','text',c.name||'','required minlength="2" maxlength="80"')}${select('kind','회사 유형',[['보험사','보험사'],['GA','GA']],c.kind||'보험사')}${area('description','회사 설명',c.description||'','maxlength="1000"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled!==false?'checked':''}>회사 사용</label>`,'회사 저장');body=`<details class="admin-card"><summary>보험사·GA 추가</summary>${companyForm({})}</details>${companies.map(c=>`<article class="admin-card"><h3>${E(c.name)}</h3>${companyForm(c)}${adminRemoval('company',c,companies)}</article>`).join('')}`;}
- else if(section==='ai')body=`<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">질문 글만 처리합니다. AI는 사람 댓글·인기 수치에 포함되지 않고, 생성에 실패해도 글과 댓글은 그대로 이용할 수 있습니다.</p>${adminForm('ai_settings','',`<label class="check-line"><input type="checkbox" name="enabled" ${d.settings?.ai_enabled?'checked':''}>AI 답변 생성 사용</label><p></p>${field('daily_limit','하루 생성 상한','number',d.settings?.ai_daily_limit||30,'required min="1" max="30"')}`,'AI 설정 저장')}</article><h2>생성 기록</h2>${(d.ai_jobs||[]).map(j=>`<article class="admin-card"><h3>${E(j.title||j.post_title||'질문 답변')}</h3><p class="small muted">${E(j.status)} · 답변 ${E(j.answer_status||'준비 전')} · ${E(date(j.created_at))}</p>${j.error||j.error_code?`<p class="error">${E(j.error_code||j.error)}</p>`:''}${j.answer||j.body?`<p class="body-text">${E(j.answer||j.body)}</p>`:''}${j.answer?`<details><summary>답변 공개·반려</summary>${adminForm('ai_publish',j.id,reasonField(),'검토 후 공개')}${adminForm('ai_reject',j.id,reasonField(),'답변 반려')}</details>`:''}</article>`).join('')||empty('생성 기록이 없어요.','AI가 켜진 상태에서 질문 글이 등록되면 처리 대기 목록에 추가됩니다.')}`;
- else if(section==='audit')body=`<p class="notice">감사 기록은 수정·삭제할 수 없습니다. 조회·권한 변경·심사·신고·증빙 접근 기록을 확인합니다.</p>${(d.audit||[]).map(a=>`<article class="admin-card"><h3>${E(a.action||a.operation||'운영 처리')}</h3><p class="small muted">${E(date(a.created_at))} · ${E(a.target_type||a.target||'')}</p><p>${E(a.reason||a.detail?.reason||a.details?.reason||'')}</p><p class="small muted">기록 번호: ${E(a.id)}</p></article>`).join('')||empty('아직 기록이 없어요.','관리자 동작을 서버에서 기록합니다.')}`;
- else if(section==='admins')body=`<p class="notice">관리자 추가·회수는 대표 계정만 할 수 있습니다. 이메일 화면 비교가 아닌 서버 권한으로 검사합니다.</p>${(d.admins||[]).map(a=>`<div class="admin-card"><strong>${E(a.nickname||'관리자')} · ${E(a.company_name||'운영')}</strong><p class="muted">${a.role==='owner'?'대표 관리자 · 모든 권한':'관리자'}</p></div>`).join('')}${viewer?.role==='owner'?adminForm('admin_role','',`${select('id','대상 회원',(d.members||[]).filter(m=>m.role!=='owner').map(m=>[m.id,`${m.company_name||'미등록'} · ${m.nickname||'닉네임 미등록'} (${statusNames[m.status]||m.status})`]),'','required')}${select('role','권한',[['admin','관리자로 지정'],['member','관리자 권한 회수']])}${reasonField()}`,'권한 변경'):''}`;
- return `<section class="section"><div class="section-head"><h1>관리자 모드</h1><span class="status-badge">${isOwner()?'대표 관리자 · 모든 권한':'관리자'}</span></div><nav class="admin-tabs" aria-label="관리 메뉴">${adminSections.map(([id,label])=>`<a class="chip ${section===id?'active':''}" href="${uri('admin/',{section:id})}">${label}</a>`).join('')}</nav><h2>${E(adminSections.find(([s])=>s===section)?.[1]||'대시보드')}</h2>${body}</section>`;
-}
-const policyDocs={
- terms:`<h1>이용약관</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브</p><h2>1. 서비스와 가입</h2><p>보험라이브는 보험설계사들이 실무 지식과 개인 경험을 나누는 커뮤니티입니다. 성인 이용자는 Google 또는 이메일로 로그인할 수 있습니다. 설계사 인증을 마쳐야 회원 전용 글·댓글·AI 답변을 읽고 글을 작성할 수 있습니다. 가입 정보와 증빙은 본인의 현재 정보여야 합니다.</p><h2>2. 공개 범위</h2><p>공개 화면에는 소속 회사명과 닉네임 첫 글자 뒤 별표 3개만 표시합니다. 실무지식·커리어·운영팀 정리는 본문 전체, 경험·자유 글과 회사 리뷰는 앞부분 최대 300자를 공개합니다. 댓글·대댓글·AI 답변은 인증 회원에게만 제공됩니다. 본문 자체에 개인정보를 쓰면 작성자를 추정할 수 있으므로 게시 전에 확인해 주세요.</p><h2>3. 회원 콘텐츠와 책임</h2><p>게시물의 권리는 작성자에게 있습니다. 작성자는 서비스 안에서 콘텐츠를 저장·표시하고 신고를 처리하는 데 필요한 이용을 허락합니다. 회원의 글과 리뷰는 개인 의견이며 소속 회사나 운영팀의 공식 입장, 보험상품 가입 권유 또는 개별 계약에 대한 확정적인 판단이 아닙니다. 실제 계약·보장·지급 여부는 약관과 공식 자료로 확인해야 합니다.</p><h2>4. 금지 행위와 운영 조치</h2><p>허위사실·명예훼손·개인정보 공개·욕설·사칭·불법 자료·도배·무단 광고·계정 거래·악의적 신고·권한 우회는 금지합니다. 운영자는 사유를 기록하고 글 숨김·삭제, 인증 보완·반려, 일시 또는 지속적 이용 제한을 적용할 수 있습니다. 주요 결과는 서비스 내 알림과 내 정보에 안내합니다.</p><h2>5. 권리침해 신고와 임시조치</h2><p>사생활 침해·명예훼손 등 권리침해를 주장하는 사람은 글·댓글·리뷰의 신고 메뉴에서 대상과 침해 사실을 구체적으로 소명해 삭제 또는 조치를 요청할 수 있습니다. 신고 접수 후 접근을 임시 차단하고 신청인·게시자에게 서비스 내 알림으로 알리며 원래 게시물 위치에 조치 사실을 표시합니다. 권리침해 판단이 어렵거나 다툼이 예상될 때 정보통신망법 제44조의2에 따른 임시조치는 30일 이내로 합니다. 운영자는 그 안에 소명을 검토해 복구 또는 위반에 따른 최종 가림·삭제를 결정합니다. 미결인 임시조치는 기간 종료 후 복구하고 당사자에게 알립니다. 조치 사유가 잘못되었다고 판단하면 해당 신고에 추가 소명을 적어 이의를 제기할 수 있습니다.</p><h2>6. 회사 리뷰와 AI</h2><p>회사 리뷰는 현재 소속이 인증된 회원이 회사별 365일에 1건 작성할 수 있으며 본인의 리뷰를 수정할 수 있습니다. 5개 이상의 유효 리뷰가 모이면 평균을 공개합니다. AI 참고 답변은 AI 작성 표시를 하며 정확성을 보장하지 않습니다. 사람 댓글과 인기 수치에 포함하지 않고 운영 검토와 설정에 따라 표시합니다.</p><h2>7. 탈퇴와 변경</h2><p>내 정보에서 탈퇴하면 회원 전용 접근을 즉시 차단하고 남은 콘텐츠의 작성자를 ‘탈퇴한 회원’으로 표시합니다. 삭제를 원하는 본인 글·댓글은 탈퇴 전에 삭제해 주세요. 관계 법령상 보관 의무가 없는 인증 정보는 삭제합니다. 약관 변경과 중요한 운영 변경은 공지로 안내합니다.</p>`,
- privacy:`<h1>개인정보처리방침</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브 운영팀</p><h2>1. 수집하는 정보와 목적</h2><p>로그인에는 이메일 주소와 로그인 제공자가 발급하는 계정 식별정보를 사용합니다. 설계사 인증에는 이름, 닉네임, 현재 소속 회사, 연락처와 증빙 사진 1장을 필수로, 설계사 등록번호를 선택으로 받습니다. 목적은 계정 확인, 설계사·소속 심사, 부정 이용 방지, 회원 문의와 신고 처리입니다. 주민등록번호는 수집하지 않습니다. 증빙에 주민등록번호·주소·고객정보가 있으면 업로드 전에 가려 주세요.</p><h2>2. 공개 정보와 접근 권한</h2><p>공개 화면에 회사명과 닉네임 첫 글자·별표 3개만 표시합니다. 실명, 연락처, 등록번호, 증빙 사진은 공개하지 않습니다. 증빙은 비공개 저장소에 보관하고 담당 관리자만 60초 동안 유효한 서명 주소로 확인합니다. 관리자의 열람과 처리 행동은 감사 기록으로 남깁니다. 공개 회원 명부나 회원별 공개 프로필을 제공하지 않습니다.</p><h2>3. 보유 기간과 파기</h2><p>계정과 공개 닉네임·현재 소속·인증 상태는 회원 유지 기간 동안 사용합니다. 인증 증빙과 심사 원본 개인정보는 승인·반려 등 처리 후 30일이 지나면 삭제 대상으로 지정하며 정리 작업에서 파일과 원본 정보를 제거합니다. 신청하지 않은 업로드 파일은 24시간 뒤 삭제 대상이 됩니다. 탈퇴 시 접근을 즉시 차단하고 개인정보와 증빙을 삭제 대상으로 전환합니다. 회원의 남은 글·댓글은 신원과의 공개 연결을 끊고 ‘탈퇴한 회원’으로 표시합니다. 법적 보존 의무가 발생한 정보는 법령이 정한 범위와 기간에 한해 별도로 보관합니다.</p><h2>4. 처리에 사용하는 서비스</h2><p>웹 화면은 GitHub Pages, 계정 인증·데이터베이스·비공개 파일 저장은 Supabase를 사용합니다. Google 로그인 선택 시 Google의 계정 확인 절차를 거칩니다. 이메일 로그인 시 로그인 확인 메일 발송에만 이메일 주소를 사용합니다. 서비스 제공자의 처리 설비가 해외에 있을 수 있으며 처리 위치와 제공자 정책은 각 서비스의 공개 정책에 따릅니다. 광고 추적, 외부 광고 이미지, 제3자 분석 스크립트를 넣지 않습니다.</p><h2>5. AI 참고 답변</h2><p>질문형 글을 선택한 경우 게시물의 제목과 본문을 Mac 처리기에서 기존 구독의 AI 도구로 처리할 수 있습니다. 회원의 실명·연락처·증빙을 답변 생성 입력에 포함하지 않습니다. 질문에도 고객 개인정보나 민감한 계약자료를 적지 마세요.</p><h2>6. 이용자의 권리와 문의</h2><p>내 정보에서 현재 상태, 내 글·댓글·북마크·알림을 확인하고 닉네임을 변경할 수 있습니다. 소속 변경은 새 증빙과 함께 재인증을 신청해 주세요. 탈퇴는 내 정보의 회원 탈퇴로 직접 처리할 수 있습니다. 개인정보가 포함된 글·댓글은 해당 콘텐츠의 신고 메뉴에서 구체적인 대상과 삭제 요청 사유를 남길 수 있습니다. 운영자는 이를 확인해 접근 제한·정정·삭제를 처리합니다.</p><h2>7. 보호 조치와 로그인 유지</h2><p>데이터베이스에서 회원 상태와 역할을 검사해 공개·회원·관리자 정보를 분리하고, 전송 구간은 HTTPS를 사용합니다. 로그인 유지를 위해 브라우저 저장소에 인증 세션을 보관합니다. 공용 기기에서는 사용 후 로그아웃해 주세요. 정지·탈퇴·세션 만료 시 서버가 회원 전용 요청을 거부하며 화면도 상태를 다시 확인합니다.</p>`,
- rules:`<h1>커뮤니티 운영정책</h1><p class="document-meta">시행일: 2026년 11월 7일</p><h2>경험은 솔직하게, 사람은 존중해 주세요</h2><p>직접 겪은 사실과 의견을 구분하고 자료의 기준일을 함께 적어 주세요. 타인·회사에 대한 허위사실, 명예훼손, 위협, 혐오와 비방은 허용하지 않습니다. 리뷰와 회원 글은 작성자 개인 의견입니다.</p><h2>개인정보와 고객자료를 올리지 마세요</h2><p>본인이나 타인의 실명·연락처·주소·주민등록번호·계약번호·질병정보·고객 사진, 개인을 추정할 수 있는 조합 정보를 공개하지 마세요. 회사 이름은 실제 명칭으로 표시하지만 지점·직급·담당 고객 등 개인을 특정하는 상세정보는 게시하지 않습니다.</p><h2>반복 게시와 영업을 제한합니다</h2><p>인증 회원은 글 하루 10개, 글 사이 60초, 댓글 하루 50개, 댓글 사이 10초 간격을 지켜야 합니다. 서버에서 제한을 적용합니다. 같은 내용 반복, 무단 광고·모집·판매, 계정 거래, 자동화 도배, 악의적 신고는 제재 대상입니다. 신고도 회원당 하루 10건으로 제한합니다.</p><h2>신고 → 임시 가림 → 운영자 판단</h2><p>각 글·댓글·리뷰에서 신고 사유를 선택하고 대상과 침해 사실을 구체적으로 적어 주세요. 접수 시 임시 가림하고 신고자와 작성자에게 알립니다. 운영자는 사실관계·소명을 확인해 복구하거나 위반이 확인된 경우 가림을 유지·삭제합니다. 권리침해 다툼을 위한 임시조치는 최대 30일이며 미결 건은 기간 종료 후 복구합니다. 신고 자체가 위반 확정을 뜻하지 않습니다.</p><h2>처리 결과와 이의신청</h2><p>콘텐츠 숨김·삭제, 인증 보완·반려, 일시 정지 또는 반복 위반 계정 정지를 적용할 수 있습니다. 사유는 내 정보와 알림에 표시합니다. 이의가 있으면 해당 대상의 신고 메뉴에서 ‘처리 결과 이의신청’을 선택하고 기존 조치와 추가 소명을 적어 주세요. 운영자는 검토 사유와 결과를 기록합니다.</p><h2>AI와 회사 리뷰</h2><p>AI 참고 답변은 사람의 답변과 구분하여 표시하며 전문적인 확정 판단으로 사용하지 마세요. 현재 인증된 회사의 리뷰만 작성할 수 있고, 실제 근무 경험 없이 평가하거나 리뷰를 거래·조작하는 행위를 금지합니다.</p>`,
- help:`<h1>이용 도움말</h1><h2>이용하는 순서</h2><ol><li>Google 또는 이메일로 로그인합니다.</li><li>설계사 인증에서 이름·소속·연락처와 증빙 사진 1장을 제출합니다.</li><li>내 정보와 알림에서 심사 결과를 확인합니다.</li><li>인증 후 글·댓글·북마크·리뷰를 이용합니다.</li></ol><h2>공개 표시</h2><p>예를 들어 닉네임 ‘바른설계’이고 소속이 삼성생명이면 ‘삼성생명 · 바***’로 보입니다. 소속 변경 시 재인증을 신청해야 합니다.</p><h2>권리침해 신고와 이의신청</h2><p>글·댓글·리뷰의 신고 버튼에서 대상, 사유와 침해 사실을 적어 주세요. 주민등록번호나 불필요한 개인 정보는 기재하지 마세요. 접수한 콘텐츠는 운영 검토를 위해 임시 가림하고 당사자에게 서비스 내 알림으로 결과를 안내합니다. 이미 조치된 글의 공개 주소를 알고 있다면 아래에서 대상 번호와 소명을 입력할 수 있습니다.</p><form data-form="report"><div class="form-grid">${select('target','대상 종류',[['post','글'],['comment','댓글'],['review','리뷰']])}${field('id','대상 번호 (주소의 id 값)','text','','required pattern="[0-9a-fA-F-]{36}"')}</div>${select('reason_type','신고 종류',[['privacy','개인정보 노출'],['defamation','명예훼손·허위사실'],['appeal','처리 결과 이의신청'],['other','그 밖의 권리침해']])}${area('reason_detail','침해 사실과 소명','','required minlength="5" maxlength="2000" placeholder="침해당한 권리, 대상 내용과 요청하는 조치를 구체적으로 적어 주세요."')}${formEnd('신고·소명 접수')}</form><h2>로그인 메일이 오지 않아요</h2><p>스팸함과 이메일 주소를 확인해 주세요. 발송 한도가 적용되므로 연속 요청을 피하고 잠시 뒤 다시 시도해 주세요. Google 로그인 연결이 완료되어 있으면 Google로 계속할 수 있습니다.</p><h2>계정을 정리하고 싶어요</h2><p>내 정보에서 본인이 쓴 글·댓글을 확인하고 삭제한 뒤 탈퇴할 수 있습니다. 탈퇴 즉시 회원 전용 내용에 접근할 수 없고, 남겨둔 글은 ‘탈퇴한 회원’으로 보입니다.</p>`};
-function dialog(html){$('#dialog-content').innerHTML=html;$('#dialog').showModal();}
-function closeDialog(){if($('#dialog').open)$('#dialog').close();$('#dialog-content').innerHTML='';}
-function confirmation(action,id,title,body){dialog(`<h2>${E(title)}</h2><p>${E(body)}</p><form data-form="confirm"><input type="hidden" name="action" value="${E(action)}"><input type="hidden" name="id" value="${E(id||'')}"><p class="error" data-form-error role="alert"></p><div class="modal-actions">${btn('취소','dialog-close')}<button type="submit" class="btn btn-danger">${E(title)}</button></div></form>`);}
-function reportDialog(target,id,appeal=false){dialog(`<h2>신고하기</h2><p class="small muted">접수한 콘텐츠는 운영 검토를 위해 임시 가림됩니다. 의견이 다르다는 이유만으로 신고하지 마세요.</p><form data-form="report"><input type="hidden" name="appeal" value="${appeal?'true':'false'}"><input type="hidden" name="target" value="${E(target)}"><input type="hidden" name="id" value="${E(id)}">${select('reason_type','신고 사유',[['privacy','개인정보 노출'],['defamation','명예훼손·허위사실'],['spam','광고·도배'],['abuse','욕설·혐오·괴롭힘'],['appeal','처리 결과 이의신청'],['other','기타 권리침해']],appeal?'appeal':'privacy')}${area('reason_detail','침해 사실과 요청 사항','','required minlength="5" maxlength="2000" data-testid="report-reason" placeholder="어떤 내용으로 어떤 권리가 침해되었는지 적어 주세요. 필요한 소명과 요청하는 조치를 함께 알려 주세요."')}<label class="check-line"><input type="checkbox" required>사실에 근거한 신고이며 악의적 신고가 아님을 확인합니다.</label>${formEnd('신고 접수')}<p></p>${btn('취소','dialog-close')}</form>`);}
-function reviewDialog(r={},companyId){dialog(`<h2>${r.id?'리뷰 수정':'회사 리뷰 작성'}</h2><p class="hint">${isOwner()?'대표 관리자는 인증·소속 제한 없이 회사별 365일에 1건 작성할 수 있습니다.':'현재 소속 회사만 365일에 1건 작성할 수 있습니다.'} 지점명·실명·고객정보를 쓰지 마세요.</p><form data-form="review"><input type="hidden" name="id" value="${E(r.id||'')}"><input type="hidden" name="company_id" value="${E(r.company_id||companyId||'')}">${field('title','리뷰 제목','text',r.title||'','required minlength="2" maxlength="150"')}<div class="review-scores">${scoreNames.map((s,i)=>select('score_'+i,s,[[1,'1점'],[2,'2점'],[3,'3점'],[4,'4점'],[5,'5점']],r.scores?.[i]||3,'required')).join('')}</div>${area('body','근무 경험과 의견',r.body||'','required minlength="10" maxlength="5000"')}<p class="notice small">리뷰 앞부분 최대 300자는 누구나 볼 수 있습니다. 평균 별점은 유효 리뷰 5개부터 공개됩니다.</p>${formEnd('리뷰 저장')}<p></p>${btn('취소','dialog-close')}</form>`);}
-function updatePreview(){const form=$('#post-form');if(form){const kind=form.elements.content_kind.value,body=form.elements.body.value;const partial=kind==='experience';$('#public-preview').textContent=partial?Array.from(body).slice(0,300).join(''):body;$('#public-preview-hint').textContent=partial?(Array.from(body).length<=300?'이 글은 짧아 본문 전체가 공개됩니다.':'본문 처음부터 300자까지 공개되고 나머지는 인증 회원에게만 보입니다.'):'본문 전체가 공개됩니다. 모든 댓글과 AI 답변은 인증 회원만 읽을 수 있습니다.';}}
-function updateDisplay(){const form=$('form[data-form="verification"]');if(!form)return;const opt=form.elements.company_id.selectedOptions[0];const name=form.elements.company_id.value==='custom'?form.elements.company_name.value:(opt?.value?opt.textContent:'회사명');const nick=Array.from(form.elements.nickname.value||'닉')[0];$('#display-preview').textContent=`${name||'회사명'} · ${nick}***`;form.elements.company_name.required=form.elements.company_id.value==='custom';}
-function safeReturn(){const value=params.get('returnTo');if(value&&value.startsWith('/')&&!value.startsWith('//')&&!value.includes('\\')&&!value.startsWith('/join')&&!value.startsWith('/login'))return value;return '/me.html';}
-async function refresh(){const stamp=++renderId;current=null;$('#content').innerHTML='<div class="loading" role="status">화면을 불러오는 중입니다.</div>';try{const r=await sb.auth.getSession();session=r.data.session;viewer=null;mine=null;if(session){mine=await read('me');if(viewer?.status==='withdrawn'){await sb.auth.signOut({scope:'local'});session=null;viewer=null;mine=null;}}let html;if(policyDocs[page])html=`<article class="section policy">${policyDocs[page]}</article>`;else {const renderers={home,channels:channelList,channel:postList,search:postList,post,write,login,verify,me:myPage,notifications,company,admin,auth:async()=>session?`<section class="auth-box"><h1>로그인을 확인했어요</h1><p>내 정보에서 계정과 이용 권한을 확인해 주세요.</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a></section>`:`<section class="auth-box"><h1>로그인을 완료하지 못했어요</h1><p>${/exchange|server_error/i.test(location.search+location.hash)?'Google 로그인 연결에 문제가 있어 운영팀이 확인 중입니다. 잠시 이메일 로그인을 이용해 주세요.':(/error/.test(location.search+location.hash)?'로그인이 취소되었거나 링크가 만료되었어요. 다시 시도해 주세요.':'링크가 만료되었거나 이미 사용되었을 수 있습니다.')}</p><a class="btn btn-primary" href="/join.html">다시 로그인</a></section>`,missing:async()=>`<section class="section"><h1>페이지를 찾을 수 없어요</h1><p>주소를 확인하거나 홈에서 다시 시작해 주세요.</p><a class="btn btn-primary" href="/index.html">홈으로</a></section>`};html=await(renderers[page]||renderers.missing)();}if(stamp!==renderId)return;layout();$('#content').innerHTML=html;updatePreview();updateDisplay();}
- catch(err){if(stamp!==renderId)return;layout();$('#content').innerHTML=`<section class="section"><h1>잠시 연결을 확인해 주세요</h1><p class="error" role="alert">${E(safeError(err))}</p>${btn('다시 시도','refresh','',true)} <a class="btn" href="/index.html">홈으로</a></section>`;}}
-async function requireWriting(){
- if(session)mine=await read('me');
- if(isVerified())return true;
- closeDialog();
- if(!session){location.href=uri('join.html',{returnTo:location.pathname+location.search});return false;}
- await refresh();notify(viewer?.status==='suspended'?'이용 정지 상태에서는 작성할 수 없어요. 내 정보의 운영 안내를 확인해 주세요.':'설계사 인증을 완료한 뒤 작성할 수 있어요. 인증 신청·보완을 확인해 주세요.');
- return false;
-}
-async function clickAction(el,event){const action=el.dataset.do,id=el.dataset.id;if(['toggle','reply','comment-edit','review-new','review-edit','post-delete','comment-delete','review-delete'].includes(action)&&!await requireWriting())return;if(action==='report'&&session&&!isActive()){notify('이용 정지 상태에서는 신고할 수 없어요. 운영 안내에서 이의신청 방법을 확인해 주세요.');return;}switch(action){case'refresh':return refresh();case'dialog-close':return closeDialog();case'google':if(window.BL_CONFIG?.googleReady===false){notify('Google 로그인 연결 준비 중입니다. 이메일로 계속해 주세요.');return;}return await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/auth.html'}}).then(({error})=>{if(error)throw error;});case'logout':await sb.auth.signOut({scope:'local'});session=null;viewer=null;mine=null;closeDialog();return refresh();case'toggle':await act('toggle',{target:el.dataset.target,id,kind:el.dataset.kind});return refresh();case'share':try{await navigator.clipboard.writeText(location.origin+uri('post.html',{id:params.get('id')}));notify('공개 글 주소를 복사했어요.');}catch{dialog(`<h2>글 주소</h2><p>아래 주소를 복사해 공유해 주세요.</p><input readonly aria-label="공유 주소" value="${E(location.origin+uri('post.html',{id:params.get('id')}))}"><div class="modal-actions">${btn('닫기','dialog-close')}</div>`);}return;case'report':if(!session){notify('신고 접수와 처리 안내를 위해 로그인해 주세요.');location.href=uri('join.html',{returnTo:location.pathname+location.search});return;}return reportDialog(el.dataset.target,id);case'appeal':return reportDialog(el.dataset.target,id,true);case'review-delete':return confirmation('review_delete',id,'리뷰 삭제','내 리뷰를 삭제하면 회사의 유효 리뷰 집계에서도 제외됩니다.');case'post-delete':return confirmation('post_delete',id,'글 삭제','삭제하면 이 글은 더 이상 표시되지 않습니다.');case'comment-delete':return confirmation('comment_delete',id,'댓글 삭제','작성한 댓글을 삭제합니다.');case'withdraw':return confirmation('withdraw','','회원 탈퇴','탈퇴 즉시 회원 전용 접근이 차단됩니다. 남은 글과 댓글은 ‘탈퇴한 회원’으로 표시됩니다.');case'reply':{const slot=$(`[data-reply-slot="${CSS.escape(id)}"]`);slot.innerHTML=`<form data-form="comment" class="inline-form"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}">${area('reply-body','답글','','required maxlength="3000"')}${formEnd('답글 등록')}</form>`;slot.querySelector('textarea').focus();return;}case'comment-edit':{const c=current?.comments?.find(c=>c.id===id);if(!c)return;dialog(`<h2>댓글 수정</h2><form data-form="comment"><input type="hidden" name="id" value="${E(c.id)}"><input type="hidden" name="post_id" value="${E(c.post_id)}">${area('body','댓글 내용',c.body,'required maxlength="3000"')}${formEnd('수정 저장')}<p></p>${btn('취소','dialog-close')}</form>`);return;}case'review-new':return reviewDialog({},id);case'review-edit':{const r=current?.reviews?.find(r=>r.id===id);if(r)return reviewDialog(r);return;}case'notifications-read':await act('notification_read');return refresh();case'notification-read':await act('notification_read',{id});return refresh();case'notification-open':event.preventDefault();await act('notification_read',{id});location.href=el.href;return;case'proof':{const d=await act('admin',{operation:'proof_access',id,reason:'인증 심사를 위한 증빙 확인'});const {data,error}=await sb.storage.from('bl-proofs').createSignedUrl(d.path,60);if(error)throw error;dialog(`<h2>인증 증빙</h2><p class="hint">이 화면의 주소는 60초 동안 유효합니다. 증빙은 심사 목적으로만 열람해 주세요.</p><img class="proof-photo" src="${E(data.signedUrl)}" alt="신청자가 제출한 인증 증빙"><div class="modal-actions">${btn('닫기','dialog-close')}</div>`);setTimeout(()=>{if($('#dialog').open&&$('.proof-photo')){closeDialog();notify('증빙 열람 시간이 끝났습니다. 필요하면 다시 열어 주세요.');}},60000);return;}}
-}
-async function submitForm(form){const data=new FormData(form),v=Object.fromEntries(data),type=form.dataset.form;if((['post','comment','review'].includes(type)||(type==='confirm'&&['post_delete','comment_delete','review_delete'].includes(v.action)))&&!await requireWriting())return;if(type==='admin'){mine=await read('me');if(!isAdmin()){await refresh();throw new Error('관리자 권한이 필요합니다.');}}switch(type){case'email':{const {error}=await sb.auth.signInWithOtp({email:v.email.trim(),options:{emailRedirectTo:location.origin+'/auth.html',shouldCreateUser:true}});if(error)throw error;$('#otp-area').hidden=false;notify('로그인 메일을 요청했어요. 받은편지함과 스팸함을 확인해 주세요.');return;}case'otp':{const email=$('#email-form').elements.email.value.trim();const {error}=await sb.auth.verifyOtp({email,token:v.token.trim(),type:'email'});if(error)throw error;location.href=safeReturn();return;}case'verification':{const file=data.get('proof');if(!file?.size)throw new Error('증빙 사진을 선택해 주세요.');if(file.size>5*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('증빙은 JPG·PNG·WebP, 5MB 이하 파일만 허용됩니다.');const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type];const path=`${session.user.id}/${crypto.randomUUID()}.${ext}`;const {error}=await sb.storage.from('bl-proofs').upload(path,file,{upsert:false,contentType:file.type});if(error)throw error;const payload={name:v.name.trim(),nickname:v.nickname.trim(),phone:v.phone.trim(),registration_number:v.registration_number.trim(),proof_path:path};if(v.company_id==='custom'){payload.company_id=null;payload.company_name=v.company_name.trim();}else payload.company_id=v.company_id;await act('profile_submit',payload);if(proofPreview)URL.revokeObjectURL(proofPreview);notify('인증 신청을 접수했어요.');location.href='/me.html';return;}case'profile':await act('profile_update',{nickname:v.nickname.trim()});notify('닉네임을 변경했어요.');return refresh();case'post':{const payload={channel_id:v.channel_id,title:v.title.trim(),body:v.body.trim(),content_kind:v.content_kind,is_question:data.has('is_question')};if(v.id)payload.id=v.id;if(v.company_id)payload.company_id=v.company_id;const result=await act('post_save',payload);location.href=uri('post.html',{id:result.id||v.id});return;}case'comment':{const payload={post_id:v.post_id,body:(v.body||v['reply-body']||'').trim()};if(v.id)payload.id=v.id;if(v.parent_id)payload.parent_id=v.parent_id;await act('comment_save',payload);closeDialog();notify(v.id?'댓글을 수정했어요.':'댓글을 등록했어요.');return refresh();}case'report':{const types={privacy:'개인정보 노출',defamation:'명예훼손·허위사실',spam:'광고·도배',abuse:'욕설·혐오·괴롭힘',appeal:'처리 결과 이의신청',other:'기타 권리침해'};await act(v.reason_type==='appeal'?'appeal':'report',{target:v.target,id:v.id.trim(),reason:`[${types[v.reason_type]||'신고'}] ${v.reason_detail.trim()}`});closeDialog();notify(v.reason_type==='appeal'?'이의신청을 접수했어요. 운영자가 소명을 검토합니다.':'신고를 접수하고 운영 검토를 위해 임시 가림했어요.');return refresh();}case'review':{const payload={company_id:v.company_id,title:v.title.trim(),body:v.body.trim(),scores:scoreNames.map((_,i)=>Number(v['score_'+i]))};if(v.id)payload.id=v.id;await act('review_save',payload);closeDialog();notify('리뷰를 저장했어요.');return refresh();}case'confirm':{await act(v.action,v.id?{id:v.id}:{});closeDialog();if(v.action==='withdraw'){await sb.auth.signOut({scope:'local'});session=null;viewer=null;mine=null;location.href='/index.html';}else if(v.action==='post_delete')location.href='/channel.html';else {notify('처리했어요.');return refresh();}return;}case'admin':{const payload={...v};if(!payload.id)delete payload.id;['enabled','pinned'].forEach(k=>{if(form.elements[k])payload[k]=data.has(k);});['display_order','daily_limit'].forEach(k=>{if(k in payload)payload[k]=Number(payload[k]);});await act('admin',payload);notify('운영 처리를 저장하고 감사 기록에 남겼어요.');return refresh();}}
-}
-document.addEventListener('click',async event=>{const el=event.target.closest('[data-do]');if(!el)return;event.preventDefault();if(el.disabled)return;el.disabled=true;try{await clickAction(el,event);}catch(err){notify(safeError(err));}finally{if(el.isConnected)el.disabled=false;}});
-document.addEventListener('submit',async event=>{const form=event.target.closest('form[data-form]');if(!form)return;event.preventDefault();if(!form.reportValidity())return;const error=$('[data-form-error]',form);if(error)error.textContent='';const button=$('button[type=submit]',form);if(button?.disabled)return;if(button)button.disabled=true;try{await submitForm(form);}catch(err){const msg=safeError(err);if(error?.isConnected)error.textContent=msg;else notify(msg);}finally{if(button?.isConnected)button.disabled=false;}});
-document.addEventListener('input',event=>{if(event.target.closest('#post-form'))updatePreview();if(event.target.closest('form[data-form="verification"]'))updateDisplay();});
-document.addEventListener('change',event=>{if(event.target.name==='proof'){if(proofPreview)URL.revokeObjectURL(proofPreview);const f=event.target.files?.[0];const img=$('#proof-preview');if(img){img.hidden=!f;if(f){proofPreview=URL.createObjectURL(f);img.src=proofPreview;}}}updatePreview();updateDisplay();});
-$('#dialog').addEventListener('click',event=>{if(event.target===$('#dialog'))closeDialog();});
-let checking=false;
-async function revalidate(){if(checking||!sb||!session||document.visibilityState==='hidden')return;checking=true;const before=`${viewer?.status}/${viewer?.role}`;try{const r=await sb.auth.getSession();if(!r.data.session){session=null;viewer=null;mine=null;closeDialog();await refresh();return;}const d=await read('me');mine=d;if(`${viewer?.status}/${viewer?.role}`!==before){closeDialog();await refresh();}}catch{viewer=null;mine=null;closeDialog();$('#content').innerHTML=`<section class="section"><h1>회원 상태를 다시 확인해 주세요</h1><p>권한 확인이 끝나지 않아 회원 내용을 가렸습니다.</p>${btn('다시 확인','refresh','',true)}</section>`;}finally{checking=false;}}
-window.addEventListener('focus',revalidate);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')revalidate();});setInterval(revalidate,60000);
-async function boot(){layout();if(!window.supabase||!window.BL_CONFIG?.url||!window.BL_CONFIG?.anonKey){if(policyDocs[page]){$('#content').innerHTML=`<article class="section policy">${policyDocs[page]}</article>`;return;}$('#content').innerHTML='<section class="section"><h1>서비스 연결을 준비하고 있어요</h1><p>잠시 후 다시 방문해 주세요.</p><a class="btn" href="/rules.html">운영정책 보기</a></section>';return;}sb=window.supabase.createClient(window.BL_CONFIG.url,window.BL_CONFIG.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},global:{headers:{'x-client-info':'bohumlive-web/1.0'}}});sb.auth.onAuthStateChange((event,newSession)=>{if(event==='INITIAL_SESSION')return;if(event==='SIGNED_OUT'){session=null;viewer=null;mine=null;current=null;closeDialog();$('#content').innerHTML='<div class="loading">로그아웃 상태를 확인하고 있습니다.</div>';setTimeout(refresh,0);}else if(event==='SIGNED_IN'&&page==='auth'){session=newSession;setTimeout(()=>location.replace('/me.html'),0);}else if(event==='TOKEN_REFRESHED')setTimeout(revalidate,0);});await refresh();}
-boot();
+  "use strict";
+  const $ = (s, root = document) => root.querySelector(s);
+  const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+  const page = document.body.dataset.page;
+  const params = new URLSearchParams(location.search);
+  const E = (v) =>
+    String(v ?? "").replace(
+      /[&<>"']/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+    );
+  const uri = (file, args = {}) => "/" + file + (Object.keys(args).length ? "?" + new URLSearchParams(args) : "");
+  const date = (v) =>
+    v
+      ? new Date(v).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "";
+  const statusNames = {
+    unverified: "설계사 인증 전",
+    pending: "인증 대기",
+    supplement: "보완 필요",
+    verified: "인증 완료",
+    rejected: "반려",
+    suspended: "이용 정지",
+    withdrawn: "탈퇴한 회원",
+  };
+  const kindNames = { practice: "실무지식", career: "커리어", experience: "경험·자유", weekly: "운영팀 정리" };
+  const scoreNames = ["수수료·시책", "교육", "전산", "심사·지급", "지점 분위기"];
+  let sb,
+    session = null,
+    viewer = null,
+    mine = null,
+    channels = [],
+    companies = [],
+    current = null,
+    renderId = 0,
+    toastTimer,
+    proofPreview;
+  const isActive = () => !!viewer && !["suspended", "withdrawn"].includes(viewer.status);
+  const isOwner = () => viewer?.role === "owner" && isActive() && viewer.verification_exempt !== false;
+  const isAdmin = () => ["admin", "owner"].includes(viewer?.role) && isActive() && viewer.can_admin !== false;
+  const validVerification = (p) => p?.status === "verified" && Date.parse(p.verified_until) > Date.now();
+  const isVerified = () => isOwner() || (validVerification(viewer) && viewer.can_write !== false);
+  const canReadMember = () => isVerified() || isAdmin();
+  const statusLabel = (p = viewer) =>
+    isOwner()
+      ? "대표 관리자 · 모든 권한"
+      : p?.status === "verified" && !validVerification(p)
+        ? "인증 기간 만료 · 재인증 필요"
+        : statusNames[p?.status] || "계정 확인 중";
+  const sampleBadge = (p) => (p?.is_sample ? '<span class="tag sample-badge">임시 견본</span>' : "");
+  const icon = (name) => {
+    const paths = {
+      search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
+      heart:
+        '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',
+      comment:
+        '<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8Z"/>',
+      bookmark: '<path d="M19 21l-7-4-7 4V3h14z"/>',
+      bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
+      edit: '<path d="m16 3 5 5-12 12-6 1 1-6zM14 5l5 5"/>',
+      share: '<path d="M12 16V3m-5 5 5-5 5 5M4 14v7h16v-7"/>',
+      lock: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/>',
+    };
+    return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.comment}</svg>`;
+  };
+  const btn = (label, action, attrs = "", primary = false) =>
+    `<button type="button" class="btn ${primary ? "btn-primary" : ""}" data-do="${E(action)}" ${attrs}>${label}</button>`;
+  const empty = (title = "아직 올라온 글이 없어요.", sub = "동료와 나누고 싶은 경험이나 질문을 남겨 주세요.") =>
+    `<div class="empty"><strong>${E(title)}</strong>${E(sub)}</div>`;
+  function notify(message) {
+    $("#toast").textContent = message;
+    $("#toast").hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => ($("#toast").hidden = true), 4500);
+  }
+  function safeError(error) {
+    const msg = String(error?.message || "");
+    if (/fetch|network|Failed|Load failed/i.test(msg))
+      return "연결하지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.";
+    if (/rate|over_email_send_rate_limit|429/i.test(msg))
+      return "요청이 너무 많아요. 잠시 후 다시 시도해 주세요. 이메일은 무료 발송 한도가 적용됩니다.";
+    if (/Email address not authorized|email_address_not_authorized/i.test(msg))
+      return "기본 이메일 발송기는 사전 등록된 운영자 이메일만 지원합니다. 일반 가입 연결을 준비하고 있습니다.";
+    if (/provider.*enabled|Unsupported provider/i.test(msg))
+      return "이 로그인 방식은 아직 연결되지 않았어요. 다른 로그인 방법을 이용해 주세요.";
+    if (/JWT|expired|session|로그인/i.test(msg))
+      return "로그인이 만료되었거나 로그인이 필요해요. 다시 로그인해 주세요.";
+    if (
+      /permission|권한|관리자|인증|정지|탈퇴|하루|간격|한도|본인|소속|필수|글자|존재|처리|별점|리뷰|중복|신고|등록|증빙|파일|반려|형식|길이|일반|변경|대상|보완|제한|허용|입력|일치|삭제|채널|회사|글|댓글/.test(
+        msg,
+      ) &&
+      msg.length < 260 &&
+      !/eyJ|secret|token|password|service_role/i.test(msg)
+    )
+      return msg;
+    return "요청을 처리하지 못했어요. 새로고침 후 다시 시도해 주세요.";
+  }
+  async function read(scope, args = {}) {
+    const { data, error } = await sb.rpc("bl_read", { p_scope: scope, p_args: args });
+    if (error) throw error;
+    if (data?.viewer !== undefined) viewer = data.viewer;
+    return data || {};
+  }
+  async function act(action, payload = {}) {
+    const { data, error } = await sb.rpc("bl_action", { p_action: action, p_payload: payload });
+    if (error) throw error;
+    return data || {};
+  }
+  let fieldSeq = 0;
+  function field(name, label, type = "text", value = "", extra = "") {
+    const fid = name + "-" + ++fieldSeq;
+    return `<div class="field"><label for="${E(fid)}">${E(label)}</label><input id="${E(fid)}" name="${E(name)}" type="${E(type)}" value="${E(value)}" ${extra}></div>`;
+  }
+  function area(name, label, value = "", extra = "") {
+    const fid = name + "-" + ++fieldSeq;
+    return `<div class="field"><label for="${E(fid)}">${E(label)}</label><textarea id="${E(fid)}" name="${E(name)}" ${extra}>${E(value)}</textarea></div>`;
+  }
+  function select(name, label, options, value = "", extra = "") {
+    const fid = name + "-" + ++fieldSeq;
+    return `<div class="field"><label for="${E(fid)}">${E(label)}</label><select id="${E(fid)}" name="${E(name)}" ${extra}>${options.map((o) => `<option value="${E(o[0])}" ${String(o[0]) === String(value) ? "selected" : ""}>${E(o[1])}</option>`).join("")}</select></div>`;
+  }
+  const formEnd = (label = "저장") =>
+    `<p class="error field-error" data-form-error role="alert"></p><div class="form-actions"><button type="submit" class="btn btn-primary" data-testid="submit">${E(label)}</button></div>`;
+  const companyOptions = () => [
+    ["", "회사를 선택해 주세요"],
+    ...companies.filter((c) => c.enabled !== false).map((c) => [c.id, c.name]),
+    ["custom", "직접 입력"],
+  ];
+  function layout() {
+    const active =
+      page === "home"
+        ? "home"
+        : ["channels", "channel", "write", "post", "search"].includes(page)
+          ? "channels"
+          : page === "company"
+            ? "company"
+            : "";
+    $("#header").innerHTML =
+      `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></a><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="관심 있는 내용을 검색해 보세요" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${session ? `<div class="header-user"><a class="notification-link" href="/notifications.html" aria-label="알림">${icon("bell")}</a><a href="/me.html">내 정보</a></div>` : `<a class="header-login" href="${uri("join.html", { returnTo: location.pathname + location.search })}">로그인·가입</a>`}</div><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a><a class="${active === "company" ? "active" : ""}" href="/company.html">보험사 리뷰</a>${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
+    $("#footer").innerHTML =
+      `<footer class="site-footer"><div class="footer-logo">보험<b style="color:var(--accent)">라이브</b></div><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html">개인정보처리방침</a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">이용 도움말·권리침해 신고</a></nav><p class="footer-note">보험라이브는 설계사의 경험과 실무 지식을 나누는 공간입니다. 회원의 글은 개인의 의견이며 회사의 공식 입장이나 보험상품 가입 권유가 아닙니다. 고객정보·주민등록번호·개인 연락처를 게시하지 마세요.</p><p class="footer-note">공개 준비 중 · 검색 노출을 차단하고 있습니다.</p></footer>`;
+    $("#sidebar").innerHTML =
+      `<section class="sidebar-block"><h2>동료의 경험이 필요할 때</h2><p class="muted">궁금한 내용을 질문하고<br>설계사 동료의 답변을 만나 보세요.</p><a class="btn btn-primary" href="/write.html">${icon("edit")} 글쓰기</a></section><section class="sidebar-block"><h2>함께 지키는 약속</h2><p class="muted small">회사는 그대로, 닉네임은 첫 글자만 표시해요. 고객정보나 동료의 개인정보가 담기지 않았는지 확인해 주세요.</p><a class="text-link" href="/rules.html">운영정책 보기 →</a></section>${session ? `<section class="sidebar-block"><h2>${isOwner() ? "나의 권한" : "나의 인증 상태"}</h2><p>${E(statusLabel())}</p><a class="text-link" href="/me.html">내 정보 확인 →</a></section>` : ""}`;
+    $("#main").classList.toggle("admin-main", page === "admin");
+    if (page === "admin") $("#sidebar").hidden = true;
+  }
+  function authorization(kind = "verified") {
+    if (!session)
+      return `<section class="auth-box"><h1>로그인이 필요해요</h1><p class="muted">계정을 확인한 다음 이어서 이용할 수 있어요.</p><a class="btn btn-primary" href="${uri("join.html", { returnTo: location.pathname + location.search })}">로그인하기</a></section>`;
+    if (kind === "admin" && !isAdmin())
+      return empty("관리자만 사용할 수 있어요.", "권한은 서버에서 확인합니다. 내 정보에서 현재 상태를 확인해 주세요.");
+    if (kind === "verified" && !isVerified())
+      return `<section class="section"><h1>설계사 인증 후 이용할 수 있어요</h1><p class="notice">현재 상태: ${E(statusLabel())}${mine?.profile?.review_reason ? `<br>${E(mine.profile.review_reason)}` : ""}</p>${viewer?.status === "suspended" ? '<p>정지 상태에서는 공개 글만 읽을 수 있습니다.</p><a class="btn" href="/help.html">운영 안내</a>' : '<a class="btn btn-primary" href="/verify.html">인증 신청·보완하기</a>'}</section>`;
+    return "";
+  }
+  function feed(post, compact = false) {
+    return `<article class="feed-item ${compact ? "compact-item" : ""} ${post.pinned ? "feed-notice" : ""}" data-testid="post-item"><a class="feed-channel" href="${uri("channel.html", { id: post.channel_id })}">${post.pinned ? '<span class="tag">공지</span>' : ""}${E(post.channel_name || "커뮤니티")} <span class="tag">${E(kindNames[post.content_kind] || "글")}</span>${post.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(post)}</a><a class="feed-title" href="${uri("post.html", { id: post.id })}">${E(post.title)}</a>${compact ? "" : `<p class="feed-excerpt">${E(post.body)}</p><p class="author">${E(post.author_display || "운영팀")}</p>`}<div class="meta"><span>${icon("heart")} ${Number(post.likes) || 0}</span><span>${icon("comment")} ${Number(post.comment_count) || 0}</span><span>${E(date(post.created_at))}</span></div></article>`;
+  }
+  const feeds = (posts, compact = false) => (posts?.length ? posts.map((p) => feed(p, compact)).join("") : empty());
+  const channelDisc = (c) => `<span class="topic-disc ${E(c.slug)}">${E(c.name?.slice(0, 1) || "보")}</span>`;
+  async function home() {
+    const d = await read("home");
+    channels = d.channels || [];
+    companies = d.companies || [];
+    const posts = d.posts || [];
+    return `${d.notices?.length ? `<section class="home-section"><h2 class="section-title">운영 안내</h2>${feeds(d.notices, true)}</section><div class="divider"></div>` : ""}<section class="home-section"><h1 class="section-title">토픽 베스트</h1>${feeds(posts.slice(0, 10), true)}<a class="more-row" href="/channel.html?sort=popular">더보기</a></section><div class="divider"></div><section class="home-section"><h2 class="section-title">지금 많이 읽는 글</h2>${feeds(d.popular || [], true)}<a class="more-row" href="/channel.html?sort=popular">더보기</a></section><div class="divider"></div>${channels.map((c) => `<section class="home-section"><div class="home-channel-heading"><h2 class="section-title"><a class="row" href="${uri("channel.html", { id: c.id })}"><span class="topic-disc mini ${E(c.slug)}">${E(c.name.slice(0, 1))}</span>${E(c.name)}</a></h2><a href="${uri("channel.html", { id: c.id })}">더보기</a></div>${feeds(posts.filter((p) => p.channel_id === c.id).slice(0, 5), true)}</section><div class="divider"></div>`).join("")}`;
+  }
+  async function channelList() {
+    const d = await read("channels");
+    channels = d.channels || [];
+    const follow = params.get("filter") === "following";
+    const list = follow ? channels.filter((c) => c.following) : channels;
+    return `<section class="explore"><h1>채널 탐색</h1><p class="muted">관심 있는 주제를 팔로우하고 동료의 이야기를 만나 보세요.</p><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card">${channelDisc(c)}<div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a></h2><p>${E(c.description)}</p><p class="follow-count">팔로워 ${Number(c.followers) || 0}명</p></div><button type="button" class="follow-small" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}</section>`;
+  }
+  async function postList() {
+    const q = params.get("q") || "";
+    let id = params.get("id") || "";
+    const cd = await read("channels");
+    channels = cd.channels || [];
+    if (!id && params.get("channel")) id = channels.find((c) => c.slug === params.get("channel"))?.id || "";
+    const channel = channels.find((c) => c.id === id);
+    const sort = params.get("sort") === "popular" ? "popular" : "latest";
+    const d = await read("posts", { ...(id ? { channel_id: id } : {}), ...(q ? { q } : {}), sort, limit: 50 });
+    const posts = d.posts || [];
+    const isSearch = page === "search";
+    return `<section class="section"><div class="section-head"><h1>${isSearch ? "검색 결과" : E(channel?.name || "모든 글")}</h1><a class="btn btn-primary btn-small" href="${uri("write.html", id ? { channel: id } : {})}">글쓰기</a></div>${isSearch ? `<form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="muted small">${q ? `“${E(q)}” 검색 결과 ${posts.length}개` : "검색어를 입력해 주세요."}</p>` : `<p class="muted">${E(channel?.description || "설계사의 경험과 실무 이야기를 함께 나눠요.")}</p>${channel ? btn(channel.following ? "팔로잉" : "팔로우", "toggle", `data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}"`) : ""}`}</section><nav class="tabs"><a class="${sort === "latest" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "latest" })}">최신순</a><a class="${sort === "popular" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "popular" })}">인기순</a></nav>${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : feeds(posts)}`;
+  }
+  function commentHTML(c) {
+    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${E(c.author_display)} ${c.is_mine ? '<span class="author-badge">내 댓글</span>' : ""} ${sampleBadge(c)}</div><p class="body-text">${E(c.body)}</p><div class="meta"><span>${E(date(c.created_at))}</span><button data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : ""}>${icon("heart")} ${Number(c.likes) || 0}</button>${!c.parent_id && isVerified() ? `<button data-do="reply" data-id="${E(c.id)}">답글</button>` : ""}${c.is_mine && isVerified() ? `<button data-do="comment-edit" data-id="${E(c.id)}">수정</button><button data-do="comment-delete" data-id="${E(c.id)}">삭제</button>` : ""}<button data-do="report" data-target="comment" data-id="${E(c.id)}">신고</button></div><div data-reply-slot="${E(c.id)}"></div></article>`;
+  }
+  async function post() {
+    const id = params.get("id");
+    if (!id) return empty("글을 선택해 주세요.", "홈이나 채널에서 읽을 글을 선택할 수 있어요.");
+    const d = await read("post", { id });
+    current = d;
+    const p = d.post;
+    if (!p)
+      return `<section class="section"><h1>${d.unavailable_reason === "temporary_hidden" ? "운영 검토를 위해 임시 가림한 글입니다" : "글을 표시할 수 없어요"}</h1><p class="notice">이 글은 삭제되었거나 신고 접수에 따른 운영 검토로 가려졌습니다. 임시조치는 접수 후 최대 30일 안에 검토합니다.${d.hidden_until ? `<br>검토 예정: ${E(date(d.hidden_until))}` : ""}</p><a class="btn" href="/channel.html">다른 글 보기</a><a class="btn" href="/help.html">신고·이의신청 안내</a>${session ? btn("내 글 조치에 이의신청", "appeal", `data-target="post" data-id="${E(id)}"`) : ""}</section>`;
+    const comments = d.comments || [];
+    const ordered = comments
+      .filter((c) => !c.parent_id)
+      .flatMap((c) => [c, ...comments.filter((x) => x.parent_id === c.id)]);
+    return `<article><header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a><span class="tag">${E(kindNames[p.content_kind])}</span>${p.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(p)}</div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="meta"><span>${E(date(p.created_at))}</span><span>${icon("comment")} 사람 댓글 ${Number(p.comment_count) || 0}</span>${p.is_mine && isVerified() ? `<a href="${uri("write.html", { id: p.id })}">수정</a><button data-do="post-delete" data-id="${E(p.id)}">삭제</button>` : ""}<button class="push" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button></div></header><div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? '<div class="guest-lock"><h2>여기부터 인증 회원에게만 공개</h2><p>설계사 인증 후 나머지 본문과 동료의 댓글을 읽을 수 있어요.</p><a class="btn btn-primary" href="/verify.html">설계사 인증하기</a></div>' : ""}<div class="post-actions"><button data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 ${Number(p.likes) || 0}</button><button data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" data-testid="post-bookmark">${icon("bookmark")} ${p.bookmarked ? "저장됨" : "북마크"}</button><button data-do="share" class="share-button" aria-label="글 링크 복사">${icon("share")}</button></div>${p.company_id ? `<section class="related-companies"><h2>관련 회사</h2><a class="related-company" href="${uri("company.html", { id: p.company_id })}"><span class="company-mark">${E(p.company_name)}</span><p>${E(p.company_name)}<br><span class="muted small">회사 정보와 리뷰 보기</span></p></a></section>` : ""}<section class="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count) || 0}</h2>${isVerified() ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="고객정보 없이 동료의 경험을 나눠 주세요." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>` : canReadMember() ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>' : `<div class="guest-lock">${icon("lock")}<h2>댓글과 AI 답변은 인증 회원에게 공개돼요</h2><p>${session ? `현재 상태: ${E(statusLabel())}` : "로그인 후 설계사 인증을 완료해 주세요."}</p><a class="btn btn-primary" href="${viewer?.status === "suspended" ? "/help.html" : "/verify.html"}">${viewer?.status === "suspended" ? "이용 정지 안내" : "설계사 인증하기"}</a></div>`}</div>${canReadMember() ? (ordered.length ? ordered.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.")) : ""}${d.ai_reply ? `<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>` : ""}</section></article>`;
+  }
+  async function write() {
+    const denied = authorization();
+    if (denied) return denied;
+    const ds = await Promise.all([read("channels"), read("companies")]);
+    channels = (ds[0].channels || []).filter((c) => c.enabled !== false);
+    companies = (ds[1].companies || []).filter((c) => c.enabled !== false);
+    let p = {};
+    if (params.get("id")) {
+      p = (await read("post", { id: params.get("id") })).post || {};
+      if (!p.is_mine) return empty("내 글만 수정할 수 있어요.", "글 목록에서 작성한 글을 확인해 주세요.");
+    }
+    current = { post: p };
+    return `<section class="section"><h1>${p.id ? "글 수정" : "글쓰기"}</h1><p class="notice">회원 글은 개인 의견입니다. 고객의 이름·연락처·계약번호나 타인을 특정할 수 있는 내용을 쓰지 마세요.</p><form data-form="post" id="post-form"><input type="hidden" name="id" value="${E(p.id || "")}"><div class="form-grid">${select(
+      "channel_id",
+      "채널",
+      channels.map((c) => [c.id, c.name]),
+      p.channel_id || params.get("channel"),
+      "required",
+    )}${select(
+      "content_kind",
+      "공개 범위",
+      Object.entries(kindNames).filter(([k]) => k !== "weekly" || isAdmin()),
+      p.content_kind || "experience",
+      "required",
+    )}${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}</div><label class="check-line"><input type="checkbox" name="is_question" ${p.is_question ? "checked" : ""}>동료에게 묻는 질문입니다. AI 참고 답변이 함께 생성될 수 있어요.</label><div style="height:20px"></div>${field("title", "제목", "text", p.title || "", 'required minlength="2" maxlength="150" data-testid="post-title"')}${area("body", "본문", p.body || "", 'required minlength="5" maxlength="10000" data-testid="post-body-input"')}<section class="preview-box"><h3>공개 미리보기</h3><p class="small muted" id="public-preview-hint"></p><div class="body-text" id="public-preview"></div></section><label class="check-line"><input type="checkbox" name="checked_preview" required>공개 범위와 미리보기를 확인했습니다.</label>${formEnd(p.id ? "수정 저장" : "글 등록")}</form></section>`;
+  }
+  async function login() {
+    if (session)
+      return `<section class="auth-box"><h1>로그인되어 있어요</h1><p>${E(statusLabel())}</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a><p></p>${btn("로그아웃", "logout")}</section>`;
+    return `<section class="auth-box"><a class="back-link" href="/index.html">← 보험라이브 홈</a><h1>로그인 · 회원가입</h1><p class="muted">처음 오셨다면 아래 방법으로 로그인하면 <b>자동으로 회원가입</b>됩니다. 별도 가입 절차는 없어요.</p>${/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|Telegram|; wv\)/i.test(navigator.userAgent) ? '<p class="hint" style="color:#b4235a;margin:10px 0">카카오톡·텔레그램 등 앱 안에서는 Google 로그인이 막힐 수 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(크롬·사파리)를 눌러 주세요. 이메일 로그인은 여기서도 됩니다.</p>' : ""}${btn("Google로 계속하기", "google", `data-testid="google-login" ${window.BL_CONFIG?.googleReady === false ? 'disabled aria-disabled="true"' : ""}`, true)}<p class="hint" style="margin-top:10px">${window.BL_CONFIG?.googleReady === false ? "Google 로그인 연결 준비 중입니다. 아래 이메일로 계속해 주세요." : "이메일 발송 한도 없이 로그인할 수 있는 Google 로그인을 권장합니다."}</p><div class="separator">또는 이메일로 로그인</div><form data-form="email" id="email-form">${field("email", "이메일 주소", "email", "", 'required autocomplete="email" placeholder="name@example.com" data-testid="login-email"')}${formEnd("로그인 메일 받기")}</form><div id="otp-area" hidden><form data-form="otp"><h2 style="margin-top:24px">인증번호로 확인</h2><p class="small muted">메일에 인증번호가 있다면 입력해 주세요. 로그인 링크로도 접속할 수 있습니다.</p>${field("token", "이메일 인증번호", "text", "", 'required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"')}${formEnd("인증번호 확인")}</form></div><p class="hint" style="margin-top:20px">${window.BL_CONFIG?.customSMTP === false ? "이메일 로그인은 현재 사전 등록된 운영자 이메일만 지원하며 서비스 전체 시간당 2건으로 제한됩니다. 일반 가입을 위한 메일 연결을 준비하고 있습니다." : window.BL_CONFIG?.emailRateLimit ? `로그인 메일은 서비스 전체 시간당 ${Number(window.BL_CONFIG.emailRateLimit)}건 한도가 적용됩니다. 잠시 기다린 뒤 다시 요청해 주세요.` : "이메일 발송에는 한도가 적용됩니다. 기본 발송기는 시간당 2건이며 허용된 주소만 지원합니다. 별도 메일 서버 연결 시 한도가 달라질 수 있습니다."}</p><p class="small muted">이용 전 <a class="text-link" href="/terms.html">이용약관</a>과 <a class="text-link" href="/privacy.html">개인정보처리방침</a>을 확인해 주세요. 로그인만으로 회사 인증이 완료되지는 않습니다.</p></section>`;
+  }
+  async function verify() {
+    const denied = authorization("login");
+    if (denied) return denied;
+    if (isOwner())
+      return `<section class="section"><h1>대표 관리자 · 모든 권한</h1><p class="notice success">대표 관리자는 설계사 인증이 면제됩니다. 글·댓글·리뷰와 모든 운영 기능을 이용할 수 있어요.</p><a class="btn btn-primary" href="/admin/">관리자로 이동</a><a class="btn" href="/me.html">내 정보</a></section>`;
+    if (viewer?.status === "suspended" || viewer?.status === "withdrawn") return authorization();
+    companies = (await read("companies")).companies || [];
+    const p = mine?.profile || {};
+    return `<section class="section"><h1>설계사 인증 신청</h1><p class="notice">현재 상태: ${E(statusLabel(p))}${p.review_reason ? `<br>운영자 안내: ${E(p.review_reason)}` : ""}</p><p class="muted">현재 소속과 설계사 자격을 확인합니다. 이름·연락처·증빙은 공개되지 않고 담당 운영자만 확인합니다.</p><form data-form="verification"><div class="form-grid">${field("name", "이름", "text", "", 'required maxlength="60" autocomplete="name" data-testid="verification-name"')}${field("nickname", "닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20" data-testid="verification-nickname"')}${select("company_id", "현재 소속 회사", companyOptions(), p.company_id || "", 'required data-testid="verification-company"')}${field("company_name", "소속 회사 직접 입력", "text", "", 'maxlength="100" placeholder="목록에서 직접 입력을 선택한 경우"')}${field("phone", "연락처", "tel", "", 'required maxlength="30" autocomplete="tel" data-testid="verification-phone"')}${field("registration_number", "설계사 등록번호 (선택)", "text", "", 'maxlength="40"')}<div class="field full"><label for="proof">증빙 사진 1장</label><input id="proof" type="file" name="proof" accept="image/jpeg,image/png,image/webp" required data-testid="verification-proof"><span class="hint">위촉증·명함·사원증 중 1장, JPG·PNG·WebP, 5MB 이하. 주민등록번호·주소·고객정보는 가린 뒤 올려 주세요. 증빙은 최대 5장까지 보관하며 신청하지 않은 업로드 파일은 24시간 뒤 삭제 대상이 됩니다.</span><img id="proof-preview" class="preview-image" alt="선택한 인증 증빙 미리보기" hidden></div></div><p class="notice">공개 표시: <strong id="display-preview">회사명 · 닉***</strong></p><label class="check-line"><input type="checkbox" name="privacy_consent" required>인증 심사 목적으로 이름·연락처·소속·증빙을 수집하는 데 동의합니다. 증빙과 심사 원본은 처리 후 30일이 지나면 삭제 대상이 됩니다. <a class="text-link" href="/privacy.html">자세히</a></label>${formEnd("인증 신청 보내기")}</form></section>`;
+  }
+  async function myPage() {
+    const denied = authorization("login");
+    if (denied) return denied;
+    const d = mine || (await read("me"));
+    current = d;
+    const p = d.profile || {},
+      owner = isOwner();
+    const tab = params.get("tab") || "profile",
+      tabs = [
+        ["profile", "내 정보"],
+        ["posts", "내 글"],
+        ["comments", "내 댓글"],
+        ["bookmarks", "북마크"],
+        ["reviews", "내 리뷰"],
+      ];
+    let body = "";
+    if (tab === "posts") body = feeds(d.posts);
+    else if (tab === "bookmarks") body = feeds(d.bookmarks);
+    else if (tab === "comments")
+      body = d.comments?.length
+        ? d.comments
+            .map(
+              (c) =>
+                `<article class="feed-item"><a href="${uri("post.html", { id: c.post_id })}"><p class="body-text">${E(c.body)}</p><span class="muted small">${E(date(c.created_at))} · 원문 보기 →</span></a></article>`,
+            )
+            .join("")
+        : empty("아직 작성한 댓글이 없어요.", "동료의 글에 의견을 남겨 보세요.");
+    else if (tab === "reviews")
+      body = d.reviews?.length
+        ? d.reviews.map((r) => reviewHTML(r)).join("")
+        : empty(
+            "아직 작성한 리뷰가 없어요.",
+            owner ? "회사에 대한 경험을 남길 수 있어요." : "인증된 현재 소속 회사의 리뷰를 남길 수 있어요.",
+          );
+    else
+      body = `<section class="section"><h2>${owner ? "현재 권한" : "현재 인증 상태"}</h2><p class="notice ${isVerified() ? "success" : ""}">${E(statusLabel(p))}${!owner && p.review_reason ? `<br>${E(p.review_reason)}` : ""}</p>${owner ? '<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>' : ""}<div class="profile-line"><span>공개 표시</span><span>${E(p.company_name || "소속 미등록")} · ${E((p.nickname || "닉").slice(0, 1))}***</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked || "미등록")}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked || "미등록")}</span></div><div class="profile-line"><span>${owner ? "설계사 인증" : "인증 유효기간"}</span><span>${owner ? "인증 면제" : E(p.verified_until ? new Date(p.verified_until).toLocaleDateString("ko-KR") : "인증 전")}</span></div><p></p>${owner ? '<a class="btn btn-primary" href="/admin/">관리자 모드</a>' : p.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : `<a class="btn btn-primary" href="/verify.html">${isVerified() ? "소속 변경·재인증" : "인증 신청·보완"}</a><p class="hint">소속을 변경하면 재인증 대기로 전환되어 공개 글만 볼 수 있습니다.</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${isActive() ? `<form data-form="profile">${field("nickname", "새 닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20"')}${formEnd("닉네임 저장")}</form>` : '<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>'}<div class="divider" style="margin:28px -20px"></div><div class="form-actions">${btn("로그아웃", "logout")}${isAdmin() && !owner ? '<a class="btn" href="/admin/">관리자 모드</a>' : ""}${!owner ? btn("회원 탈퇴", "withdraw") : ""}</div><p class="hint" style="margin-top:16px">${owner ? "대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다." : "탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요."}</p></section>`;
+    return `<section class="section"><h1>내 정보</h1><p class="muted">${E(statusLabel(p))}</p></section><nav class="tabs">${tabs.map(([id, label]) => `<a class="${tab === id ? "active" : ""}" href="${uri("me.html", { tab: id })}">${label}</a>`).join("")}</nav>${body}`;
+  }
+  async function notifications() {
+    const denied = authorization("login");
+    if (denied) return denied;
+    const d = mine || (await read("me"));
+    const list = d.notifications || [];
+    return `<section class="section"><div class="section-head"><h1>알림</h1>${btn("모두 읽음", "notifications-read", 'class="btn btn-small"')}</div><p class="muted">내 글의 댓글과 인증·운영 처리 결과를 확인해요.</p></section>${list.length ? list.map((n) => `<article class="notification-item ${n.read_at || n.is_read ? "" : "unread"}"><h2>${E(n.title || n.message || n.kind || "새 알림")}</h2>${n.body ? `<p>${E(n.body)}</p>` : ""}<div class="meta"><span>${E(date(n.created_at))}</span>${n.post_id ? `<a data-do="notification-open" data-id="${E(n.id)}" href="${uri("post.html", { id: n.post_id })}">글 보기 →</a>` : ""}${!n.read_at && !n.is_read ? `<button data-do="notification-read" data-id="${E(n.id)}">읽음 표시</button>` : ""}</div></article>`).join("") : empty("새로운 알림이 없어요.", "동료가 내 글에 댓글을 남기면 알려드릴게요.")}`;
+  }
+  function reviewHTML(r) {
+    return `<article class="review" data-testid="review-item"><div class="section-head"><h3>${E(r.title)} ${sampleBadge(r)}</h3>${r.is_mine && isVerified() ? `<div class="form-actions">${btn("수정", "review-edit", `data-id="${E(r.id)}"`)}${btn("삭제", "review-delete", `data-id="${E(r.id)}"`)}</div>` : ""}</div><p class="author">${E(r.author_display)} · ${E(date(r.created_at))}</p><div class="review-scores">${scoreNames.map((s, i) => `<div class="review-score"><span>${s}</span><span class="stars">${"★".repeat(Number(r.scores?.[i]) || 0)}</span></div>`).join("")}</div><p class="body-text" style="margin-top:16px">${E(r.body)}</p>${r.is_truncated ? '<p class="hint">나머지 리뷰는 인증 후 읽을 수 있어요.</p>' : ""}<button class="text-link small" data-do="report" data-target="review" data-id="${E(r.id)}">리뷰 신고</button></article>`;
+  }
+  async function company() {
+    companies = (await read("companies")).companies || [];
+    const id = params.get("id");
+    if (!id)
+      return `<section class="explore"><h1>보험사·GA 리뷰</h1><p class="muted">현재 소속이 인증된 동료들의 경험을 모읍니다. 5개 이상의 리뷰가 쌓이면 평균 별점을 공개합니다.</p><div class="channel-cards">${companies.map((c) => `<a class="channel-card" href="${uri("company.html", { id: c.id })}"><span class="company-mark">${E(c.name)}</span><div class="channel-card-info"><h2>${E(c.name)}</h2><p>${E(c.kind || "보험사")}</p><span class="small">${c.average != null ? `<span class="stars">★</span> ${Number(c.average).toFixed(1)}` : "리뷰 모으는 중"} · 리뷰 ${Number(c.review_count) || 0}개</span></div></a>`).join("")}</div>${companies.length ? "" : empty("등록된 회사가 없어요.", "운영자가 회사 목록을 준비하고 있습니다.")}</section>`;
+    const d = await read("company", { id });
+    current = d;
+    const c = d.company;
+    if (!c) return empty("회사 정보를 찾을 수 없어요.", "보험사·GA 목록에서 다시 선택해 주세요.");
+    const canReview = c.enabled !== false && (isOwner() || (isVerified() && mine?.profile?.company_id === id));
+    return `<div class="company-cover"></div><section class="company-hero"><a class="back-link" href="/company.html">← 보험사·GA 목록</a><div class="section-head"><h1>${E(c.name)}</h1><span class="company-mark">${E(c.kind || "보험사")}</span></div><p class="muted">${E(c.description || "설계사 동료가 나누는 근무 경험입니다.")}</p><div class="metrics"><div><strong>${Number(c.review_count) || 0}개</strong>리뷰</div><div><strong>${c.average != null ? Number(c.average).toFixed(1) : "모으는 중"}</strong>종합 별점</div><div><strong>5항목</strong>설계사 관점</div><div><strong>1년 1건</strong>회사별 작성</div></div>${c.average != null ? `<div class="rating-grid">${scoreNames.map((s, i) => `<div class="review-score"><span>${s}</span><span>${Number(c.scores?.[i] || 0).toFixed(1)} / 5</span></div>`).join("")}</div>` : '<p class="notice">유효한 리뷰가 5개 이상 모이면 전체·항목별 평균 별점을 공개합니다.</p>'}<p></p>${canReview ? btn("리뷰 작성", "review-new", `data-id="${E(c.id)}" data-testid="review-create"`, true) : isOwner() ? '<p class="hint">숨김 처리된 회사입니다. 관리자에서 회사를 공개한 후 리뷰를 작성할 수 있어요.</p>' : `<p class="hint">현재 소속 회사가 인증된 회원만 리뷰를 작성할 수 있어요.</p><a class="btn" href="${viewer?.status === "suspended" ? "/help.html" : "/verify.html"}">${viewer?.status === "suspended" ? "이용 정지 안내" : "내 소속 인증하기"}</a>`}</section><nav class="company-tabs"><a class="active" href="#company-reviews">리뷰</a><a href="#company-posts">관련 글</a></nav><section id="company-reviews">${d.reviews?.length ? d.reviews.map(reviewHTML).join("") : empty("아직 등록된 리뷰가 없어요.", "현재 소속 회사에 대한 첫 경험을 남겨 주세요.")}</section><section id="company-posts"><h2 class="section">${E(c.name)} 관련 글</h2>${feeds(d.posts, true)}</section>`;
+  }
+  const adminSections = [
+    ["dashboard", "대시보드"],
+    ["verifications", "인증 심사"],
+    ["members", "회원"],
+    ["posts", "글"],
+    ["comments", "댓글"],
+    ["reports", "신고"],
+    ["channels", "채널"],
+    ["companies", "보험사·GA"],
+    ["reviews", "리뷰"],
+    ["ai", "AI 답변"],
+    ["audit", "감사 기록"],
+    ["admins", "관리자"],
+  ];
+  function adminForm(operation, id, content, label = "저장", extra = "") {
+    return `<form data-form="admin" class="admin-form"><input type="hidden" name="operation" value="${E(operation)}"><input type="hidden" name="id" value="${E(id || "")}">${extra}${content}${formEnd(label)}</form>`;
+  }
+  const reasonField = (value = "") =>
+    field("reason", "처리 사유", "text", value, 'required minlength="2" maxlength="500"');
+  function adminRemoval(kind, item, items) {
+    const isChannel = kind === "channel",
+      label = isChannel ? "채널" : "회사",
+      count = Number(isChannel ? item.post_count : item.reference_count) || 0;
+    const targets = items.filter((x) => x.id !== item.id && x.enabled !== false);
+    const operation = isChannel ? "channel_delete" : "company_delete",
+      targetKey = isChannel ? "target_channel_id" : "target_company_id";
+    const summary = count > 0 ? `${label} ${isChannel ? "이동 후 삭제" : "병합·삭제"}` : `빈 ${label} 삭제`;
+    const detail = isChannel
+      ? `연결된 글 ${count}개`
+      : `관련 글 ${Number(item.post_count) || 0}개 · 리뷰 ${Number(item.total_review_count) || 0}개 · 회원 ${Number(item.member_count) || 0}명`;
+    if (count > 0 && !targets.length)
+      return `<details class="admin-delete"><summary>${summary}</summary><p class="notice">${detail}. 먼저 다른 활성 ${label}를 추가해 주세요. 자료를 옮길 대상이 있어야 삭제할 수 있습니다.</p></details>`;
+    const target =
+      count > 0
+        ? select(
+            targetKey,
+            isChannel ? "옮길 채널 선택" : "병합할 회사 선택",
+            [["", "대상을 선택해 주세요"], ...targets.map((x) => [x.id, x.name])],
+            "",
+            "required",
+          )
+        : "";
+    const text =
+      count > 0
+        ? `${detail}. 선택한 ${label}로 자료를 모두 옮긴 뒤 이 ${label}를 삭제합니다.`
+        : `연결된 자료가 없어 이 ${label}를 바로 삭제할 수 있습니다.`;
+    return `<details class="admin-delete"><summary>${summary}</summary>${adminForm(operation, item.id, `<p class="notice">${E(text)} 삭제와 이동 내역은 감사 기록에 남습니다.</p>${target}${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_delete" required>‘${E(item.name)}’ ${label}의 삭제 내용을 확인했습니다.</label>`, count > 0 ? (isChannel ? "글 이동 후 채널 삭제" : "자료 병합 후 회사 삭제") : `${label} 삭제`)}</details>`;
+  }
+  function adminContent(items, target) {
+    return (
+      (items || [])
+        .map(
+          (p) =>
+            `<article class="admin-card"><h3>${E(p.title || p.body?.slice(0, 70) || "콘텐츠")}</h3><p class="small muted">${E(p.author_display || "")} · ${E(p.status)} · ${E(date(p.created_at))}</p><details><summary>내용 확인</summary><p class="body-text">${E(p.body)}</p></details>${adminForm(
+              "content",
+              p.id,
+              `${select(
+                "status",
+                "표시 상태",
+                [
+                  ["published", "게시"],
+                  ["hidden", "숨김"],
+                  ["deleted", "삭제"],
+                ],
+                p.status || "published",
+              )}${target === "post" ? `<label class="check-line"><input type="checkbox" name="pinned" ${p.pinned ? "checked" : ""}>공지로 고정</label><p></p>` : ""}${reasonField()}`,
+              "처리 저장",
+              `<input type="hidden" name="target" value="${target}">`,
+            )}</article>`,
+        )
+        .join("") || empty("관리할 콘텐츠가 없어요.", "등록되면 이곳에 표시됩니다.")
+    );
+  }
+  async function admin() {
+    const denied = authorization("admin");
+    if (denied) return denied;
+    const section = params.get("section") || "dashboard";
+    const q = params.get("q") || "";
+    const d = await read("admin", { section, q });
+    current = d;
+    channels = d.channels || [];
+    companies = d.companies || [];
+    let body = "";
+    if (section === "dashboard") {
+      const k = d.dashboard || {};
+      const rows = Object.entries(k);
+      const labels = {
+        members: "가입 회원",
+        member_count: "가입 회원",
+        total_members: "가입 회원",
+        pending: "인증 대기",
+        pending_count: "인증 대기",
+        pending_verifications: "인증 대기",
+        reports: "미처리 신고",
+        open_reports: "미처리 신고",
+        report_count: "미처리 신고",
+        today_posts: "오늘 글",
+        today_comments: "오늘 댓글",
+        verified: "인증 완료",
+        verified_count: "인증 완료",
+        users: "가입 회원",
+      };
+      body = `<div class="status-list">${rows
+        .filter(([, v]) => typeof v === "number" || typeof v === "string")
+        .map(([key, val]) => `<div><strong>${E(val)}</strong><small>${E(labels[key] || key)}</small></div>`)
+        .join(
+          "",
+        )}</div><p class="notice" data-testid="dashboard-count-basis">${k.counts_exclude_test_and_sample === true ? "집계 기준: 시험 계정·시험 콘텐츠와 임시 견본을 제외합니다." : "집계 기준을 확인하고 있습니다."} 증빙 자료 열람과 운영 처리는 감사 기록에 남습니다.</p><div class="form-actions"><a class="btn btn-primary" href="/admin/?section=verifications">인증 심사</a><a class="btn" href="/admin/?section=reports">신고 처리</a></div>`;
+    } else if (section === "verifications")
+      body =
+        (d.verifications || [])
+          .map(
+            (v) =>
+              `<article class="admin-card" data-testid="verification-item"><h3>${E(v.company_name)} · ${E(v.nickname)}</h3><p class="small">상태: ${E(statusNames[v.status] || v.status)} · 신청 ${E(date(v.submitted_at))}</p><p>이름: ${E(v.name)}<br>연락처: ${E(v.phone)}<br>등록번호: ${E(v.registration_number || "미입력")}</p>${v.proof_path ? btn("증빙 사진 보기 (60초)", "proof", `data-id="${E(v.id)}" data-testid="proof-view"`) : '<p class="muted">보관 중인 증빙이 없습니다.</p>'}${v.review_reason ? `<p class="notice">기존 처리: ${E(v.review_reason)}</p>` : ""}${adminForm(
+                "verification",
+                v.id,
+                `${select(
+                  "status",
+                  "심사 결과",
+                  [
+                    ["verified", "승인 — 인증 완료"],
+                    ["supplement", "보완 요청"],
+                    ["rejected", "반려"],
+                  ],
+                  "verified",
+                )}${reasonField()}`,
+                "심사 결과 저장",
+              )}</article>`,
+          )
+          .join("") || empty("인증 심사 신청이 없어요.", "새 신청이 들어오면 이곳에서 검토할 수 있습니다.");
+    else if (section === "members")
+      body = `<form class="search-form" action="/admin/"><input type="hidden" name="section" value="members"><input name="q" value="${E(q)}" aria-label="회원 검색" placeholder="닉네임·회사 검색"><button class="btn">검색</button></form>${
+        (d.members || [])
+          .map(
+            (m) =>
+              `<article class="admin-card"><h3>${E(m.company_name)} · ${E(m.nickname)}</h3><p class="small muted">${m.role === "owner" ? "대표 관리자 · 모든 권한 · 인증 면제" : `${E(statusNames[m.status] || m.status)} · ${m.role === "admin" ? "관리자" : "회원"}`}</p>${
+                m.role === "owner"
+                  ? '<p class="notice">대표 관리자는 정지하거나 권한을 낮출 수 없습니다.</p>'
+                  : `<details><summary>상태 변경·정지 해제</summary>${adminForm(
+                      "member_status",
+                      m.id,
+                      `${select(
+                        "status",
+                        "변경할 상태",
+                        [
+                          ["suspended", "이용 정지"],
+                          ["unverified", "정지 해제 — 재인증 필요"],
+                          ["verified", "정지 해제 — 기존 인증 확인"],
+                        ],
+                        m.status,
+                      )}${reasonField()}`,
+                      "회원 상태 저장",
+                    )}</details>`
+              }<details style="margin-top:14px"><summary>닉네임 강제 변경</summary>${adminForm("nickname", m.id, `${field("nickname", "새 닉네임", "text", m.nickname || "", 'required minlength="2" maxlength="20"')}${reasonField()}`, "닉네임 변경")}</details></article>`,
+          )
+          .join("") || empty("검색 결과가 없어요.", "검색어를 바꿔 확인해 주세요.")
+      }`;
+    else if (section === "posts") body = adminContent(d.posts, "post");
+    else if (section === "comments") body = adminContent(d.comments, "comment");
+    else if (section === "reviews") body = adminContent(d.reviews, "review");
+    else if (section === "reports")
+      body =
+        (d.reports || [])
+          .map(
+            (r) =>
+              `<article class="admin-card" data-testid="report-item"><h3>${E({ post: "글", comment: "댓글", review: "리뷰" }[r.target_type || r.target] || "콘텐츠")} 신고</h3><p class="small muted">${E(r.status || "접수")} · ${E(date(r.created_at))}</p><p class="body-text">${E(r.reason)}</p>${(() => {
+                const item = ({ post: d.posts, comment: d.comments, review: d.reviews }[r.target] || []).find(
+                  (x) => x.id === r.target_id,
+                );
+                return item
+                  ? `<details><summary>대상 콘텐츠 확인: ${E(item.title || "댓글")}</summary><p class="body-text">${E(item.body)}</p></details>`
+                  : "";
+              })()}${r.target_body ? `<details><summary>대상 내용</summary><p class="body-text">${E(r.target_body)}</p></details>` : ""}<p class="notice small">신고 접수 시 임시 가림합니다. 권리침해 여부와 소명을 검토해 복구 또는 위반에 따른 가림 유지를 결정하세요. 미결 임시조치는 30일 이내 검토합니다.</p>${r.resolution || r.decision ? `<p>처리 결과: ${E(r.resolution || r.decision)} · ${E(r.resolution_reason || r.decision_reason || "")}</p>` : ""}${adminForm(
+                "report_resolve",
+                r.id,
+                `${select("decision", "처리 결정", [
+                  ["restore", "복구 — 게시 다시 허용"],
+                  ["maintain", "위반 확인 — 가림 유지"],
+                ])}${reasonField()}`,
+                "신고 처리 완료",
+              )}</article>`,
+          )
+          .join("") || empty("접수된 신고가 없어요.", "신고가 접수되면 대상과 처리 상태가 표시됩니다.");
+    else if (section === "channels") {
+      const channelForm = (c) =>
+        adminForm(
+          "channel_save",
+          c.id,
+          `<div class="form-grid">${field("slug", "채널 코드", "text", c.slug || "", 'required pattern="[a-z0-9-]+" minlength="2" maxlength="40"')}${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40"')}</div>${area("description", "설명", c.description || "", 'required maxlength="500"')}${field("display_order", "표시 순서", "number", c.display_order ?? 0, 'required min="0" max="999"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>채널 사용</label>`,
+          "채널 저장",
+        );
+      body = `<details class="admin-card"><summary>채널 추가</summary>${channelForm({})}</details>${channels.map((c) => `<article class="admin-card"><h3>${E(c.name)}</h3>${channelForm(c)}${adminRemoval("channel", c, channels)}</article>`).join("")}`;
+    } else if (section === "companies") {
+      const companyForm = (c) =>
+        adminForm(
+          "company_save",
+          c.id,
+          `${field("name", "회사 이름", "text", c.name || "", 'required minlength="2" maxlength="80"')}${select(
+            "kind",
+            "회사 유형",
+            [
+              ["보험사", "보험사"],
+              ["GA", "GA"],
+            ],
+            c.kind || "보험사",
+          )}${area("description", "회사 설명", c.description || "", 'maxlength="1000"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>회사 사용</label>`,
+          "회사 저장",
+        );
+      body = `<details class="admin-card"><summary>보험사·GA 추가</summary>${companyForm({})}</details>${companies.map((c) => `<article class="admin-card"><h3>${E(c.name)}</h3>${companyForm(c)}${adminRemoval("company", c, companies)}</article>`).join("")}`;
+    } else if (section === "ai")
+      body = `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">질문 글만 처리합니다. AI는 사람 댓글·인기 수치에 포함되지 않고, 생성에 실패해도 글과 댓글은 그대로 이용할 수 있습니다.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${d.settings?.ai_enabled ? "checked" : ""}>AI 답변 생성 사용</label><p></p>${field("daily_limit", "하루 생성 상한", "number", d.settings?.ai_daily_limit || 30, 'required min="1" max="30"')}`, "AI 설정 저장")}</article><h2>생성 기록</h2>${(d.ai_jobs || []).map((j) => `<article class="admin-card"><h3>${E(j.title || j.post_title || "질문 답변")}</h3><p class="small muted">${E(j.status)} · 답변 ${E(j.answer_status || "준비 전")} · ${E(date(j.created_at))}</p>${j.error || j.error_code ? `<p class="error">${E(j.error_code || j.error)}</p>` : ""}${j.answer || j.body ? `<p class="body-text">${E(j.answer || j.body)}</p>` : ""}${j.answer ? `<details><summary>답변 공개·반려</summary>${adminForm("ai_publish", j.id, reasonField(), "검토 후 공개")}${adminForm("ai_reject", j.id, reasonField(), "답변 반려")}</details>` : ""}</article>`).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 등록되면 처리 대기 목록에 추가됩니다.")}`;
+    else if (section === "audit")
+      body = `<p class="notice">감사 기록은 수정·삭제할 수 없습니다. 조회·권한 변경·심사·신고·증빙 접근 기록을 확인합니다.</p>${(d.audit || []).map((a) => `<article class="admin-card"><h3>${E(a.action || a.operation || "운영 처리")}</h3><p class="small muted">${E(date(a.created_at))} · ${E(a.target_type || a.target || "")}</p><p>${E(a.reason || a.detail?.reason || a.details?.reason || "")}</p><p class="small muted">기록 번호: ${E(a.id)}</p></article>`).join("") || empty("아직 기록이 없어요.", "관리자 동작을 서버에서 기록합니다.")}`;
+    else if (section === "admins")
+      body = `<p class="notice">관리자 추가·회수는 대표 계정만 할 수 있습니다. 이메일 화면 비교가 아닌 서버 권한으로 검사합니다.</p>${(d.admins || []).map((a) => `<div class="admin-card"><strong>${E(a.nickname || "관리자")} · ${E(a.company_name || "운영")}</strong><p class="muted">${a.role === "owner" ? "대표 관리자 · 모든 권한" : "관리자"}</p></div>`).join("")}${
+        viewer?.role === "owner"
+          ? adminForm(
+              "admin_role",
+              "",
+              `${select(
+                "id",
+                "대상 회원",
+                (d.members || [])
+                  .filter((m) => m.role !== "owner")
+                  .map((m) => [
+                    m.id,
+                    `${m.company_name || "미등록"} · ${m.nickname || "닉네임 미등록"} (${statusNames[m.status] || m.status})`,
+                  ]),
+                "",
+                "required",
+              )}${select("role", "권한", [
+                ["admin", "관리자로 지정"],
+                ["member", "관리자 권한 회수"],
+              ])}${reasonField()}`,
+              "권한 변경",
+            )
+          : ""
+      }`;
+    return `<section class="section"><div class="section-head"><h1>관리자 모드</h1><span class="status-badge">${isOwner() ? "대표 관리자 · 모든 권한" : "관리자"}</span></div><nav class="admin-tabs" aria-label="관리 메뉴">${adminSections.map(([id, label]) => `<a class="chip ${section === id ? "active" : ""}" href="${uri("admin/", { section: id })}">${label}</a>`).join("")}</nav><h2>${E(adminSections.find(([s]) => s === section)?.[1] || "대시보드")}</h2>${body}</section>`;
+  }
+  const policyDocs = {
+    terms: `<h1>이용약관</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브</p><h2>1. 서비스와 가입</h2><p>보험라이브는 보험설계사들이 실무 지식과 개인 경험을 나누는 커뮤니티입니다. 성인 이용자는 Google 또는 이메일로 로그인할 수 있습니다. 설계사 인증을 마쳐야 회원 전용 글·댓글·AI 답변을 읽고 글을 작성할 수 있습니다. 가입 정보와 증빙은 본인의 현재 정보여야 합니다.</p><h2>2. 공개 범위</h2><p>공개 화면에는 소속 회사명과 닉네임 첫 글자 뒤 별표 3개만 표시합니다. 실무지식·커리어·운영팀 정리는 본문 전체, 경험·자유 글과 회사 리뷰는 앞부분 최대 300자를 공개합니다. 댓글·대댓글·AI 답변은 인증 회원에게만 제공됩니다. 본문 자체에 개인정보를 쓰면 작성자를 추정할 수 있으므로 게시 전에 확인해 주세요.</p><h2>3. 회원 콘텐츠와 책임</h2><p>게시물의 권리는 작성자에게 있습니다. 작성자는 서비스 안에서 콘텐츠를 저장·표시하고 신고를 처리하는 데 필요한 이용을 허락합니다. 회원의 글과 리뷰는 개인 의견이며 소속 회사나 운영팀의 공식 입장, 보험상품 가입 권유 또는 개별 계약에 대한 확정적인 판단이 아닙니다. 실제 계약·보장·지급 여부는 약관과 공식 자료로 확인해야 합니다.</p><h2>4. 금지 행위와 운영 조치</h2><p>허위사실·명예훼손·개인정보 공개·욕설·사칭·불법 자료·도배·무단 광고·계정 거래·악의적 신고·권한 우회는 금지합니다. 운영자는 사유를 기록하고 글 숨김·삭제, 인증 보완·반려, 일시 또는 지속적 이용 제한을 적용할 수 있습니다. 주요 결과는 서비스 내 알림과 내 정보에 안내합니다.</p><h2>5. 권리침해 신고와 임시조치</h2><p>사생활 침해·명예훼손 등 권리침해를 주장하는 사람은 글·댓글·리뷰의 신고 메뉴에서 대상과 침해 사실을 구체적으로 소명해 삭제 또는 조치를 요청할 수 있습니다. 신고 접수 후 접근을 임시 차단하고 신청인·게시자에게 서비스 내 알림으로 알리며 원래 게시물 위치에 조치 사실을 표시합니다. 권리침해 판단이 어렵거나 다툼이 예상될 때 정보통신망법 제44조의2에 따른 임시조치는 30일 이내로 합니다. 운영자는 그 안에 소명을 검토해 복구 또는 위반에 따른 최종 가림·삭제를 결정합니다. 미결인 임시조치는 기간 종료 후 복구하고 당사자에게 알립니다. 조치 사유가 잘못되었다고 판단하면 해당 신고에 추가 소명을 적어 이의를 제기할 수 있습니다.</p><h2>6. 회사 리뷰와 AI</h2><p>회사 리뷰는 현재 소속이 인증된 회원이 회사별 365일에 1건 작성할 수 있으며 본인의 리뷰를 수정할 수 있습니다. 5개 이상의 유효 리뷰가 모이면 평균을 공개합니다. AI 참고 답변은 AI 작성 표시를 하며 정확성을 보장하지 않습니다. 사람 댓글과 인기 수치에 포함하지 않고 운영 검토와 설정에 따라 표시합니다.</p><h2>7. 탈퇴와 변경</h2><p>내 정보에서 탈퇴하면 회원 전용 접근을 즉시 차단하고 남은 콘텐츠의 작성자를 ‘탈퇴한 회원’으로 표시합니다. 삭제를 원하는 본인 글·댓글은 탈퇴 전에 삭제해 주세요. 관계 법령상 보관 의무가 없는 인증 정보는 삭제합니다. 약관 변경과 중요한 운영 변경은 공지로 안내합니다.</p>`,
+    privacy: `<h1>개인정보처리방침</h1><p class="document-meta">시행일: 2026년 11월 7일 · 보험라이브 운영팀</p><h2>1. 수집하는 정보와 목적</h2><p>로그인에는 이메일 주소와 로그인 제공자가 발급하는 계정 식별정보를 사용합니다. 설계사 인증에는 이름, 닉네임, 현재 소속 회사, 연락처와 증빙 사진 1장을 필수로, 설계사 등록번호를 선택으로 받습니다. 목적은 계정 확인, 설계사·소속 심사, 부정 이용 방지, 회원 문의와 신고 처리입니다. 주민등록번호는 수집하지 않습니다. 증빙에 주민등록번호·주소·고객정보가 있으면 업로드 전에 가려 주세요.</p><h2>2. 공개 정보와 접근 권한</h2><p>공개 화면에 회사명과 닉네임 첫 글자·별표 3개만 표시합니다. 실명, 연락처, 등록번호, 증빙 사진은 공개하지 않습니다. 증빙은 비공개 저장소에 보관하고 담당 관리자만 60초 동안 유효한 서명 주소로 확인합니다. 관리자의 열람과 처리 행동은 감사 기록으로 남깁니다. 공개 회원 명부나 회원별 공개 프로필을 제공하지 않습니다.</p><h2>3. 보유 기간과 파기</h2><p>계정과 공개 닉네임·현재 소속·인증 상태는 회원 유지 기간 동안 사용합니다. 인증 증빙과 심사 원본 개인정보는 승인·반려 등 처리 후 30일이 지나면 삭제 대상으로 지정하며 정리 작업에서 파일과 원본 정보를 제거합니다. 신청하지 않은 업로드 파일은 24시간 뒤 삭제 대상이 됩니다. 탈퇴 시 접근을 즉시 차단하고 개인정보와 증빙을 삭제 대상으로 전환합니다. 회원의 남은 글·댓글은 신원과의 공개 연결을 끊고 ‘탈퇴한 회원’으로 표시합니다. 법적 보존 의무가 발생한 정보는 법령이 정한 범위와 기간에 한해 별도로 보관합니다.</p><h2>4. 처리에 사용하는 서비스</h2><p>웹 화면은 GitHub Pages, 계정 인증·데이터베이스·비공개 파일 저장은 Supabase를 사용합니다. Google 로그인 선택 시 Google의 계정 확인 절차를 거칩니다. 이메일 로그인 시 로그인 확인 메일 발송에만 이메일 주소를 사용합니다. 서비스 제공자의 처리 설비가 해외에 있을 수 있으며 처리 위치와 제공자 정책은 각 서비스의 공개 정책에 따릅니다. 광고 추적, 외부 광고 이미지, 제3자 분석 스크립트를 넣지 않습니다.</p><h2>5. AI 참고 답변</h2><p>질문형 글을 선택한 경우 게시물의 제목과 본문을 Mac 처리기에서 기존 구독의 AI 도구로 처리할 수 있습니다. 회원의 실명·연락처·증빙을 답변 생성 입력에 포함하지 않습니다. 질문에도 고객 개인정보나 민감한 계약자료를 적지 마세요.</p><h2>6. 이용자의 권리와 문의</h2><p>내 정보에서 현재 상태, 내 글·댓글·북마크·알림을 확인하고 닉네임을 변경할 수 있습니다. 소속 변경은 새 증빙과 함께 재인증을 신청해 주세요. 탈퇴는 내 정보의 회원 탈퇴로 직접 처리할 수 있습니다. 개인정보가 포함된 글·댓글은 해당 콘텐츠의 신고 메뉴에서 구체적인 대상과 삭제 요청 사유를 남길 수 있습니다. 운영자는 이를 확인해 접근 제한·정정·삭제를 처리합니다.</p><h2>7. 보호 조치와 로그인 유지</h2><p>데이터베이스에서 회원 상태와 역할을 검사해 공개·회원·관리자 정보를 분리하고, 전송 구간은 HTTPS를 사용합니다. 로그인 유지를 위해 브라우저 저장소에 인증 세션을 보관합니다. 공용 기기에서는 사용 후 로그아웃해 주세요. 정지·탈퇴·세션 만료 시 서버가 회원 전용 요청을 거부하며 화면도 상태를 다시 확인합니다.</p>`,
+    rules: `<h1>커뮤니티 운영정책</h1><p class="document-meta">시행일: 2026년 11월 7일</p><h2>경험은 솔직하게, 사람은 존중해 주세요</h2><p>직접 겪은 사실과 의견을 구분하고 자료의 기준일을 함께 적어 주세요. 타인·회사에 대한 허위사실, 명예훼손, 위협, 혐오와 비방은 허용하지 않습니다. 리뷰와 회원 글은 작성자 개인 의견입니다.</p><h2>개인정보와 고객자료를 올리지 마세요</h2><p>본인이나 타인의 실명·연락처·주소·주민등록번호·계약번호·질병정보·고객 사진, 개인을 추정할 수 있는 조합 정보를 공개하지 마세요. 회사 이름은 실제 명칭으로 표시하지만 지점·직급·담당 고객 등 개인을 특정하는 상세정보는 게시하지 않습니다.</p><h2>반복 게시와 영업을 제한합니다</h2><p>인증 회원은 글 하루 10개, 글 사이 60초, 댓글 하루 50개, 댓글 사이 10초 간격을 지켜야 합니다. 서버에서 제한을 적용합니다. 같은 내용 반복, 무단 광고·모집·판매, 계정 거래, 자동화 도배, 악의적 신고는 제재 대상입니다. 신고도 회원당 하루 10건으로 제한합니다.</p><h2>신고 → 임시 가림 → 운영자 판단</h2><p>각 글·댓글·리뷰에서 신고 사유를 선택하고 대상과 침해 사실을 구체적으로 적어 주세요. 접수 시 임시 가림하고 신고자와 작성자에게 알립니다. 운영자는 사실관계·소명을 확인해 복구하거나 위반이 확인된 경우 가림을 유지·삭제합니다. 권리침해 다툼을 위한 임시조치는 최대 30일이며 미결 건은 기간 종료 후 복구합니다. 신고 자체가 위반 확정을 뜻하지 않습니다.</p><h2>처리 결과와 이의신청</h2><p>콘텐츠 숨김·삭제, 인증 보완·반려, 일시 정지 또는 반복 위반 계정 정지를 적용할 수 있습니다. 사유는 내 정보와 알림에 표시합니다. 이의가 있으면 해당 대상의 신고 메뉴에서 ‘처리 결과 이의신청’을 선택하고 기존 조치와 추가 소명을 적어 주세요. 운영자는 검토 사유와 결과를 기록합니다.</p><h2>AI와 회사 리뷰</h2><p>AI 참고 답변은 사람의 답변과 구분하여 표시하며 전문적인 확정 판단으로 사용하지 마세요. 현재 인증된 회사의 리뷰만 작성할 수 있고, 실제 근무 경험 없이 평가하거나 리뷰를 거래·조작하는 행위를 금지합니다.</p>`,
+    help: `<h1>이용 도움말</h1><h2>이용하는 순서</h2><ol><li>Google 또는 이메일로 로그인합니다.</li><li>설계사 인증에서 이름·소속·연락처와 증빙 사진 1장을 제출합니다.</li><li>내 정보와 알림에서 심사 결과를 확인합니다.</li><li>인증 후 글·댓글·북마크·리뷰를 이용합니다.</li></ol><h2>공개 표시</h2><p>예를 들어 닉네임 ‘바른설계’이고 소속이 삼성생명이면 ‘삼성생명 · 바***’로 보입니다. 소속 변경 시 재인증을 신청해야 합니다.</p><h2>권리침해 신고와 이의신청</h2><p>글·댓글·리뷰의 신고 버튼에서 대상, 사유와 침해 사실을 적어 주세요. 주민등록번호나 불필요한 개인 정보는 기재하지 마세요. 접수한 콘텐츠는 운영 검토를 위해 임시 가림하고 당사자에게 서비스 내 알림으로 결과를 안내합니다. 이미 조치된 글의 공개 주소를 알고 있다면 아래에서 대상 번호와 소명을 입력할 수 있습니다.</p><form data-form="report"><div class="form-grid">${select(
+      "target",
+      "대상 종류",
+      [
+        ["post", "글"],
+        ["comment", "댓글"],
+        ["review", "리뷰"],
+      ],
+    )}${field("id", "대상 번호 (주소의 id 값)", "text", "", 'required pattern="[0-9a-fA-F-]{36}"')}</div>${select(
+      "reason_type",
+      "신고 종류",
+      [
+        ["privacy", "개인정보 노출"],
+        ["defamation", "명예훼손·허위사실"],
+        ["appeal", "처리 결과 이의신청"],
+        ["other", "그 밖의 권리침해"],
+      ],
+    )}${area("reason_detail", "침해 사실과 소명", "", 'required minlength="5" maxlength="2000" placeholder="침해당한 권리, 대상 내용과 요청하는 조치를 구체적으로 적어 주세요."')}${formEnd("신고·소명 접수")}</form><h2>로그인 메일이 오지 않아요</h2><p>스팸함과 이메일 주소를 확인해 주세요. 발송 한도가 적용되므로 연속 요청을 피하고 잠시 뒤 다시 시도해 주세요. Google 로그인 연결이 완료되어 있으면 Google로 계속할 수 있습니다.</p><h2>계정을 정리하고 싶어요</h2><p>내 정보에서 본인이 쓴 글·댓글을 확인하고 삭제한 뒤 탈퇴할 수 있습니다. 탈퇴 즉시 회원 전용 내용에 접근할 수 없고, 남겨둔 글은 ‘탈퇴한 회원’으로 보입니다.</p>`,
+  };
+  function dialog(html) {
+    $("#dialog-content").innerHTML = html;
+    $("#dialog").showModal();
+  }
+  function closeDialog() {
+    if ($("#dialog").open) $("#dialog").close();
+    $("#dialog-content").innerHTML = "";
+  }
+  function confirmation(action, id, title, body) {
+    dialog(
+      `<h2>${E(title)}</h2><p>${E(body)}</p><form data-form="confirm"><input type="hidden" name="action" value="${E(action)}"><input type="hidden" name="id" value="${E(id || "")}"><p class="error" data-form-error role="alert"></p><div class="modal-actions">${btn("취소", "dialog-close")}<button type="submit" class="btn btn-danger">${E(title)}</button></div></form>`,
+    );
+  }
+  function reportDialog(target, id, appeal = false) {
+    dialog(
+      `<h2>신고하기</h2><p class="small muted">접수한 콘텐츠는 운영 검토를 위해 임시 가림됩니다. 의견이 다르다는 이유만으로 신고하지 마세요.</p><form data-form="report"><input type="hidden" name="appeal" value="${appeal ? "true" : "false"}"><input type="hidden" name="target" value="${E(target)}"><input type="hidden" name="id" value="${E(id)}">${select(
+        "reason_type",
+        "신고 사유",
+        [
+          ["privacy", "개인정보 노출"],
+          ["defamation", "명예훼손·허위사실"],
+          ["spam", "광고·도배"],
+          ["abuse", "욕설·혐오·괴롭힘"],
+          ["appeal", "처리 결과 이의신청"],
+          ["other", "기타 권리침해"],
+        ],
+        appeal ? "appeal" : "privacy",
+      )}${area("reason_detail", "침해 사실과 요청 사항", "", 'required minlength="5" maxlength="2000" data-testid="report-reason" placeholder="어떤 내용으로 어떤 권리가 침해되었는지 적어 주세요. 필요한 소명과 요청하는 조치를 함께 알려 주세요."')}<label class="check-line"><input type="checkbox" required>사실에 근거한 신고이며 악의적 신고가 아님을 확인합니다.</label>${formEnd("신고 접수")}<p></p>${btn("취소", "dialog-close")}</form>`,
+    );
+  }
+  function reviewDialog(r = {}, companyId) {
+    dialog(
+      `<h2>${r.id ? "리뷰 수정" : "회사 리뷰 작성"}</h2><p class="hint">${isOwner() ? "대표 관리자는 인증·소속 제한 없이 회사별 365일에 1건 작성할 수 있습니다." : "현재 소속 회사만 365일에 1건 작성할 수 있습니다."} 지점명·실명·고객정보를 쓰지 마세요.</p><form data-form="review"><input type="hidden" name="id" value="${E(r.id || "")}"><input type="hidden" name="company_id" value="${E(r.company_id || companyId || "")}">${field("title", "리뷰 제목", "text", r.title || "", 'required minlength="2" maxlength="150"')}<div class="review-scores">${scoreNames
+        .map((s, i) =>
+          select(
+            "score_" + i,
+            s,
+            [
+              [1, "1점"],
+              [2, "2점"],
+              [3, "3점"],
+              [4, "4점"],
+              [5, "5점"],
+            ],
+            r.scores?.[i] || 3,
+            "required",
+          ),
+        )
+        .join(
+          "",
+        )}</div>${area("body", "근무 경험과 의견", r.body || "", 'required minlength="10" maxlength="5000"')}<p class="notice small">리뷰 앞부분 최대 300자는 누구나 볼 수 있습니다. 평균 별점은 유효 리뷰 5개부터 공개됩니다.</p>${formEnd("리뷰 저장")}<p></p>${btn("취소", "dialog-close")}</form>`,
+    );
+  }
+  function updatePreview() {
+    const form = $("#post-form");
+    if (form) {
+      const kind = form.elements.content_kind.value,
+        body = form.elements.body.value;
+      const partial = kind === "experience";
+      $("#public-preview").textContent = partial ? Array.from(body).slice(0, 300).join("") : body;
+      $("#public-preview-hint").textContent = partial
+        ? Array.from(body).length <= 300
+          ? "이 글은 짧아 본문 전체가 공개됩니다."
+          : "본문 처음부터 300자까지 공개되고 나머지는 인증 회원에게만 보입니다."
+        : "본문 전체가 공개됩니다. 모든 댓글과 AI 답변은 인증 회원만 읽을 수 있습니다.";
+    }
+  }
+  function updateDisplay() {
+    const form = $('form[data-form="verification"]');
+    if (!form) return;
+    const opt = form.elements.company_id.selectedOptions[0];
+    const name =
+      form.elements.company_id.value === "custom"
+        ? form.elements.company_name.value
+        : opt?.value
+          ? opt.textContent
+          : "회사명";
+    const nick = Array.from(form.elements.nickname.value || "닉")[0];
+    $("#display-preview").textContent = `${name || "회사명"} · ${nick}***`;
+    form.elements.company_name.required = form.elements.company_id.value === "custom";
+  }
+  function safeReturn() {
+    const value = params.get("returnTo");
+    if (
+      value &&
+      value.startsWith("/") &&
+      !value.startsWith("//") &&
+      !value.includes("\\") &&
+      !value.startsWith("/join") &&
+      !value.startsWith("/login")
+    )
+      return value;
+    return "/me.html";
+  }
+  async function refresh() {
+    const stamp = ++renderId;
+    current = null;
+    $("#content").innerHTML = '<div class="loading" role="status">화면을 불러오는 중입니다.</div>';
+    try {
+      const r = await sb.auth.getSession();
+      session = r.data.session;
+      viewer = null;
+      mine = null;
+      if (session) {
+        mine = await read("me");
+        if (viewer?.status === "withdrawn") {
+          await sb.auth.signOut({ scope: "local" });
+          session = null;
+          viewer = null;
+          mine = null;
+        }
+      }
+      let html;
+      if (policyDocs[page]) html = `<article class="section policy">${policyDocs[page]}</article>`;
+      else {
+        const renderers = {
+          home,
+          channels: channelList,
+          channel: postList,
+          search: postList,
+          post,
+          write,
+          login,
+          verify,
+          me: myPage,
+          notifications,
+          company,
+          admin,
+          auth: async () =>
+            session
+              ? `<section class="auth-box"><h1>로그인을 확인했어요</h1><p>내 정보에서 계정과 이용 권한을 확인해 주세요.</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a></section>`
+              : `<section class="auth-box"><h1>로그인을 완료하지 못했어요</h1><p>${/exchange|server_error/i.test(location.search + location.hash) ? "Google 로그인 연결에 문제가 있어 운영팀이 확인 중입니다. 잠시 이메일 로그인을 이용해 주세요." : /error/.test(location.search + location.hash) ? "로그인이 취소되었거나 링크가 만료되었어요. 다시 시도해 주세요." : "링크가 만료되었거나 이미 사용되었을 수 있습니다."}</p><a class="btn btn-primary" href="/join.html">다시 로그인</a></section>`,
+          missing: async () =>
+            `<section class="section"><h1>페이지를 찾을 수 없어요</h1><p>주소를 확인하거나 홈에서 다시 시작해 주세요.</p><a class="btn btn-primary" href="/index.html">홈으로</a></section>`,
+        };
+        html = await (renderers[page] || renderers.missing)();
+      }
+      if (stamp !== renderId) return;
+      layout();
+      $("#content").innerHTML = html;
+      updatePreview();
+      updateDisplay();
+    } catch (err) {
+      if (stamp !== renderId) return;
+      layout();
+      $("#content").innerHTML =
+        `<section class="section"><h1>잠시 연결을 확인해 주세요</h1><p class="error" role="alert">${E(safeError(err))}</p>${btn("다시 시도", "refresh", "", true)} <a class="btn" href="/index.html">홈으로</a></section>`;
+    }
+  }
+  async function requireWriting() {
+    if (session) mine = await read("me");
+    if (isVerified()) return true;
+    closeDialog();
+    if (!session) {
+      location.href = uri("join.html", { returnTo: location.pathname + location.search });
+      return false;
+    }
+    await refresh();
+    notify(
+      viewer?.status === "suspended"
+        ? "이용 정지 상태에서는 작성할 수 없어요. 내 정보의 운영 안내를 확인해 주세요."
+        : "설계사 인증을 완료한 뒤 작성할 수 있어요. 인증 신청·보완을 확인해 주세요.",
+    );
+    return false;
+  }
+  async function clickAction(el, event) {
+    const action = el.dataset.do,
+      id = el.dataset.id;
+    if (
+      [
+        "toggle",
+        "reply",
+        "comment-edit",
+        "review-new",
+        "review-edit",
+        "post-delete",
+        "comment-delete",
+        "review-delete",
+      ].includes(action) &&
+      !(await requireWriting())
+    )
+      return;
+    if (action === "report" && session && !isActive()) {
+      notify("이용 정지 상태에서는 신고할 수 없어요. 운영 안내에서 이의신청 방법을 확인해 주세요.");
+      return;
+    }
+    switch (action) {
+      case "refresh":
+        return refresh();
+      case "dialog-close":
+        return closeDialog();
+      case "google":
+        if (window.BL_CONFIG?.googleReady === false) {
+          notify("Google 로그인 연결 준비 중입니다. 이메일로 계속해 주세요.");
+          return;
+        }
+        return await sb.auth
+          .signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/auth.html" } })
+          .then(({ error }) => {
+            if (error) throw error;
+          });
+      case "logout":
+        await sb.auth.signOut({ scope: "local" });
+        session = null;
+        viewer = null;
+        mine = null;
+        closeDialog();
+        return refresh();
+      case "toggle":
+        await act("toggle", { target: el.dataset.target, id, kind: el.dataset.kind });
+        return refresh();
+      case "share":
+        try {
+          await navigator.clipboard.writeText(location.origin + uri("post.html", { id: params.get("id") }));
+          notify("공개 글 주소를 복사했어요.");
+        } catch {
+          dialog(
+            `<h2>글 주소</h2><p>아래 주소를 복사해 공유해 주세요.</p><input readonly aria-label="공유 주소" value="${E(location.origin + uri("post.html", { id: params.get("id") }))}"><div class="modal-actions">${btn("닫기", "dialog-close")}</div>`,
+          );
+        }
+        return;
+      case "report":
+        if (!session) {
+          notify("신고 접수와 처리 안내를 위해 로그인해 주세요.");
+          location.href = uri("join.html", { returnTo: location.pathname + location.search });
+          return;
+        }
+        return reportDialog(el.dataset.target, id);
+      case "appeal":
+        return reportDialog(el.dataset.target, id, true);
+      case "review-delete":
+        return confirmation(
+          "review_delete",
+          id,
+          "리뷰 삭제",
+          "내 리뷰를 삭제하면 회사의 유효 리뷰 집계에서도 제외됩니다.",
+        );
+      case "post-delete":
+        return confirmation("post_delete", id, "글 삭제", "삭제하면 이 글은 더 이상 표시되지 않습니다.");
+      case "comment-delete":
+        return confirmation("comment_delete", id, "댓글 삭제", "작성한 댓글을 삭제합니다.");
+      case "withdraw":
+        return confirmation(
+          "withdraw",
+          "",
+          "회원 탈퇴",
+          "탈퇴 즉시 회원 전용 접근이 차단됩니다. 남은 글과 댓글은 ‘탈퇴한 회원’으로 표시됩니다.",
+        );
+      case "reply": {
+        const slot = $(`[data-reply-slot="${CSS.escape(id)}"]`);
+        slot.innerHTML = `<form data-form="comment" class="inline-form"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}">${area("reply-body", "답글", "", 'required maxlength="3000"')}${formEnd("답글 등록")}</form>`;
+        slot.querySelector("textarea").focus();
+        return;
+      }
+      case "comment-edit": {
+        const c = current?.comments?.find((c) => c.id === id);
+        if (!c) return;
+        dialog(
+          `<h2>댓글 수정</h2><form data-form="comment"><input type="hidden" name="id" value="${E(c.id)}"><input type="hidden" name="post_id" value="${E(c.post_id)}">${area("body", "댓글 내용", c.body, 'required maxlength="3000"')}${formEnd("수정 저장")}<p></p>${btn("취소", "dialog-close")}</form>`,
+        );
+        return;
+      }
+      case "review-new":
+        return reviewDialog({}, id);
+      case "review-edit": {
+        const r = current?.reviews?.find((r) => r.id === id);
+        if (r) return reviewDialog(r);
+        return;
+      }
+      case "notifications-read":
+        await act("notification_read");
+        return refresh();
+      case "notification-read":
+        await act("notification_read", { id });
+        return refresh();
+      case "notification-open":
+        event.preventDefault();
+        await act("notification_read", { id });
+        location.href = el.href;
+        return;
+      case "proof": {
+        const d = await act("admin", { operation: "proof_access", id, reason: "인증 심사를 위한 증빙 확인" });
+        const { data, error } = await sb.storage.from("bl-proofs").createSignedUrl(d.path, 60);
+        if (error) throw error;
+        dialog(
+          `<h2>인증 증빙</h2><p class="hint">이 화면의 주소는 60초 동안 유효합니다. 증빙은 심사 목적으로만 열람해 주세요.</p><img class="proof-photo" src="${E(data.signedUrl)}" alt="신청자가 제출한 인증 증빙"><div class="modal-actions">${btn("닫기", "dialog-close")}</div>`,
+        );
+        setTimeout(() => {
+          if ($("#dialog").open && $(".proof-photo")) {
+            closeDialog();
+            notify("증빙 열람 시간이 끝났습니다. 필요하면 다시 열어 주세요.");
+          }
+        }, 60000);
+        return;
+      }
+    }
+  }
+  async function submitForm(form) {
+    const data = new FormData(form),
+      v = Object.fromEntries(data),
+      type = form.dataset.form;
+    if (
+      (["post", "comment", "review"].includes(type) ||
+        (type === "confirm" && ["post_delete", "comment_delete", "review_delete"].includes(v.action))) &&
+      !(await requireWriting())
+    )
+      return;
+    if (type === "admin") {
+      mine = await read("me");
+      if (!isAdmin()) {
+        await refresh();
+        throw new Error("관리자 권한이 필요합니다.");
+      }
+    }
+    switch (type) {
+      case "email": {
+        const { error } = await sb.auth.signInWithOtp({
+          email: v.email.trim(),
+          options: { emailRedirectTo: location.origin + "/auth.html", shouldCreateUser: true },
+        });
+        if (error) throw error;
+        $("#otp-area").hidden = false;
+        notify("로그인 메일을 요청했어요. 받은편지함과 스팸함을 확인해 주세요.");
+        return;
+      }
+      case "otp": {
+        const email = $("#email-form").elements.email.value.trim();
+        const { error } = await sb.auth.verifyOtp({ email, token: v.token.trim(), type: "email" });
+        if (error) throw error;
+        location.href = safeReturn();
+        return;
+      }
+      case "verification": {
+        const file = data.get("proof");
+        if (!file?.size) throw new Error("증빙 사진을 선택해 주세요.");
+        if (file.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(file.type))
+          throw new Error("증빙은 JPG·PNG·WebP, 5MB 이하 파일만 허용됩니다.");
+        const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[file.type];
+        const path = `${session.user.id}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await sb.storage
+          .from("bl-proofs")
+          .upload(path, file, { upsert: false, contentType: file.type });
+        if (error) throw error;
+        const payload = {
+          name: v.name.trim(),
+          nickname: v.nickname.trim(),
+          phone: v.phone.trim(),
+          registration_number: v.registration_number.trim(),
+          proof_path: path,
+        };
+        if (v.company_id === "custom") {
+          payload.company_id = null;
+          payload.company_name = v.company_name.trim();
+        } else payload.company_id = v.company_id;
+        await act("profile_submit", payload);
+        if (proofPreview) URL.revokeObjectURL(proofPreview);
+        notify("인증 신청을 접수했어요.");
+        location.href = "/me.html";
+        return;
+      }
+      case "profile":
+        await act("profile_update", { nickname: v.nickname.trim() });
+        notify("닉네임을 변경했어요.");
+        return refresh();
+      case "post": {
+        const payload = {
+          channel_id: v.channel_id,
+          title: v.title.trim(),
+          body: v.body.trim(),
+          content_kind: v.content_kind,
+          is_question: data.has("is_question"),
+        };
+        if (v.id) payload.id = v.id;
+        if (v.company_id) payload.company_id = v.company_id;
+        const result = await act("post_save", payload);
+        location.href = uri("post.html", { id: result.id || v.id });
+        return;
+      }
+      case "comment": {
+        const payload = { post_id: v.post_id, body: (v.body || v["reply-body"] || "").trim() };
+        if (v.id) payload.id = v.id;
+        if (v.parent_id) payload.parent_id = v.parent_id;
+        await act("comment_save", payload);
+        closeDialog();
+        notify(v.id ? "댓글을 수정했어요." : "댓글을 등록했어요.");
+        return refresh();
+      }
+      case "report": {
+        const types = {
+          privacy: "개인정보 노출",
+          defamation: "명예훼손·허위사실",
+          spam: "광고·도배",
+          abuse: "욕설·혐오·괴롭힘",
+          appeal: "처리 결과 이의신청",
+          other: "기타 권리침해",
+        };
+        await act(v.reason_type === "appeal" ? "appeal" : "report", {
+          target: v.target,
+          id: v.id.trim(),
+          reason: `[${types[v.reason_type] || "신고"}] ${v.reason_detail.trim()}`,
+        });
+        closeDialog();
+        notify(
+          v.reason_type === "appeal"
+            ? "이의신청을 접수했어요. 운영자가 소명을 검토합니다."
+            : "신고를 접수하고 운영 검토를 위해 임시 가림했어요.",
+        );
+        return refresh();
+      }
+      case "review": {
+        const payload = {
+          company_id: v.company_id,
+          title: v.title.trim(),
+          body: v.body.trim(),
+          scores: scoreNames.map((_, i) => Number(v["score_" + i])),
+        };
+        if (v.id) payload.id = v.id;
+        await act("review_save", payload);
+        closeDialog();
+        notify("리뷰를 저장했어요.");
+        return refresh();
+      }
+      case "confirm": {
+        await act(v.action, v.id ? { id: v.id } : {});
+        closeDialog();
+        if (v.action === "withdraw") {
+          await sb.auth.signOut({ scope: "local" });
+          session = null;
+          viewer = null;
+          mine = null;
+          location.href = "/index.html";
+        } else if (v.action === "post_delete") location.href = "/channel.html";
+        else {
+          notify("처리했어요.");
+          return refresh();
+        }
+        return;
+      }
+      case "admin": {
+        const payload = { ...v };
+        if (!payload.id) delete payload.id;
+        ["enabled", "pinned"].forEach((k) => {
+          if (form.elements[k]) payload[k] = data.has(k);
+        });
+        ["display_order", "daily_limit"].forEach((k) => {
+          if (k in payload) payload[k] = Number(payload[k]);
+        });
+        await act("admin", payload);
+        notify("운영 처리를 저장하고 감사 기록에 남겼어요.");
+        return refresh();
+      }
+    }
+  }
+  document.addEventListener("click", async (event) => {
+    const el = event.target.closest("[data-do]");
+    if (!el) return;
+    event.preventDefault();
+    if (el.disabled) return;
+    el.disabled = true;
+    try {
+      await clickAction(el, event);
+    } catch (err) {
+      notify(safeError(err));
+    } finally {
+      if (el.isConnected) el.disabled = false;
+    }
+  });
+  document.addEventListener("submit", async (event) => {
+    const form = event.target.closest("form[data-form]");
+    if (!form) return;
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const error = $("[data-form-error]", form);
+    if (error) error.textContent = "";
+    const button = $("button[type=submit]", form);
+    if (button?.disabled) return;
+    if (button) button.disabled = true;
+    try {
+      await submitForm(form);
+    } catch (err) {
+      const msg = safeError(err);
+      if (error?.isConnected) error.textContent = msg;
+      else notify(msg);
+    } finally {
+      if (button?.isConnected) button.disabled = false;
+    }
+  });
+  document.addEventListener("input", (event) => {
+    if (event.target.closest("#post-form")) updatePreview();
+    if (event.target.closest('form[data-form="verification"]')) updateDisplay();
+  });
+  document.addEventListener("change", (event) => {
+    if (event.target.name === "proof") {
+      if (proofPreview) URL.revokeObjectURL(proofPreview);
+      const f = event.target.files?.[0];
+      const img = $("#proof-preview");
+      if (img) {
+        img.hidden = !f;
+        if (f) {
+          proofPreview = URL.createObjectURL(f);
+          img.src = proofPreview;
+        }
+      }
+    }
+    updatePreview();
+    updateDisplay();
+  });
+  $("#dialog").addEventListener("click", (event) => {
+    if (event.target === $("#dialog")) closeDialog();
+  });
+  let checking = false;
+  async function revalidate() {
+    if (checking || !sb || !session || document.visibilityState === "hidden") return;
+    checking = true;
+    const before = `${viewer?.status}/${viewer?.role}`;
+    try {
+      const r = await sb.auth.getSession();
+      if (!r.data.session) {
+        session = null;
+        viewer = null;
+        mine = null;
+        closeDialog();
+        await refresh();
+        return;
+      }
+      const d = await read("me");
+      mine = d;
+      if (`${viewer?.status}/${viewer?.role}` !== before) {
+        closeDialog();
+        await refresh();
+      }
+    } catch {
+      viewer = null;
+      mine = null;
+      closeDialog();
+      $("#content").innerHTML =
+        `<section class="section"><h1>회원 상태를 다시 확인해 주세요</h1><p>권한 확인이 끝나지 않아 회원 내용을 가렸습니다.</p>${btn("다시 확인", "refresh", "", true)}</section>`;
+    } finally {
+      checking = false;
+    }
+  }
+  window.addEventListener("focus", revalidate);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") revalidate();
+  });
+  setInterval(revalidate, 60000);
+  async function boot() {
+    layout();
+    if (!window.supabase || !window.BL_CONFIG?.url || !window.BL_CONFIG?.anonKey) {
+      if (policyDocs[page]) {
+        $("#content").innerHTML = `<article class="section policy">${policyDocs[page]}</article>`;
+        return;
+      }
+      $("#content").innerHTML =
+        '<section class="section"><h1>서비스 연결을 준비하고 있어요</h1><p>잠시 후 다시 방문해 주세요.</p><a class="btn" href="/rules.html">운영정책 보기</a></section>';
+      return;
+    }
+    sb = window.supabase.createClient(window.BL_CONFIG.url, window.BL_CONFIG.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      global: { headers: { "x-client-info": "bohumlive-web/1.0" } },
+    });
+    sb.auth.onAuthStateChange((event, newSession) => {
+      if (event === "INITIAL_SESSION") return;
+      if (event === "SIGNED_OUT") {
+        session = null;
+        viewer = null;
+        mine = null;
+        current = null;
+        closeDialog();
+        $("#content").innerHTML = '<div class="loading">로그아웃 상태를 확인하고 있습니다.</div>';
+        setTimeout(refresh, 0);
+      } else if (event === "SIGNED_IN" && page === "auth") {
+        session = newSession;
+        setTimeout(() => location.replace("/me.html"), 0);
+      } else if (event === "TOKEN_REFRESHED") setTimeout(revalidate, 0);
+    });
+    await refresh();
+  }
+  boot();
 })();
