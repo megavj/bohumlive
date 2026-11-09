@@ -2070,3 +2070,49 @@ dialog::backdrop {
   border-color: #ecd9a8;
   background: #fffaf0;
 }
+
+/* 2026-11-09 수정: 알림 숫자, 관리자 처리할 일 */
+.notification-count {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #e0313d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.admin-todo {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 12px 0 20px;
+  background: #fff;
+}
+.admin-todo.has-todo {
+  border-color: #f0b9bf;
+  background: #fff6f7;
+}
+.admin-todo h3 {
+  margin: 0 0 10px;
+}
+.admin-todo .todo-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.admin-todo .todo-links a {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 700;
+}
+.admin-filter {
+  margin: 0 0 16px;
+  flex-wrap: wrap;
+}
