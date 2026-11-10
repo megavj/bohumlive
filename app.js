@@ -1142,7 +1142,7 @@
     },
     ai(d) {
       const s = d.settings || {};
-      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에만 답변을 만듭니다. 답변은 검수 없이 바로 공개되고, 댓글 1개처럼 보이며 댓글 수에 포함돼요. 하루 개수 제한은 없어요. 운영팀 Mac에 있는 보험사 공시 자료(약관·상품요약서 등)에서 질문과 맞는 부분을 찾아 근거로 짧게 밝혀 답합니다.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}>AI 답변 만들기 사용</label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
+      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에만 답변을 만듭니다. 답변은 검수 없이 바로 공개되고, 댓글 1개처럼 보이며 댓글 수에 포함돼요. 하루 개수 제한은 없어요. 운영팀 Mac에 있는 보험사 공시 자료(약관·상품요약서 등)에서 질문과 맞는 부분을 찾아 정확하게 답하는 데에만 쓰고, 답변에는 자료 이름·출처를 쓰지 않아요.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}>AI 답변 만들기 사용</label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
     },
     settings(d) {
       const words = d.settings?.banned_words || [];
