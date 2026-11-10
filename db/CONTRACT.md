@@ -109,3 +109,13 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - `notification_read {channel_id}`: 그 채널의 팔로우 알림만 읽음(묶음을 눌렀을 때). `{id}`·`{}`는 예전 그대로.
 - 관리자 `ai_settings`: `enabled`만 저장한다. 하루 개수(`ai_daily_limit`, 019에서 1000000)는 바꾸지 않는다(30 상한 제거).
 - **AI 참고 자료(Mac 처리기)**: `worker/kb_build.py`로 상품 자료 목록(최신판 약관·상품요약서·사업방법서·상품설명서, 허용 폴더만)과 보험위키 정리 원문을 한 번 읽어 `worker/kb/bl_kb.sqlite3`(git 제외)를 만든다. 처리기는 질문마다 `kb_search.search`로 맞는 발췌 0~3개를 찾아 `official_sources`(자료·보험사·상품·종류·기준·쪽·발췌)로 넣는다. 색인이 없거나 깨지면 자료 없이 예전처럼 답한다. 고객·개인 자료 폴더(메일·메신저·고객 파일·접수함)는 경로 규칙으로 읽지 않는다.
+
+## 2026-11-10 댓글·답글 알림 묶음 (021, 대표 추가 지시 2)
+- **알림 만들기**: `bl_comments`에 새 댓글이 들어가면 트리거 `bl_comments_notify`가 ① 원댓글 작성자에게 `kind='reply'`(답글일 때) ② 글쓴이에게 `kind='comment'`를 만든다(`post_id`, `comment_id`=새 댓글). 본인이 쓴 것·탈퇴 회원 제외, 시험 댓글은 시험 프로필에만, 글쓴이가 곧 원댓글 작성자면 `reply` 1건만. `comment_save`의 예전 알림 줄은 뺐다(중복 방지).
+- **AI 참고 답변**: `bl_ai_replies`에 처음 공개 insert될 때 트리거 `bl_ai_replies_notify`가 글쓴이에게 `kind='comment'` 1건(제목 '내 글 '…'에 AI 참고 답변이 달렸습니다', `comment_id` 없음). 다시 만들어 덮어쓰기(update)는 알리지 않는다.
+- `bl_read('me'|'notifications')`의 `notifications` 각 줄에 `count`·`anchor`·`comment_id`가 있다. 같은 종류·같은 대상·같은 읽음 상태가 5개 이상이면 한 줄: `comment_group`(대상=글, `post_id`, '내 글 '제목'에 N개의 댓글이 달렸습니다', anchor `comments`), `reply_group`(대상=원댓글, `comment_id`=원댓글, '내 댓글에 N개의 답글이 달렸습니다', body '내 댓글: 앞부분…', anchor `comment-<원댓글>`), `follow_group`(020 그대로). 4개 이하는 `comment`('내 글 '제목'에 새 댓글이 달렸습니다', anchor `comment-<댓글>`)·`reply`('내 댓글에 새 답글이 달렸습니다')·AI(anchor `comment-ai`). 댓글·답글 알림은 읽은 뒤에도 남고(5개 이상이면 읽은 묶음 한 줄), 팔로우 알림은 읽으면 빠진다. 지워지거나 가려진 글·댓글의 알림은 목록·종 숫자에서 빠진다(`bl_note_visible`).
+- `viewer.unread_count`는 목록과 같은 기준 — 묶음 N의 합과 같다.
+- `notification_read {post_id}` = 그 글의 `comment` 알림, `{comment_id}` = 그 원댓글에 달린 `reply` 알림, `{channel_id}` = 팔로우(020). `{id}`·`{}`는 예전 그대로.
+- `bl_read('post')`를 로그인 회원이 부르면 그 글의 팔로우 알림과(댓글을 볼 수 있는 회원이면) 댓글·답글 알림이 읽음 처리되고, 응답의 `viewer.unread_count`도 바로 맞춘다.
+- 예전 '내 댓글에 답글이 달렸습니다' 줄은 `kind='reply'`로 맞췄다(대상 정보가 없어 한 줄씩).
+- **AI 답변에는 근거·출처를 쓰지 않는다**(같은 날 대표 지시): 처리기는 Mac 자료 발췌를 입력에만 넣고, 답변 본문에 자료 이름·약관명·기준일·쪽·조항·'○○에 따르면'·출처 줄·질문에 없는 회사·상품 이름이 있으면 1회 고쳐 쓰게 하고, 남으면 지운 뒤 그래도 남으면 공개하지 않는다(다음 회차 다시). '확인 포인트' 줄은 쓰지 않는다.

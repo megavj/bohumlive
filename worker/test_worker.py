@@ -229,16 +229,50 @@ class ReferenceSources(unittest.TestCase):
         self.assertEqual(set(data["official_sources"][0]), set(worker.SOURCE_FIELDS))
         self.assertNotIn("/Users/secret", json.dumps(data, ensure_ascii=False))
 
-    def test_answer_rules_for_sources(self):
-        src = [{"자료": "가나생명 다라보험 상품요약서", "보험사": "가나생명", "발췌": "중증치매 진단자금 1,000만원을 지급합니다."}]
-        ok = "결론입니다.\n\n• 가나생명 다라보험 상품요약서(2026.10 기준)에 따르면 중증치매 진단자금은 1,000만원입니다."
+    def test_answer_rules_no_source_in_text(self):
+        # 2026-11-10 추가 지시 2: 자료는 입력에만, 답변에는 근거·출처를 쓰지 않는다.
+        src = [{"자료": "가나생명 다라보험 상품요약서", "보험사": "가나생명", "상품": "(무)가나생명 다라보험(갱신형)",
+                "발췌": "중증치매 진단자금 1,000만원을 지급합니다."}]
+        ok = "결론입니다.\n\n• 중증치매 진단자금은 1,000만원입니다."
         self.assertEqual(worker.answer_problem(ok, src, "치매 보장"), "")
         self.assertIn("금액", worker.answer_problem(ok.replace("1,000만원", "2,000만원"), src, "치매 보장"))
-        self.assertIn("회사 이름", worker.answer_problem(ok + " 삼성생명도 비슷합니다.", src, "치매 보장"))
-        dsrc = [{"자료": "DB손해보험 간편실손 약관", "보험사": "DB손해보험", "발췌": "진단서"}]
-        self.assertEqual(worker.answer_problem("결론.\n\n• DB손보 간편실손 약관에 따르면 진단서를 냅니다.", dsrc, "q"), "")
-        self.assertIn("자료 이름", worker.answer_problem(ok, [], "치매 보장"))
+        for leak in ("결론.\n\n• 가나생명 다라보험 상품요약서(2026.10 기준)에 따르면 1,000만원입니다.",
+                     "결론.\n\n• 약관에 따르면 진단서를 냅니다.", "결론.\n\n• 2026.4 기준으로 바뀌었습니다.",
+                     "결론.\n\n• 37쪽 표를 보면 됩니다.", "결론.\n\n• 제3조에서 정합니다.", "결론.\n\n출처: 공시 자료",
+                     "결론.\n\n• 사업방법서상 가입 나이는 정해집니다.", "결론.\n\n• 치매간병보험 약관에서는 진단서를 냅니다.",
+                     ok + " 삼성생명도 비슷합니다.", "결론.\n\n• 다라보험은 1,000만원입니다."):
+            self.assertIn("근거·출처", worker.answer_problem(leak, src, "치매 보장"), leak)
+        # 질문이 직접 물은 회사·상품 이름, 일반 낱말 '약관'은 괜찮다.
+        self.assertEqual(worker.answer_problem("결론.\n\n• 다라보험은 1,000만원입니다.", src, "가나생명 다라보험 보장"), "")
+        self.assertEqual(worker.answer_problem("결론.\n\n• 삼성생명 상품은 갱신형입니다.", [], "삼성생명 암보험"), "")
         self.assertEqual(worker.answer_problem("일반 원칙입니다.\n\n• 약관의 청구 조항을 보세요.", [], "q"), "")
+        self.assertNotIn("자료 이름을 짧게 밝히", worker.SYSTEM_PROMPT)
+        self.assertNotIn("에 따르면 …\" (보험사", worker.SYSTEM_PROMPT)
+
+    def test_scrub_removes_source_mentions(self):
+        text = ("결론입니다.\n\n• 가나생명 다라보험 약관(2026.4 기준)에 따르면 진단서를 냅니다.\n• 조직검사 결과지도 냅니다."
+                "\n\n확인 포인트: 약관 제5조를 보세요.")
+        clean = worker.scrub_sources(text)
+        self.assertEqual(clean, "결론입니다.\n\n• 진단서를 냅니다.\n• 조직검사 결과지도 냅니다.")
+        self.assertEqual(worker.source_problem(clean, [], "q"), "")
+
+    def test_source_leak_after_rewrite_is_not_published(self):
+        def fake(job, heartbeat, fix, sources=(), deadline=None):
+            return {"body": "결론.\n\n• 가나생명 상품요약서 내용대로 진단서를 냅니다.", "model": "claude-opus-5-5", "effort": "medium",
+                    "subscription": True, "fallback_used": False, "elapsed_ms": 1}
+        with mock.patch.object(worker, "_generate_once", side_effect=fake):
+            with self.assertRaises(worker.WorkerError) as ctx:
+                worker.generate({"title": "t", "body": "b"}, sources=[])
+        self.assertEqual(ctx.exception.code, "answer_source_rejected")
+
+    def test_check_point_tail_line_is_dropped(self):
+        def fake(job, heartbeat, fix, sources=(), deadline=None):
+            return {"body": "결론입니다.\n\n• 핵심 하나입니다.\n• 핵심 둘입니다.\n\n확인 포인트: 고객의 가입 시기를 보세요.",
+                    "model": "claude-opus-5-5", "effort": "medium", "subscription": True, "fallback_used": False, "elapsed_ms": 1}
+        with mock.patch.object(worker, "_generate_once", side_effect=fake):
+            result = worker.generate({"title": "t", "body": "b"}, sources=[])
+        self.assertEqual(result["body"], "결론입니다.\n\n• 핵심 하나입니다.\n• 핵심 둘입니다.")
+        self.assertFalse(result["rewritten"])
 
     def test_no_rewrite_when_first_answer_is_slow(self):
         calls = []
@@ -263,7 +297,7 @@ class ReferenceSources(unittest.TestCase):
             result = worker.generate({"title": "t", "body": "b"}, sources=[])
         self.assertEqual(result["body"], "일반 원칙으로 보면 됩니다.")
         self.assertTrue(result["rewritten"])
-        self.assertEqual(result["rewrite_reason"], "cite_without_source")
+        self.assertEqual(result["rewrite_reason"], "source_named")
 
     def test_question_words_and_insurer_detection(self):
         kb = worker.kb_search
