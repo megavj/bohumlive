@@ -318,21 +318,79 @@
   function commentHTML(c) {
     return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${E(c.author_display)} ${c.is_mine ? '<span class="author-badge">내 댓글</span>' : ""} ${sampleBadge(c)}</div><p class="body-text">${E(c.body)}</p><div class="meta"><span>${E(date(c.created_at))}</span><button data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : ""}>${icon("heart")} <span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${!c.parent_id && isVerified() ? `<button data-do="reply" data-id="${E(c.id)}">답글</button>` : ""}${c.is_mine && isVerified() ? `<button data-do="comment-edit" data-id="${E(c.id)}">수정</button><button data-do="comment-delete" data-id="${E(c.id)}">삭제</button>` : ""}${c.is_mine ? "" : `<button data-do="report" data-target="comment" data-id="${E(c.id)}">신고</button>`}</div><div data-reply-slot="${E(c.id)}"></div></article>`;
   }
+  // ⋯ 메뉴: 링크 복사·신고·수정·삭제처럼 가끔 쓰는 기능을 접어 둔다.
+  const moreMenu = (items, label = "더보기") =>
+    `<details class="more-menu"><summary aria-label="${label}" title="${label}">${icon("more")}</summary><div class="more-list">${items.filter(Boolean).join("")}</div></details>`;
+  // 손님·인증 전 회원에게 보이는 짧은 잠금 안내 한 줄
+  function lockBar(text) {
+    const action =
+      viewer?.status === "suspended"
+        ? '<a class="btn btn-small" href="/help.html">이용 정지 안내</a>'
+        : viewer?.status === "pending"
+          ? '<a class="btn btn-small" href="/me.html">심사 중</a>'
+          : verifyLink("btn btn-primary btn-small");
+    return `<div class="guest-lock lock-bar" data-testid="guest-lock">${icon("lock")}<span>${E(text)}</span>${action}</div>`;
+  }
+  // 같은 기기에서 새로고침을 반복해도 조회수는 한 번만 올린다.
+  function firstView(id) {
+    try {
+      const seen = JSON.parse(sessionStorage.getItem("bl_viewed") || "[]");
+      if (seen.includes(id)) return false;
+      sessionStorage.setItem("bl_viewed", JSON.stringify([...seen, id].slice(-200)));
+    } catch {}
+    return true;
+  }
+  // 글 맨 아래: 같은 채널의 다른 글(본문을 먼저 그린 뒤 따로 채운다)
+  async function fillMorePosts(stamp) {
+    const slot = $("[data-more-posts]");
+    if (!slot || !sb) return;
+    try {
+      const { data, error } = await sb.rpc("bl_read", { p_scope: "posts", p_args: { channel_id: slot.dataset.channel, limit: 8 } });
+      if (error || stamp !== renderId || !slot.isConnected) return;
+      const list = (data?.posts || []).filter((x) => x.id !== slot.dataset.post && !x.pinned).slice(0, 5);
+      if (!list.length) return;
+      slot.innerHTML = `<div class="box-head"><h2>‘${E(slot.dataset.name)}’ 채널의 다른 글</h2><a class="box-more" href="${uri("channel.html", { id: slot.dataset.channel })}" aria-label="${E(slot.dataset.name)} 채널 더보기">더보기</a></div><div class="item-list">${feeds(list)}</div>`;
+      slot.hidden = false;
+    } catch {}
+  }
   async function post() {
     const id = params.get("id");
     if (!id) return empty("글을 선택해 주세요.", "홈이나 채널에서 읽을 글을 선택할 수 있어요.");
-    const d = await read("post", { id });
+    const d = await read("post", { id, ...(firstView(id) ? { view: "1" } : {}) });
     current = d;
     const p = d.post;
     if (!p)
       return d.unavailable_reason === "not_found"
         ? empty("글을 찾을 수 없어요.", "주소가 바뀌었거나 삭제된 글이에요. 채널에서 다른 글을 골라 주세요.")
         : `<section class="section"><h1>${d.unavailable_reason === "temporary_hidden" ? "운영 검토를 위해 임시 가림한 글입니다" : "글을 표시할 수 없어요"}</h1><p class="notice">이 글은 삭제되었거나 신고 접수에 따른 운영 검토로 가려졌습니다. 임시조치는 접수 후 최대 30일 안에 검토합니다.${d.hidden_until ? `<br>검토 예정: ${E(date(d.hidden_until))}` : ""}</p><a class="btn" href="/channel.html">다른 글 보기</a><a class="btn" href="/help.html">신고·이의신청 안내</a></section>`;
-    const comments = d.comments || [];
+    const following = !!mine?.follows?.includes(p.channel_id);
+    const menu = moreMenu(
+      [
+        `<button type="button" data-do="share" data-testid="post-copy">${icon("link")} 링크 복사</button>`,
+        p.is_mine && isVerified() ? `<a href="${uri("write.html", { id: p.id })}" data-testid="post-edit">${icon("edit")} 수정</a>` : "",
+        p.is_mine && isVerified() ? `<button type="button" data-do="post-delete" data-id="${E(p.id)}">삭제</button>` : "",
+        p.is_mine ? "" : `<button type="button" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button>`,
+      ],
+      "글 메뉴 더보기",
+    );
+    const header = `<header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a>${p.anonymous ? '<span class="tag anon-tag">완전 익명</span>' : ""}<span class="crumb-dot" aria-hidden="true">·</span><button type="button" class="crumb-follow" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(p.channel_id)}" aria-pressed="${following}" data-on="팔로잉" data-off="팔로우">${following ? "팔로잉" : "팔로우"}</button></div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="post-info">${timeTag(p.created_at, "post-time")}${stat("eye", "조회수", p.views)}${stat("comment", "댓글", p.comment_count)}<span class="post-tools">${markButton(p, "tool-mark").replace("<button", '<button data-testid="post-bookmark"')}${menu}</span></div></header>`;
+    const band =
+      p.status && p.status !== "published"
+        ? `<div class="status-band" data-testid="status-band"><b>${p.status === "hidden" ? "숨김 상태인 글" : "삭제된 글"}</b> — 다른 회원에게는 보이지 않아요.${p.is_mine && p.status === "hidden" ? `<br>운영 조치에 의견이 있으면 이의신청을 남겨 주세요. ${btn("내 글 조치에 이의신청", "appeal", `data-target="post" data-id="${E(p.id)}" data-testid="appeal-button"`)}` : ""}</div>`
+        : "";
+    const company = p.company_id
+      ? `<p class="post-company"><a href="${uri("company.html", { id: p.company_id })}" data-testid="post-company"><span class="muted">관련 회사</span> ${E(p.company_name)} ›</a></p>`
+      : "";
+    const actions = `<div class="post-actions"><button type="button" data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 <span data-count="${Number(p.likes) || 0}">${num(p.likes)}</span></button><a class="post-comment-link" href="#comments">${icon("comment")} 댓글 ${num(p.comment_count)}</a><button type="button" data-do="share" class="share-button" aria-label="공유(글 링크 복사)" title="공유(글 링크 복사)">${icon("share")}</button></div>`;
+    return `<article class="post" data-testid="post">${header}${band}<div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? lockBar("뒷부분은 설계사 인증 회원만 볼 수 있어요.") : ""}${company}${actions}${commentsSection(d)}<section class="more-posts" data-more-posts data-channel="${E(p.channel_id)}" data-post="${E(p.id)}" data-name="${E(p.channel_name)}" data-testid="more-posts-list" hidden></section></article>`;
+  }
+  function commentsSection(d) {
+    const p = d.post,
+      comments = d.comments || [];
     const ordered = comments
       .filter((c) => !c.parent_id)
       .flatMap((c) => [c, ...comments.filter((x) => x.parent_id === c.id)]);
-    return `<article><header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a><span class="tag">${E(kindNames[p.content_kind])}</span>${p.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(p)}</div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="meta"><span>${E(date(p.created_at))}</span>${p.is_mine && isVerified() ? `<a href="${uri("write.html", { id: p.id })}">수정</a><button data-do="post-delete" data-id="${E(p.id)}">삭제</button>` : ""}${p.is_mine ? "" : `<button class="push" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button>`}</div></header>${p.status && p.status !== "published" ? `<div class="status-band" data-testid="status-band"><b>${p.status === "hidden" ? "숨김 상태인 글" : "삭제된 글"}</b> — 다른 회원에게는 보이지 않아요.${p.is_mine && p.status === "hidden" ? `<br>운영 조치에 의견이 있으면 이의신청을 남겨 주세요. ${btn("내 글 조치에 이의신청", "appeal", `data-target="post" data-id="${E(p.id)}" data-testid="appeal-button"`)}` : ""}</div>` : ""}<div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? '<div class="guest-lock"><h2>여기부터 인증 회원에게만 공개</h2><p>설계사 인증 후 나머지 본문과 동료의 댓글을 읽을 수 있어요.</p>${verifyLink()}</div>' : ""}<div class="post-actions"><button data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 <span data-count="${Number(p.likes) || 0}">${num(p.likes)}</span></button><button data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" data-on="저장됨" data-off="저장" data-testid="post-bookmark">${icon("bookmark")} <span data-label>${p.bookmarked ? "저장됨" : "저장"}</span></button><button data-do="share" class="share-button" aria-label="글 링크 복사">${icon("share")}</button></div>${p.company_id ? `<section class="related-companies"><h2>관련 회사</h2><a class="related-company" href="${uri("company.html", { id: p.company_id })}"><span class="company-mark">${E(p.company_name)}</span><p>${E(p.company_name)}<br><span class="muted small">회사 정보와 리뷰 보기</span></p></a></section>` : ""}<section class="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count) || 0}</h2>${isVerified() ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="좋은 댓글은 응원이 됩니다." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>` : canReadMember() ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>' : `<div class="guest-lock">${icon("lock")}<h2>댓글과 AI 답변은 인증 회원에게 공개돼요</h2><p>${session ? `현재 상태: ${E(statusLabel())}` : "로그인 후 설계사 인증을 완료해 주세요."}</p>${viewer?.status === "suspended" ? '<a class="btn btn-primary" href="/help.html">이용 정지 안내</a>' : verifyLink()}</div>`}</div>${canReadMember() ? (ordered.length ? ordered.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.")) : ""}${d.ai_reply ? `<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>` : ""}</section></article>`;
+    return `<section class="comments" id="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count) || 0}</h2>${isVerified() ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="좋은 댓글은 응원이 됩니다." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>` : canReadMember() ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>' : lockBar(session ? `댓글은 설계사 인증 회원만 볼 수 있어요. (지금: ${statusLabel()})` : "댓글은 설계사 인증 회원만 볼 수 있어요.")}</div>${canReadMember() ? (ordered.length ? ordered.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.")) : ""}${d.ai_reply ? `<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>` : ""}</section>`;
   }
   async function write() {
     const denied = isAdmin() ? authorization("admin") : authorization();
@@ -1195,6 +1253,7 @@
       layout();
       $("#content").innerHTML = html;
       fillAside(stamp);
+      fillMorePosts(stamp);
       {
         const chips = $(".chan-chips"),
           on = chips && $(".active", chips);
@@ -1665,6 +1724,11 @@
     } finally {
       if (el.isConnected) el.disabled = false;
     }
+  });
+  document.addEventListener("click", (event) => {
+    $$("details.more-menu[open]").forEach((m) => {
+      if (!m.contains(event.target) || event.target.closest(".more-list a, .more-list button")) m.open = false;
+    });
   });
   document.addEventListener("submit", async (event) => {
     const form = event.target.closest("form[data-form]");

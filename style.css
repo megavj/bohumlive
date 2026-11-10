@@ -3197,3 +3197,236 @@ dialog::backdrop {
     gap: 14px;
   }
 }
+/* C. 글 화면 — 경로 줄, 제목 아래 정보 줄, 저장·⋯ 메뉴, 짧은 잠금 안내, 같은 채널 다른 글 */
+.post-header {
+  padding: 16px 16px 12px;
+}
+.post-header .breadcrumb {
+  gap: 6px;
+  margin-bottom: 12px;
+  color: #6a6676;
+  font-weight: 600;
+}
+.crumb-dot {
+  color: #c4c1cf;
+}
+.breadcrumb .crumb-follow {
+  position: relative;
+  padding: 2px 0;
+  color: var(--link);
+  font-size: 12px;
+  font-weight: 700;
+}
+.breadcrumb .crumb-follow[aria-pressed="true"] {
+  color: #8c9099;
+}
+.post-header h1 {
+  margin: 0 0 10px;
+  font-size: 20px;
+  line-height: 1.4;
+}
+.post-author {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.post-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  color: #94929e;
+  font-size: 12px;
+}
+.post-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.tool-mark,
+.more-menu > summary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 18px;
+  color: #6a6676;
+  list-style: none;
+  cursor: pointer;
+}
+.more-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.tool-mark:hover,
+.more-menu > summary:hover {
+  background: var(--soft);
+}
+.tool-mark svg.icon,
+.more-menu > summary svg.icon {
+  width: 20px;
+  height: 20px;
+}
+.more-menu > summary svg.icon {
+  fill: currentColor;
+}
+.more-menu {
+  position: relative;
+}
+.more-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  min-width: 132px;
+  padding: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(36, 33, 43, 0.12);
+}
+.more-list a,
+.more-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+}
+.more-list a:hover,
+.more-list button:hover {
+  background: var(--soft);
+}
+.more-list svg.icon {
+  width: 16px;
+  height: 16px;
+}
+.post-body {
+  padding: 20px 16px 8px;
+}
+.lock-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8f7fb;
+  color: #5d5969;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+}
+.lock-bar > span {
+  flex: 1;
+  min-width: 0;
+}
+.lock-bar > svg.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.lock-bar .btn {
+  flex: none;
+}
+.post-company {
+  margin: 4px 16px 0;
+  font-size: 13px;
+}
+.post-company a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: #4a4658;
+  font-weight: 600;
+}
+.post-actions {
+  gap: 18px;
+  padding: 10px 16px 14px;
+  color: #5d5969;
+  font-size: 14px;
+}
+.post-actions button,
+.post-comment-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+}
+.post-actions .share-button {
+  width: 40px;
+  min-height: 40px;
+  margin-left: auto;
+  border-radius: 20px;
+  background: none;
+  color: #5d5969;
+}
+.post-actions .share-button:hover {
+  background: var(--soft);
+}
+.comments {
+  margin-top: 0;
+  scroll-margin-top: 96px;
+}
+.comments .lock-bar {
+  margin: 14px 0 18px;
+}
+.more-posts {
+  padding: 22px 16px 8px;
+  border-top: 8px solid var(--soft);
+}
+.more-posts .box-head {
+  margin-bottom: 10px;
+}
+.more-posts .item-list {
+  margin: 0 -16px;
+}
+@media (max-width: 799px) {
+  .crumb-follow::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+@media (min-width: 800px) {
+  .post-header {
+    padding: 4px 0 12px;
+  }
+  .post-header h1 {
+    font-size: 24px;
+  }
+  .post-body {
+    min-height: 120px;
+    padding: 24px 0 8px;
+  }
+  .lock-bar,
+  .post-company {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .post-actions {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .more-posts {
+    padding: 26px 0 8px;
+  }
+  .more-posts .item-list {
+    margin: 0;
+  }
+}
