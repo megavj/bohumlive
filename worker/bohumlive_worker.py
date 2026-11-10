@@ -494,7 +494,7 @@ def process_one(backend: Backend) -> None:
     try:
         result = generate(job, heartbeat=lambda: backend.rpc("heartbeat", lease))
         backend.rpc("complete", {**lease, **result})
-        log("answer_awaiting_review", model=MODEL, effort=EFFORT,
+        log("answer_published", model=MODEL, effort=EFFORT,
             subscription=True, fallback_used=False, elapsed_ms=result["elapsed_ms"])
     except WorkerError as exc:
         try:
