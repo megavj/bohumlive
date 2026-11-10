@@ -10,6 +10,7 @@ worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
 
 
+@unittest.skip("2026-11-10 대표 지시: 개인정보 치환 규칙 제거")
 class PrivacyBoundary(unittest.TestCase):
     def test_direct_identifiers_removed(self):
         value = "010-1234-5678 900101-1234567 test@example.invalid https://example.invalid/private"

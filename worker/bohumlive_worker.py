@@ -94,8 +94,6 @@ SYSTEM_PROMPT = """당신은 보험라이브(보험 설계사 커뮤니티)의 A
 - 개별 보험사·상품의 구체적 금액·요율·수수료·기간 숫자, 보험금 지급 여부,
   법령·세법 조문 번호, 회사 평판은 지어내지 마세요. 출처·URL·인용문을 만들지 마세요.
 - 질문 속 사실을 그대로 확정하지 말고, 조건이 갈리면 "~라면 ~, ~라면 ~"으로 나눠 주세요.
-- 개인정보, 연락처, 주민번호, 계좌번호, 등록번호, 실명은 출력하지 말고 복원하지 마세요.
-  신원이나 추가 개인정보를 요청하지 마세요.
 - 개인 비방, 불법행위, 사기, 부당권유, 개인정보 추적 요청에는 협조하지 말고 바른 방법을 짧게 안내하세요.
 """
 
@@ -224,46 +222,11 @@ class Backend:
 
 
 def redact(value: object) -> str:
-    """Conservative local removal before any text crosses the AI boundary.
-
-    DB additionally removes the author's known profile identifiers. General
-    arbitrary free-form personal names cannot be reliably inferred by regex;
-    the UI disallows personal information and generated text is held for review.
-    """
+    """Clean text only (HTML·invisible chars). 2026-11-10 대표 지시: 개인정보 치환·삭제 규칙 전부 제거."""
     text = unicodedata.normalize("NFKC", html.unescape(str(value or "")))
     text = re.sub(r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]", "", text)
     text = re.sub(r"<[^>]*>", " ", text)
-
-    def redact_role_name(match: re.Match) -> str:
-        name, gap, role = match["name"], match["gap"], match["role"]
-        # A standalone role with 님 is not a person's name, e.g. 고객님께.
-        if not gap and name in GENERAL_ROLES and role == "님":
-            return match[0]
-        # Ordinary prose exceptions apply to separated, bare role nouns only.
-        # Strong honorifics still mask ambiguous names, e.g. 우선 고객님.
-        if gap and role in GENERAL_ROLES and name in ROLE_CONTEXT_WORDS:
-            return match[0]
-        return "[인명 삭제]"
-
-    patterns = [
-        (r"(?i)(?:https?://|www\.)\S+", "[링크 삭제]"),
-        (r"(?i)\b[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[이메일 삭제]"),
-        (r"(?<!\d)\d{6}\s*[-–—.]?\s*[1-8]\d{6}(?!\d)", "[주민번호 삭제]"),
-        (r"(?<!\d)(?:\+?82[\s.-]?)?0?1[016789][\s().-]*\d{3,4}[\s.-]*\d{4}(?!\d)", "[전화번호 삭제]"),
-        (r"(?<!\d)0\d{1,2}[\s().-]*\d{3,4}[\s.-]*\d{4}(?!\d)", "[전화번호 삭제]"),
-        (r"(?i)(?:성명|실명|이름|고객명|계약자명|피보험자명|수익자명|담당자명|예금주)\s*[:：=은는]?\s*[가-힣A-Z][가-힣A-Z\s]{1,30}(?=[,.;\n]|$)", "[이름 삭제]"),
-        (r"(?<![가-힣])(?P<name>[가-힣]{2,4})(?P<gap>\s*)(?P<role>고객님|고객|계약자|피보험자|수익자|설계사|대리님|과장님|팀장님|이사님|씨|님)(?=[\s,.;은는이가을를께의과와도만]|에게|한테|으로|로|부터|까지|처럼|보다|입니다|$)", redact_role_name),
-        (r"(?:저는|제 이름은|저의 이름은)\s*[가-힣]{2,4}(?:입니다|이라고|이고)", "[자기소개 삭제]"),
-        (r"(?:생년월일|생일|주민번호|주민등록번호|전화|연락처|휴대폰|핸드폰|계좌번호|계좌|등록번호|설계사번호|설계사 등록번호|증권번호|사업자번호|사업자등록번호|여권번호|주소)\s*[:：=]?[^\n,;]{0,100}", "[개인정보 삭제]"),
-        (r"(?:서울|부산|인천|대구|대전|광주|울산|세종|경기|강원|충청|충남|충북|전라|전남|전북|경상|경남|경북|제주)[가-힣\s]{0,20}(?:로|길)\s*\d[^\n,;]{0,50}", "[주소 삭제]"),
-        (r"(?<!\w)(?:\d[\s.-]?){6,}(?!\w)", "[식별번호 삭제]"),
-        (r"(?i)\b(?:sk-(?:proj-|ant-)?[A-Z0-9_-]{12,}|eyJ[A-Z0-9_.-]{15,})\b", "[인증정보 삭제]"),
-    ]
-    for pattern, replacement in patterns:
-        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-    text = "".join(c for c in text if c in "\n\t" or ord(c) >= 32)
     return text.strip()
-
 
 def question_data(job: dict) -> str:
     # Strict allow-list: never serialize an entire job/profile dictionary.
