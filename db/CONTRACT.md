@@ -9,7 +9,7 @@
 - `posts`: args `{channel_id?,q?,company_id?,sort?:'latest'|'popular',limit?:50}` -> `{viewer,posts}`
 - `post`: args `{id}` -> `{viewer,post,comments,ai_reply}`. post null이면 존재하지 않음/가림.
 - post DTO `{id,channel_id,channel_name,title,body,content_kind,is_question,company_id,company_name,author_display,created_at,updated_at,status,pinned,likes,comment_count,liked,bookmarked,is_mine,is_truncated}`. body는 서버가 권한별 제한; 목록도 same DTO.
-- comment DTO `{id,post_id,parent_id,body,author_display,created_at,updated_at,likes,liked,is_mine,status}`. comments는 인증/관리자만, 대댓글 한 단계. ai_reply null 또는 `{id,body,created_at,label:'보험라이브 AI 참고 답변'}`. AI는 댓글 수 제외.
+- comment DTO `{id,post_id,parent_id,body,author_display,created_at,updated_at,likes,liked,is_mine,status,is_ai}`. comments는 인증/관리자만, 대댓글 한 단계. AI도 이 목록의 실제 댓글이며 댓글 수에 포함한다. ai_reply는 항상 null(023).
 - `companies`: `{viewer,companies}`. company `{id,name,kind,description,enabled,review_count,average,scores}`. scores는 5항목 배열, average/scores는 유효 리뷰 5개 미만 null.
 - `company`: args `{id}` -> `{viewer,company,reviews,posts}`. review `{id,company_id,title,body,scores,author_display,created_at,updated_at,is_mine,is_truncated}`
 - `me`: `{viewer,profile,posts,comments,bookmarks,notifications,follows,reviews}`. profile `{nickname,company_id,company_name,status,review_reason,verified_until,name_masked,phone_masked,has_proof,role}`. 원본 이름/연락처는 본인에게도 재반환 안 함.
@@ -45,7 +45,7 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 ## AI / 정리 worker (service_role 전용)
 `bl_worker(p_action,p_payload={})`:
 - `claim`: `{}` -> `{job:null}` 또는 `{job:{id,post_id,title,body,attempts,lease_token}}`; enabled 확인/하루 생성 상한 30/중복 claim 방지.
-- `complete`: `{id:job_uuid,lease_token,body,model?}` -> `{ok:true}`; 게시글당 AI 답변 1개 upsert, status review(검수대기), 사용자 글·댓글 독립. 관리자 ai_publish 후 공개.
+- `complete`: `{id:job_uuid,lease_token,body,model?}` -> `{ok:true,status:'published',comment_id}`; 게시글당 AI 댓글 1개 upsert, 검수 없이 즉시 공개(023).
 - `fail`: `{id,lease_token,error}` -> `{ok:true}`; 오류는 500자 정리하여 기록(비밀값 금지).
 - `cleanup_list`: `{}` -> `{paths:[...]}`; 처리일 30일 지난 증빙/탈퇴 증빙 대상. Storage remove 후
 - `cleanup_done`: `{paths:[...]}` -> `{ok:true}`; 경로/개인정보 정리.
@@ -59,7 +59,7 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - `post` 조회에서 post가 null이면 `unavailable_reason:'temporary_hidden'|'unavailable'`, `hidden_until`도 반환. 가려진 제목/본문/작성자는 반환 안 함.
 - `review_delete`: `{id}` 본인 리뷰 삭제. 365일 신규 작성 제한은 삭제해도 유지.
 - `appeal`: `{target:'post'|'comment'|'review',id,reason}` 본인 숨김 콘텐츠 처리결과 이의신청. 정지회원도 가능. 같은 콘텐츠 하루1회, 관리자 알림+감사 기록. 관리자 콘텐츠 복구/유지 후 회원에게 처리 통지.
-- admin `operation:'ai_publish'|'ai_reject'`, `{id:job_uuid,reason}`. ai_jobs에는 `answer`, `answer_status`도 제공. 공개 전 반드시 관리자 검수.
+- admin `operation:'ai_publish'|'ai_reject'`, `{id:job_uuid,reason}`. ai_jobs에는 `answer`, `answer_status`도 제공. 현재는 검수 없이 즉시 공개(017·023).
 - worker `heartbeat`: `{id,lease_token}` -> `{ok:true}`; lease6분 갱신. 일일30은 실패 포함 생성 시도 횟수.
 - worker `status`: `{ai_enabled,ai_daily_limit,queued,review}`.
 - worker `cleanup_users`: `{}` -> `{ids:[withdrawn uuid...]}`. 미삭제증빙/Storage객체 없는 탈퇴회원만 반환. Auth Admin hard delete 후 `cleanup_user_done:{id}`. DB는 실제 auth.users 삭제 확인 후 tombstone에 auth_deleted_at 기록. bl_profiles UUID는 익명 콘텐츠 관계를 위해 유지되며 auth.users FK는 없음.
