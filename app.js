@@ -69,6 +69,9 @@
       edit: '<path d="m16 3 5 5-12 12-6 1 1-6zM14 5l5 5"/>',
       share: '<path d="M12 16V3m-5 5 5-5 5 5M4 14v7h16v-7"/>',
       lock: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/>',
+      eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+      more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+      link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
     };
     return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.comment}</svg>`;
   };
@@ -140,20 +143,56 @@
           : page === "company"
             ? "company"
             : "";
+    // 글쓰기는 머리줄의 연필 하나로만 들어간다(채널 화면에서는 그 채널이 미리 골라진다).
+    const writeHref = uri("write.html", page === "channel" && params.get("id") ? { channel: params.get("id") } : {});
+    const unread = Number(viewer?.unread_count) || 0;
+    const tools = `<a class="tool-btn tool-search" href="/search.html" aria-label="검색" data-testid="header-search-link">${icon("search")}</a>${page === "write" || page === "login" ? "" : `<a class="tool-btn tool-write" href="${E(writeHref)}" aria-label="글쓰기" title="글쓰기" data-testid="header-write">${icon("edit")}<span class="tool-label">글쓰기</span></a>`}${
+      session
+        ? `<div class="header-user" data-testid="header-user"><a class="tool-btn notification-link" href="/notifications.html" aria-label="${unread ? `알림 ${unread}개 안 읽음` : "알림"}" title="알림">${icon("bell")}${unread ? `<span class="notification-count" data-testid="unread-count">${unread > 99 ? "99+" : unread}</span>` : ""}</a><a class="header-name" href="/me.html" title="내 정보">${E(displayName())}님</a><span class="header-sep" aria-hidden="true">·</span><button type="button" class="header-logout" data-do="logout" data-testid="header-logout">로그아웃</button></div>`
+        : page === "login"
+          ? ""
+          : `<a class="header-login" href="${E(loginUrl())}">로그인·가입</a>`
+    }`;
     $("#header").innerHTML =
-      `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><picture><source media="(prefers-reduced-motion: reduce)" srcset="/assets/logo-live-still.png?v=20261109"><source media="(max-width: 799px)" srcset="/assets/logo-live-m.gif?v=20261109b"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109b" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></picture></a><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="궁금한 내용 검색" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${session ? `<div class="header-user" data-testid="header-user"><a class="notification-link" href="/notifications.html" aria-label="${viewer?.unread_count ? `알림 ${Number(viewer.unread_count)}개 안 읽음` : "알림"}">${icon("bell")}${viewer?.unread_count ? `<span class="notification-count" data-testid="unread-count">${Number(viewer.unread_count) > 99 ? "99+" : Number(viewer.unread_count)}</span>` : ""}</a><a class="header-name" href="/me.html" title="내 정보">${E(displayName())}님</a><span class="header-sep" aria-hidden="true">·</span><button type="button" class="header-logout" data-do="logout" data-testid="header-logout">로그아웃</button></div>` : page === "login" ? "" : `<a class="header-login" href="${E(loginUrl())}">로그인·가입</a>`}</div><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a><a class="${active === "company" ? "active" : ""}" href="/company.html">보험사 리뷰</a>${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
+      `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><picture><source media="(prefers-reduced-motion: reduce)" srcset="/assets/logo-live-still.png?v=20261109"><source media="(max-width: 799px)" srcset="/assets/logo-live-m.gif?v=20261109b"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109b" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></picture></a><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a><a class="${active === "company" ? "active" : ""}" href="/company.html">보험사 리뷰</a>${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="궁금한 내용 검색" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form><div class="header-tools">${tools}</div></div>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
     $("#footer").innerHTML =
       `<footer class="site-footer"><div class="footer-logo">보험<b style="color:var(--accent)">라이브</b></div><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html">개인정보처리방침</a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">이용 도움말·권리침해 신고</a></nav><p class="footer-note">보험라이브는 설계사의 경험과 실무 지식을 나누는 공간입니다. 회원의 글은 개인의 의견이며 회사의 공식 입장이나 보험상품 가입 권유가 아닙니다. 고객정보·주민등록번호·개인 연락처를 게시하지 마세요.</p><p class="footer-note">공개 준비 중 · 검색 노출을 차단하고 있습니다.</p></footer>`;
-    $("#sidebar").innerHTML =
-      `<section class="sidebar-block"><h2>동료의 경험이 필요할 때</h2><p class="muted">궁금한 내용을 질문하고<br>설계사 동료의 답변을 만나 보세요.</p><a class="btn btn-primary" href="/write.html">${icon("edit")} 글쓰기</a></section><section class="sidebar-block"><h2>함께 지키는 약속</h2><p class="muted small">회사는 그대로, 닉네임은 첫 글자만 표시해요(완전익명 채널은 ‘익명’). 고객정보나 동료의 개인정보가 담기지 않았는지 확인해 주세요.</p><a class="text-link" href="/rules.html" target="_blank" rel="noopener">운영정책 보기 →</a></section>${session ? `<section class="sidebar-block"><h2>${isOwner() ? "나의 권한" : "나의 인증 상태"}</h2><p>${E(statusLabel())}</p><a class="text-link" href="/me.html" target="_blank" rel="noopener">내 정보 확인 →</a></section>` : ""}`;
-    if (["home", "channels", "channel", "post", "search", "company"].includes(page))
-      $("#footer").insertAdjacentHTML(
-        "beforeend",
-        `<a class="fab-write" href="${E(uri("write.html", page === "channel" && params.get("id") ? { channel: params.get("id") } : {}))}" data-testid="fab-write">${icon("edit")} 글쓰기</a>`,
-      );
-    document.body.classList.toggle("has-fab", ["home", "channels", "channel", "post", "search", "company"].includes(page));
+    // 오른쪽 칸: 안내 상자·글쓰기 버튼을 두지 않는다. 목록·글 화면(PC)에서만 '인기 글' 제목 목록을 채운다.
+    const mode = page === "admin" ? "admin" : page === "home" ? "wide" : ["channel", "post", "search"].includes(page) ? "aside" : "narrow";
+    document.body.dataset.layout = mode;
+    $("#sidebar").innerHTML = "";
+    $("#sidebar").hidden = mode !== "aside";
     $("#main").classList.toggle("admin-main", page === "admin");
-    if (page === "admin") $("#sidebar").hidden = true;
+  }
+  // PC 오른쪽 칸: '인기 글' 제목 목록만 둔다(본문을 먼저 그린 뒤 따로 채운다).
+  async function fillAside(stamp) {
+    if (document.body.dataset.layout !== "aside" || !sb || !window.matchMedia("(min-width: 800px)").matches) return;
+    try {
+      const { data, error } = await sb.rpc("bl_read", { p_scope: "best", p_args: {} });
+      if (error || stamp !== renderId) return;
+      const list = (data?.best || []).filter((p) => p.id !== params.get("id")).slice(0, 10);
+      $("#sidebar").innerHTML = list.length
+        ? `<section class="side-best" data-testid="side-best"><h2>인기 글</h2><ol>${list.map((p, i) => `<li><a href="${uri("post.html", { id: p.id })}"><span class="side-rank">${i + 1}</span><span class="side-title">${E(p.title)}</span></a></li>`).join("")}</ol></section>`
+        : "";
+    } catch {}
+  }
+  // 로그인했지만 아직 글을 쓸 수 없는 회원에게만 보이는 얇은 한 줄 안내
+  function verifyStrip() {
+    if (!session || !viewer || isVerified() || isAdmin()) return "";
+    const s = viewer.status;
+    const [text, label, href] =
+      s === "suspended"
+        ? ["이용 정지 상태예요. 공개 글만 읽을 수 있어요.", "안내 보기", "/help.html"]
+        : s === "pending"
+          ? ["설계사 인증을 심사하고 있어요. 결과는 알림으로 알려 드려요.", "신청 내용 보기", "/me.html"]
+          : s === "supplement"
+            ? ["인증 신청에 보완이 필요해요.", "보완하기", "/verify.html"]
+            : s === "rejected"
+              ? ["인증 신청이 반려됐어요. 내용을 확인하고 다시 신청해 주세요.", "다시 신청", "/verify.html"]
+              : s === "verified"
+                ? ["인증 기간이 끝났어요. 다시 인증하면 글·댓글을 쓸 수 있어요.", "재인증하기", "/verify.html"]
+                : ["설계사 인증을 마치면 글·댓글을 쓸 수 있어요.", "인증하기", "/verify.html"];
+    return `<p class="verify-strip" data-testid="verify-strip"><span>${E(text)}</span><a href="${href}">${E(label)}</a></p>`;
   }
   function authorization(kind = "verified") {
     if (!session) {
@@ -167,19 +206,57 @@
     return "";
   }
   function feed(post, compact = false) {
-    return `<article class="feed-item ${compact ? "compact-item" : ""} ${post.pinned ? "feed-notice" : ""}" data-testid="post-item"><a class="feed-channel" href="${uri("channel.html", { id: post.channel_id })}">${post.pinned ? '<span class="tag">공지</span>' : ""}${E(post.channel_name || "커뮤니티")} <span class="tag">${E(kindNames[post.content_kind] || "글")}</span>${post.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(post)}${post.status && post.status !== "published" ? '<span class="tag hidden-tag">숨김</span>' : ""}</a><a class="feed-title" href="${uri("post.html", { id: post.id })}">${E(post.title)}</a>${compact ? "" : `<p class="feed-excerpt">${E(post.body)}</p><p class="author">${E(post.author_display || "운영팀")}</p>`}<div class="meta"><span>${icon("heart")} ${Number(post.likes) || 0}</span><span>${icon("comment")} ${Number(post.comment_count) || 0}</span><span>${E(date(post.created_at))}</span></div></article>`;
+    const mixed = !(page === "channel" && params.get("id"));
+    const marks = `${post.pinned ? '<span class="tag">공지</span>' : ""}${mixed ? E(post.channel_name || "커뮤니티") : ""}${post.status && post.status !== "published" ? '<span class="tag hidden-tag">숨김</span>' : ""}`;
+    return `<article class="feed-item ${compact ? "compact-item" : ""} ${post.pinned ? "feed-notice" : ""}" data-testid="post-item">${marks ? `<a class="feed-channel" href="${uri("channel.html", { id: post.channel_id })}">${marks}</a>` : ""}<a class="feed-title" href="${uri("post.html", { id: post.id })}">${E(post.title)}</a>${compact ? "" : `<p class="feed-excerpt">${E(post.body)}</p><p class="author">${E(post.author_display || "운영팀")}</p>`}<div class="meta"><span>${icon("heart")} ${Number(post.likes) || 0}</span><span>${icon("comment")} ${Number(post.comment_count) || 0}</span><span>${E(date(post.created_at))}</span></div></article>`;
   }
   const feeds = (posts, compact = false) => (posts?.length ? posts.map((p) => feed(p, compact)).join("") : empty());
   const channelDisc = (c) => `<span class="topic-disc ${E(c.slug)}">${E(c.name?.slice(0, 1) || "보")}</span>`;
+  // 짧은 시간 표시: 방금 · 5분 · 2시간 · 어제 · 3일 · 11.07 · 2025.11.07
+  const ago = (v) => {
+    if (!v) return "";
+    const t = new Date(v),
+      now = new Date(),
+      min = Math.floor((now - t) / 60000);
+    if (min < 1) return "방금";
+    if (min < 60) return `${min}분`;
+    if (min < 1440) return `${Math.floor(min / 60)}시간`;
+    if (min < 2880) return "어제";
+    if (min < 10080) return `${Math.floor(min / 1440)}일`;
+    const md = `${String(t.getMonth() + 1).padStart(2, "0")}.${String(t.getDate()).padStart(2, "0")}`;
+    return t.getFullYear() === now.getFullYear() ? md : `${t.getFullYear()}.${md}`;
+  };
+  // 큰 숫자는 짧게: 1,234 · 1.2만
+  const num = (v) => {
+    const n = Number(v) || 0;
+    return n >= 10000 ? `${(n / 10000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, "")}만` : n.toLocaleString("ko-KR");
+  };
+  // 아이콘 + 숫자(화면 읽기 프로그램에는 이름까지 읽어 준다)
+  const stat = (name, label, value) =>
+    `<span class="stat stat-${name}" title="${label} ${num(value)}">${icon(name)}<span class="sr-only">${label}</span>${num(value)}</span>`;
+  // 공지는 맨 위에 한 줄. 여러 개면 첫 줄만 보이고 '+n'을 누르면 나머지가 펼쳐진다.
+  function noticeLine(list = []) {
+    if (!list.length) return "";
+    const row = (n) =>
+      `<a class="notice-row" href="${uri("post.html", { id: n.id })}"><span class="notice-mark">공지</span><span class="notice-title">${E(n.title)}</span></a>`;
+    if (list.length === 1) return `<div class="notice-line" data-testid="notice-line">${row(list[0])}</div>`;
+    return `<details class="notice-line" data-testid="notice-line"><summary>${row(list[0])}<span class="notice-count" title="공지 ${list.length - 1}개 더 보기">+${list.length - 1}</span></summary>${list.slice(1).map(row).join("")}</details>`;
+  }
   async function home() {
-    const d = await read("home");
+    const d = await read("home", { v: "3" });
     channels = d.channels || [];
-    companies = d.companies || [];
-    // 공지는 '운영 안내'에 한 번만, 최신 글과 좋아요 많은 글은 겹치지 않게, 채널은 바로가기로만.
-    const latest = (d.posts || []).filter((p) => !p.pinned).slice(0, 10);
-    const shown = new Set(latest.map((p) => p.id));
-    const liked = (d.popular || []).filter((p) => !p.pinned && Number(p.likes) > 0 && !shown.has(p.id)).slice(0, 5);
-    return `${d.notices?.length ? `<section class="home-section"><h2 class="section-title">운영 안내</h2>${feeds(d.notices, true)}</section><div class="divider"></div>` : ""}<section class="home-section" data-testid="home-latest"><h1 class="section-title">최신 글</h1>${feeds(latest, true)}<a class="more-row" href="/channel.html">최신 글 더 보기</a></section>${liked.length ? `<div class="divider"></div><section class="home-section" data-testid="home-liked"><h2 class="section-title">좋아요 많은 글</h2>${feeds(liked, true)}<a class="more-row" href="/channel.html?sort=popular">좋아요 순으로 더 보기</a></section>` : ""}<div class="divider"></div><section class="home-section" data-testid="home-channels"><h2 class="section-title">채널</h2><nav class="home-channel-links">${channels.map((c) => `<a class="row" href="${uri("channel.html", { id: c.id })}">${channelDisc(c)}<span><b>${E(c.name)}</b>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}<small>${E(c.description || "")}</small></span></a>`).join("")}</nav></section>`;
+    const byId = Object.fromEntries(channels.map((c) => [c.id, c]));
+    const boxes = (d.boxes || []).filter((b) => byId[b.channel_id]);
+    const filled = boxes.filter((b) => b.posts.length),
+      quiet = boxes.filter((b) => !b.posts.length);
+    const best = d.best || [];
+    const bestRow = (p) =>
+      `<li class="best-row" data-testid="best-item"><a class="best-channel" href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name || "")}</a><a class="best-title" href="${uri("post.html", { id: p.id })}">${E(p.title)}</a><span class="best-info">${stat("heart", "좋아요", p.likes)}${stat("comment", "댓글", p.comment_count)}</span></li>`;
+    const box = (b) => {
+      const c = byId[b.channel_id];
+      return `<section class="box" data-testid="home-box"><div class="box-head"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a></h2><a class="box-more" href="${uri("channel.html", { id: c.id })}" aria-label="${E(c.name)} 더보기">더보기</a></div><ul class="box-list">${b.posts.map((p) => `<li><a href="${uri("post.html", { id: p.id })}">${E(p.title)}</a>${stat("eye", "조회수", p.views)}</li>`).join("")}</ul></section>`;
+    };
+    return `<form class="home-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="궁금한 내용을 검색해 보세요" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${noticeLine(d.notices)}${verifyStrip()}<section class="best" data-testid="home-best"><div class="box-head"><h1>인기 글</h1><a class="box-more" href="/channel.html?sort=popular" aria-label="인기 글 더보기">더보기</a></div>${best.length ? `<ol class="best-list">${best.map(bestRow).join("")}</ol>` : empty()}</section><div class="boxes" data-testid="home-boxes">${filled.map(box).join("")}</div>${quiet.length ? `<p class="quiet-channels" data-testid="quiet-channels"><span>첫 글을 기다리는 채널</span>${quiet.map((b) => `<a href="${uri("channel.html", { id: b.channel_id })}">${E(byId[b.channel_id].name)}</a>`).join("")}</p>` : ""}`;
   }
   async function channelList() {
     const d = await read("channels");
@@ -1083,6 +1160,7 @@
       if (stamp !== renderId) return;
       layout();
       $("#content").innerHTML = html;
+      fillAside(stamp);
       updatePreview();
       updateDisplay();
     } catch (err) {
