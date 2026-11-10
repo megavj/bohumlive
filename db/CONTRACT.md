@@ -100,3 +100,12 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - **015 채널별 손님 공개 범위**: `bl_channels.guest_full`(채널 DTO에도 제공). `post_save`가 `content_kind`를 받지 않으면 자동으로 정한다 — ① 같은 채널에서 고치는 글은 원래 값 유지 ② `as_team`(관리자)이면 `weekly` ③ 채널 `guest_full`이면 `practice`, 아니면 `experience`. `content_kind`를 보내면 예전처럼 그 값을 쓴다(`weekly`는 관리자만). 손님 300자 제한 방식(`experience`)과 댓글 권한은 그대로. 관리자 `channel_save`에 `guest_full?:boolean`(없으면 기존 값 유지, 새 채널 기본 false). 채널 설정을 바꿔도 이미 쓴 글의 `content_kind`는 바뀌지 않는다(새 글부터 적용).
 - **016**: 작성자 정보가 없는 글(운영팀 공지·탈퇴 회원 글)을 손님이 열 때도 조회수를 센다(014의 조건 보완).
 - 화면 쪽 약속: 좋아요·저장·팔로우는 `toggle` 응답 `active`로 그 자리에서 반영(전체 다시 그리지 않음), 댓글 저장·삭제 뒤에는 `post`를 다시 읽어 댓글 구역만 갱신. 글쓰기 임시저장은 기기 저장소(`bl_draft:<회원>:<글|new>`)에만 두고 서버로 보내지 않으며 등록·로그아웃 때 지운다.
+
+## 2026-11-10 팔로우 알림·AI 참고 자료 (020)
+- **채널 팔로우 새 글 알림**: `bl_posts`에 새 글이 들어가면(공개·사용 중 채널) 트리거 `bl_posts_follow_notify`가 그 채널 팔로워에게 `bl_notifications(kind='follow', post_id, channel_id)`를 만든다. 글쓴이 본인·탈퇴 회원 제외, 시험 글(`is_test`)은 시험 프로필에만.
+- `bl_read('me'|'notifications')`의 `notifications`: 팔로우 알림은 **읽지 않은 것·지금 볼 수 있는 글**만 준다. 같은 채널이 5개 이상이면 한 줄 `{id:null,kind:'follow_group',title:'○○ 채널에 N개의 새 글이 있습니다',channel_id,count:N,read_at:null,created_at}`, 4개 이하는 `{id,kind:'follow',title:'○○ 채널 새 글: 제목',post_id,channel_id,count:1}`. 다른 알림은 예전 그대로.
+- `viewer.unread_count`는 팔로우 알림을 목록과 같은 기준(볼 수 있는 글만)으로 센다 — 묶음의 N과 합이 맞는다.
+- `bl_read('post')`를 로그인 회원이 부르면 그 글의 팔로우 알림은 읽음 처리된다.
+- `notification_read {channel_id}`: 그 채널의 팔로우 알림만 읽음(묶음을 눌렀을 때). `{id}`·`{}`는 예전 그대로.
+- 관리자 `ai_settings`: `enabled`만 저장한다. 하루 개수(`ai_daily_limit`, 019에서 1000000)는 바꾸지 않는다(30 상한 제거).
+- **AI 참고 자료(Mac 처리기)**: `worker/kb_build.py`로 상품 자료 목록(최신판 약관·상품요약서·사업방법서·상품설명서, 허용 폴더만)과 보험위키 정리 원문을 한 번 읽어 `worker/kb/bl_kb.sqlite3`(git 제외)를 만든다. 처리기는 질문마다 `kb_search.search`로 맞는 발췌 0~3개를 찾아 `official_sources`(자료·보험사·상품·종류·기준·쪽·발췌)로 넣는다. 색인이 없거나 깨지면 자료 없이 예전처럼 답한다. 고객·개인 자료 폴더(메일·메신저·고객 파일·접수함)는 경로 규칙으로 읽지 않는다.

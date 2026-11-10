@@ -6,3 +6,4 @@ __pycache__/
 .DS_Store
 worker/.cron.lock
 worker/.cron.log
+worker/kb/

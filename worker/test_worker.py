@@ -202,5 +202,72 @@ class PrivacyBoundary(unittest.TestCase):
         self.assertEqual(payload, {"id": "job", "lease_token": "lease", "error": "subscription_timeout"})
 
 
+class ReferenceSources(unittest.TestCase):
+    """2026-11-10 맥 자료 근거: 색인이 없거나 깨져도 멈추지 않고, 근거 규칙을 지킨다."""
+
+    def test_missing_or_broken_index_means_no_sources(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            broken = Path(d) / "broken.sqlite3"
+            broken.write_bytes(b"not a database")
+            for path in (Path(d) / "missing.sqlite3", broken):
+                with self.subTest(path=path.name), mock.patch.object(worker.kb_search, "KB_PATH", path):
+                    sources, ms = worker.find_sources({"title": "실손 전환", "body": "기존 계약은?"})
+                    self.assertEqual(sources, [])
+                    self.assertIsInstance(ms, int)
+
+    def test_search_exception_never_stops_answer(self):
+        with mock.patch.object(worker.kb_search, "search", side_effect=RuntimeError("boom")):
+            self.assertEqual(worker.find_sources({"title": "x", "body": "y"})[0], [])
+
+    def test_sources_reach_model_with_allowlisted_fields_only(self):
+        src = [{"자료": "가나생명 다라보험 약관", "보험사": "가나생명", "상품": "다라보험", "종류": "약관",
+                "기준": "2026.4 기준", "쪽": 12, "발췌": "보험금 청구 서류는 진단서입니다.",
+                "_score": 3.1, "_source": "catalog", "path": "/Users/secret/file.pdf"}]
+        data = json.loads(worker.question_data({"title": "t", "body": "b"}, src).split("\n", 1)[1])
+        self.assertEqual(len(data["official_sources"]), 1)
+        self.assertEqual(set(data["official_sources"][0]), set(worker.SOURCE_FIELDS))
+        self.assertNotIn("/Users/secret", json.dumps(data, ensure_ascii=False))
+
+    def test_answer_rules_for_sources(self):
+        src = [{"자료": "가나생명 다라보험 상품요약서", "보험사": "가나생명", "발췌": "중증치매 진단자금 1,000만원을 지급합니다."}]
+        ok = "결론입니다.\n\n• 가나생명 다라보험 상품요약서(2026.10 기준)에 따르면 중증치매 진단자금은 1,000만원입니다."
+        self.assertEqual(worker.answer_problem(ok, src, "치매 보장"), "")
+        self.assertIn("금액", worker.answer_problem(ok.replace("1,000만원", "2,000만원"), src, "치매 보장"))
+        self.assertIn("회사 이름", worker.answer_problem(ok + " 삼성생명도 비슷합니다.", src, "치매 보장"))
+        self.assertIn("자료 이름", worker.answer_problem(ok, [], "치매 보장"))
+        self.assertEqual(worker.answer_problem("일반 원칙입니다.\n\n• 약관의 청구 조항을 보세요.", [], "q"), "")
+
+    def test_no_rewrite_when_first_answer_is_slow(self):
+        calls = []
+
+        def fake(job, heartbeat, fix, sources=(), deadline=None):
+            calls.append(fix)
+            return {"body": "삼성생명 약관에 따르면 됩니다.", "model": "claude-opus-5-5", "effort": "medium",
+                    "subscription": True, "fallback_used": False, "elapsed_ms": 1}
+        ticks = iter([0.0, worker.REWRITE_START_LIMIT + 1, worker.REWRITE_START_LIMIT + 2])
+        with mock.patch.object(worker, "_generate_once", side_effect=fake), \
+                mock.patch.object(worker.time, "monotonic", side_effect=lambda: next(ticks)):
+            worker.generate({"title": "t", "body": "b"}, sources=[])
+        self.assertEqual(len(calls), 1)
+
+    def test_rewrite_once_for_unsupported_citation(self):
+        answers = iter(["가나생명 약관에 따르면 됩니다.", "일반 원칙으로 보면 됩니다."])
+
+        def fake(job, heartbeat, fix, sources=(), deadline=None):
+            return {"body": next(answers), "model": "claude-opus-5-5", "effort": "medium",
+                    "subscription": True, "fallback_used": False, "elapsed_ms": 1}
+        with mock.patch.object(worker, "_generate_once", side_effect=fake):
+            result = worker.generate({"title": "t", "body": "b"}, sources=[])
+        self.assertEqual(result["body"], "일반 원칙으로 보면 됩니다.")
+        self.assertTrue(result["rewritten"])
+
+    def test_question_words_and_insurer_detection(self):
+        kb = worker.kb_search
+        self.assertIn("실손", kb.key_words("실비 전환하면 어떻게 되나요?"))
+        self.assertNotIn("어떻게", kb.key_words("실비 전환하면 어떻게 되나요?"))
+        self.assertIn("암", kb.key_words("암 진단비 서류"))
+
+
 if __name__ == "__main__":
     unittest.main()
