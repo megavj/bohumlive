@@ -645,10 +645,10 @@
     companies = (await read("companies")).companies || [];
     const id = params.get("id");
     if (!id)
-      return `<section class="explore"><h1>보험사·GA 리뷰</h1><p class="muted">현재 소속이 인증된 동료들의 경험을 모읍니다. 5개 이상의 리뷰가 쌓이면 평균 별점을 공개합니다.</p>${["생명보험사", "손해보험사", "GA", "보험사"]
+      return `<section class="explore"><h1>보험사·GA 리뷰</h1><p class="muted">현재 소속이 인증된 동료들의 경험을 모읍니다. 5개 이상의 리뷰가 쌓이면 평균 별점을 공개합니다.</p>${["GA", "손해보험사", "생명보험사", "보험사"]
         .map((kind) => [kind, companies.filter((c) => (c.kind || "보험사") === kind)])
         .filter(([, list]) => list.length)
-        .map(([kind, list]) => `<h2 class="company-group">${E(kind === "GA" ? "GA(법인보험대리점)" : kind)} <span class="muted small">${list.length}곳</span></h2><div class="channel-cards">${list.map((c) => `<a class="channel-card company-row" href="${uri("company.html", { id: c.id })}"><div class="channel-card-info"><h2>${E(c.name)}</h2><span class="small">${c.average != null ? `<span class="stars">★</span> ${Number(c.average).toFixed(1)}` : "리뷰 모으는 중"} · 리뷰 ${Number(c.review_count) || 0}개</span></div></a>`).join("")}</div>`)
+        .map(([kind, list]) => `<h2 class="company-group">${E(kind === "GA" ? "GA(법인보험대리점)" : kind)} <span class="muted small">${list.length}곳</span></h2><div class="channel-cards">${list.map((c) => `<a class="channel-card company-row" href="${uri("company.html", { id: c.id })}"><div class="channel-card-info"><h2>${E(c.name)}</h2>${Number(c.review_count) > 0 ? `<span class="small">${c.average != null ? `<span class="stars">★</span> ${Number(c.average).toFixed(1)} · ` : ""}리뷰 ${Number(c.review_count)}개</span>` : ""}</div></a>`).join("")}</div>`)
         .join("")}${companies.length ? "" : empty("등록된 회사가 없어요.", "운영자가 회사 목록을 준비하고 있습니다.")}</section>`;
     const d = await read("company", { id });
     current = d;
