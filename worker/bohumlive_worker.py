@@ -30,7 +30,7 @@ import proof_check
 
 
 MODEL = "claude-opus-5-5"
-EFFORT = "high"
+EFFORT = "medium"  # 2026-11-10 대표 지시: Opus 5.5 medium
 VERSION = "2026-11-09.1"
 PROOF_BUCKET = "bl-proofs"
 MAX_SECONDS = 240
