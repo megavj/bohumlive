@@ -205,12 +205,31 @@
       return `<section class="section"><h1>설계사 인증 후 이용할 수 있어요</h1><p class="notice">현재 상태: ${E(statusLabel())}${mine?.profile?.review_reason ? `<br>${E(mine.profile.review_reason)}` : ""}</p>${viewer?.status === "suspended" ? '<p>정지 상태에서는 공개 글만 읽을 수 있습니다.</p><a class="btn" href="/help.html">운영 안내</a>' : '<a class="btn btn-primary" href="/verify.html">인증 신청·보완하기</a>'}</section>`;
     return "";
   }
-  function feed(post, compact = false) {
-    const mixed = !(page === "channel" && params.get("id"));
-    const marks = `${post.pinned ? '<span class="tag">공지</span>' : ""}${mixed ? E(post.channel_name || "커뮤니티") : ""}${post.status && post.status !== "published" ? '<span class="tag hidden-tag">숨김</span>' : ""}`;
-    return `<article class="feed-item ${compact ? "compact-item" : ""} ${post.pinned ? "feed-notice" : ""}" data-testid="post-item">${marks ? `<a class="feed-channel" href="${uri("channel.html", { id: post.channel_id })}">${marks}</a>` : ""}<a class="feed-title" href="${uri("post.html", { id: post.id })}">${E(post.title)}</a>${compact ? "" : `<p class="feed-excerpt">${E(post.body)}</p><p class="author">${E(post.author_display || "운영팀")}</p>`}<div class="meta"><span>${icon("heart")} ${Number(post.likes) || 0}</span><span>${icon("comment")} ${Number(post.comment_count) || 0}</span><span>${E(date(post.created_at))}</span></div></article>`;
+  // NOW·HOT 기준(숫자만 바꾸면 됨) — HOT: 좋아요 5개 이상 또는 댓글 10개 이상 / NOW: 24시간 안에 올라와 댓글 3개 이상 또는 좋아요 2개 이상
+  const HEAT = { hot: { likes: 5, comments: 10 }, now: { hours: 24, likes: 2, comments: 3 } };
+  function heat(p) {
+    const likes = Number(p.likes) || 0,
+      cm = Number(p.comment_count) || 0;
+    if (p.pinned || (p.status && p.status !== "published")) return "";
+    if (likes >= HEAT.hot.likes || cm >= HEAT.hot.comments) return '<i class="heat heat-hot" title="반응이 많은 글">HOT</i>';
+    if (Date.now() - Date.parse(p.created_at) < HEAT.now.hours * 3600000 && (likes >= HEAT.now.likes || cm >= HEAT.now.comments))
+      return '<i class="heat heat-now" title="지금 이야기 중인 글">NOW</i>';
+    return "";
   }
-  const feeds = (posts, compact = false) => (posts?.length ? posts.map((p) => feed(p, compact)).join("") : empty());
+  const timeTag = (v, cls = "item-time") =>
+    `<time class="${cls}" datetime="${E(v || "")}" title="${E(date(v))}"><span class="sr-only">작성시간 </span>${E(ago(v))}</time>`;
+  const markButton = (p, cls = "item-mark") =>
+    `<button type="button" class="${cls}" data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" aria-label="저장" title="저장">${icon("bookmark")}</button>`;
+  // 목록 한 줄: [NOW/HOT·채널] 제목 → 본문 앞 1~2줄 → 회사·닉네임 → 조회수·좋아요·댓글 → 작성시간 → 저장
+  // mixed: 여러 채널이 섞인 목록(채널 이름을 작게 보여 줌), compact: 본문 미리보기 없이
+  function feed(post, opts = {}) {
+    const href = uri("post.html", { id: post.id });
+    if (post.pinned)
+      return `<article class="item item-notice" data-testid="post-item"><a class="notice-row" href="${href}"><span class="notice-mark">공지</span><span class="notice-title">${E(post.title)}</span></a></article>`;
+    const top = `${heat(post)}${opts.mixed ? `<span class="item-channel">${E(post.channel_name || "")}</span>` : ""}${post.status && post.status !== "published" ? '<span class="tag hidden-tag">숨김</span>' : ""}`;
+    return `<article class="item" data-testid="post-item"><a class="item-main" href="${href}">${top ? `<span class="item-top">${top}</span>` : ""}<h3 class="item-title">${E(post.title)}</h3>${opts.compact || !post.body ? "" : `<p class="item-pre">${E(String(post.body).slice(0, 160))}</p>`}</a><div class="item-sub"><span class="item-name">${E(post.author_display || "보험라이브 운영팀")}</span><span class="item-stats">${stat("eye", "조회수", post.views)}${stat("heart", "좋아요", post.likes)}${stat("comment", "댓글", post.comment_count)}</span>${timeTag(post.created_at)}${markButton(post)}</div></article>`;
+  }
+  const feeds = (posts, opts = {}) => (posts?.length ? posts.map((p) => feed(p, opts)).join("") : empty());
   const channelDisc = (c) => `<span class="topic-disc ${E(c.slug)}">${E(c.name?.slice(0, 1) || "보")}</span>`;
   // 짧은 시간 표시: 방금 · 5분 · 2시간 · 어제 · 3일 · 11.07 · 2025.11.07
   const ago = (v) => {
@@ -263,7 +282,15 @@
     channels = d.channels || [];
     const follow = params.get("filter") === "following";
     const list = follow ? channels.filter((c) => c.following) : channels;
-    return `<section class="explore"><h1>채널 탐색</h1><p class="muted">관심 있는 주제를 팔로우하고 동료의 이야기를 만나 보세요.</p><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우한 채널</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card">${channelDisc(c)}<div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h2><p>${E(c.description)}</p><p class="follow-count">팔로워 ${Number(c.followers) || 0}명</p></div><button type="button" class="follow-small" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}</section>`;
+    return `<section class="explore"><h1>채널 탐색</h1><p class="muted">관심 있는 주제를 팔로우하고 동료의 이야기를 만나 보세요.</p><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우한 채널</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card">${channelDisc(c)}<div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h2><p>${E(c.description)}</p><p class="follow-count" data-followers="${E(c.id)}" data-base="${Number(c.followers) || 0}" data-first="${!!c.following}">팔로워 ${Number(c.followers) || 0}명</p></div><button type="button" class="follow-small" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}" data-on="팔로잉" data-off="팔로우">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}</section>`;
+  }
+  // 채널 바로가기 줄: 전체 · 인기 · 채널들 · 채널 탐색(옆으로 밀어서 이동)
+  function channelChips(activeId, sort) {
+    const on = (flag) => (flag ? "active" : "");
+    return `<nav class="chan-chips" aria-label="채널 바로가기" data-testid="chan-chips"><a class="chip ${on(!activeId && sort !== "popular")}" href="/channel.html">전체</a><a class="chip ${on(!activeId && sort === "popular")}" href="/channel.html?sort=popular">인기</a>${channels
+      .filter((c) => c.enabled !== false)
+      .map((c) => `<a class="chip ${on(c.id === activeId)}" href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a>`)
+      .join("")}<a class="chip chip-more" href="/channels.html">채널 탐색 ›</a></nav>`;
   }
   async function postList() {
     const q = params.get("q") || "";
@@ -272,17 +299,24 @@
     channels = cd.channels || [];
     if (!id && params.get("channel")) id = channels.find((c) => c.slug === params.get("channel"))?.id || "";
     const channel = channels.find((c) => c.id === id);
-    if (id && !channel && page !== "search") return empty("채널을 찾을 수 없어요.", "채널 목록에서 다시 골라 주세요.");
+    const isSearch = page === "search";
+    if (id && !channel && !isSearch) return empty("채널을 찾을 수 없어요.", "채널 목록에서 다시 골라 주세요.");
     const sort = params.get("sort") === "popular" ? "popular" : "latest";
     const listArgs = { ...(id ? { channel_id: id } : {}), ...(q ? { q } : {}), sort, limit: 20 };
     const d = await read("posts", listArgs);
     const posts = d.posts || [];
-    current = { list: { args: listArgs, offset: posts.length } };
-    const isSearch = page === "search";
-    return `<section class="section"><div class="section-head"><h1>${isSearch ? "검색 결과" : E(channel?.name || "모든 글")}${channel?.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h1><a class="btn btn-primary btn-small" href="${uri("write.html", id ? { channel: id } : {})}">글쓰기</a></div>${isSearch ? `<form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="muted small">${q ? `“${E(q)}” 검색 결과 ${posts.length >= 20 ? "20개 이상" : `${posts.length}개`}` : "검색어를 입력해 주세요."}</p>` : `<p class="muted">${E(channel?.description || "설계사의 경험과 실무 이야기를 함께 나눠요.")}</p>${channel?.anonymous ? '<p class="notice small">이 채널의 글과 댓글은 회사명·닉네임 없이 ‘익명’으로만 보여요. 운영자는 신고 처리 때만 기록을 남기고 작성자를 확인합니다.</p>' : ""}${channel ? btn(channel.following ? "팔로잉" : "팔로우", "toggle", `data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}"`) : ""}`}</section><nav class="tabs"><a class="${sort === "latest" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "latest" })}">최신순</a><a class="${sort === "popular" ? "active" : ""}" href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), sort: "popular" })}">인기순</a></nav>${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : `<div data-post-list>${feeds(posts)}</div>${posts.length >= 20 ? `<p class="more-wrap">${btn("더 보기", "more-posts", 'data-testid="more-posts"')}</p>` : ""}`}`;
+    const opts = { mixed: !channel };
+    current = { list: { args: listArgs, offset: posts.length, opts } };
+    const sortLink = (key, label) =>
+      `<a class="${sort === key ? "active" : ""}" ${sort === key ? 'aria-current="true"' : ""} href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), ...(key === "popular" ? { sort: "popular" } : {}) })}">${label}</a>`;
+    const sorter = `<nav class="list-sort" aria-label="정렬" data-testid="list-sort">${sortLink("latest", "최신순")}${sortLink("popular", "추천순")}</nav>`;
+    const head = isSearch
+      ? `<header class="list-head"><div class="list-title"><h1>검색 결과</h1>${q ? sorter : ""}</div><form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="list-desc">${q ? `“${E(q)}” 검색 결과 ${posts.length >= 20 ? "20개 이상" : `${posts.length}개`}` : "검색어를 입력해 주세요."}</p></header>`
+      : `${channelChips(id, sort)}<header class="list-head"><div class="list-title"><h1>${E(channel?.name || (sort === "popular" ? "인기 글" : "전체 글"))}${channel?.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h1>${channel ? `<button type="button" class="follow-chip" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}" data-on="팔로잉" data-off="팔로우">${channel.following ? "팔로잉" : "팔로우"}</button>` : ""}${sorter}</div>${channel?.description ? `<p class="list-desc">${E(channel.description)}</p>` : ""}${channel?.anonymous ? '<p class="list-desc">이 채널의 글과 댓글은 회사명·닉네임 없이 ‘익명’으로만 보여요. 운영자는 신고 처리 때만 기록을 남기고 작성자를 확인합니다.</p>' : ""}</header>${verifyStrip()}`;
+    return `${head}${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : `<div class="item-list" data-post-list>${feeds(posts, opts)}</div>${posts.length >= 20 ? `<p class="more-wrap">${btn("더 보기", "more-posts", 'data-testid="more-posts"')}</p>` : ""}`}`;
   }
   function commentHTML(c) {
-    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${E(c.author_display)} ${c.is_mine ? '<span class="author-badge">내 댓글</span>' : ""} ${sampleBadge(c)}</div><p class="body-text">${E(c.body)}</p><div class="meta"><span>${E(date(c.created_at))}</span><button data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : ""}>${icon("heart")} ${Number(c.likes) || 0}</button>${!c.parent_id && isVerified() ? `<button data-do="reply" data-id="${E(c.id)}">답글</button>` : ""}${c.is_mine && isVerified() ? `<button data-do="comment-edit" data-id="${E(c.id)}">수정</button><button data-do="comment-delete" data-id="${E(c.id)}">삭제</button>` : ""}${c.is_mine ? "" : `<button data-do="report" data-target="comment" data-id="${E(c.id)}">신고</button>`}</div><div data-reply-slot="${E(c.id)}"></div></article>`;
+    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${E(c.author_display)} ${c.is_mine ? '<span class="author-badge">내 댓글</span>' : ""} ${sampleBadge(c)}</div><p class="body-text">${E(c.body)}</p><div class="meta"><span>${E(date(c.created_at))}</span><button data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : ""}>${icon("heart")} <span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${!c.parent_id && isVerified() ? `<button data-do="reply" data-id="${E(c.id)}">답글</button>` : ""}${c.is_mine && isVerified() ? `<button data-do="comment-edit" data-id="${E(c.id)}">수정</button><button data-do="comment-delete" data-id="${E(c.id)}">삭제</button>` : ""}${c.is_mine ? "" : `<button data-do="report" data-target="comment" data-id="${E(c.id)}">신고</button>`}</div><div data-reply-slot="${E(c.id)}"></div></article>`;
   }
   async function post() {
     const id = params.get("id");
@@ -298,7 +332,7 @@
     const ordered = comments
       .filter((c) => !c.parent_id)
       .flatMap((c) => [c, ...comments.filter((x) => x.parent_id === c.id)]);
-    return `<article><header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a><span class="tag">${E(kindNames[p.content_kind])}</span>${p.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(p)}</div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="meta"><span>${E(date(p.created_at))}</span>${p.is_mine && isVerified() ? `<a href="${uri("write.html", { id: p.id })}">수정</a><button data-do="post-delete" data-id="${E(p.id)}">삭제</button>` : ""}${p.is_mine ? "" : `<button class="push" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button>`}</div></header>${p.status && p.status !== "published" ? `<div class="status-band" data-testid="status-band"><b>${p.status === "hidden" ? "숨김 상태인 글" : "삭제된 글"}</b> — 다른 회원에게는 보이지 않아요.${p.is_mine && p.status === "hidden" ? `<br>운영 조치에 의견이 있으면 이의신청을 남겨 주세요. ${btn("내 글 조치에 이의신청", "appeal", `data-target="post" data-id="${E(p.id)}" data-testid="appeal-button"`)}` : ""}</div>` : ""}<div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? '<div class="guest-lock"><h2>여기부터 인증 회원에게만 공개</h2><p>설계사 인증 후 나머지 본문과 동료의 댓글을 읽을 수 있어요.</p>${verifyLink()}</div>' : ""}<div class="post-actions"><button data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 ${Number(p.likes) || 0}</button><button data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" data-testid="post-bookmark">${icon("bookmark")} ${p.bookmarked ? "저장됨" : "저장"}</button><button data-do="share" class="share-button" aria-label="글 링크 복사">${icon("share")}</button></div>${p.company_id ? `<section class="related-companies"><h2>관련 회사</h2><a class="related-company" href="${uri("company.html", { id: p.company_id })}"><span class="company-mark">${E(p.company_name)}</span><p>${E(p.company_name)}<br><span class="muted small">회사 정보와 리뷰 보기</span></p></a></section>` : ""}<section class="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count) || 0}</h2>${isVerified() ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="좋은 댓글은 응원이 됩니다." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>` : canReadMember() ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>' : `<div class="guest-lock">${icon("lock")}<h2>댓글과 AI 답변은 인증 회원에게 공개돼요</h2><p>${session ? `현재 상태: ${E(statusLabel())}` : "로그인 후 설계사 인증을 완료해 주세요."}</p>${viewer?.status === "suspended" ? '<a class="btn btn-primary" href="/help.html">이용 정지 안내</a>' : verifyLink()}</div>`}</div>${canReadMember() ? (ordered.length ? ordered.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.")) : ""}${d.ai_reply ? `<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>` : ""}</section></article>`;
+    return `<article><header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a><span class="tag">${E(kindNames[p.content_kind])}</span>${p.is_question ? '<span class="tag">질문</span>' : ""}${sampleBadge(p)}</div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="meta"><span>${E(date(p.created_at))}</span>${p.is_mine && isVerified() ? `<a href="${uri("write.html", { id: p.id })}">수정</a><button data-do="post-delete" data-id="${E(p.id)}">삭제</button>` : ""}${p.is_mine ? "" : `<button class="push" data-do="report" data-target="post" data-id="${E(p.id)}">신고</button>`}</div></header>${p.status && p.status !== "published" ? `<div class="status-band" data-testid="status-band"><b>${p.status === "hidden" ? "숨김 상태인 글" : "삭제된 글"}</b> — 다른 회원에게는 보이지 않아요.${p.is_mine && p.status === "hidden" ? `<br>운영 조치에 의견이 있으면 이의신청을 남겨 주세요. ${btn("내 글 조치에 이의신청", "appeal", `data-target="post" data-id="${E(p.id)}" data-testid="appeal-button"`)}` : ""}</div>` : ""}<div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? '<div class="guest-lock"><h2>여기부터 인증 회원에게만 공개</h2><p>설계사 인증 후 나머지 본문과 동료의 댓글을 읽을 수 있어요.</p>${verifyLink()}</div>' : ""}<div class="post-actions"><button data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 <span data-count="${Number(p.likes) || 0}">${num(p.likes)}</span></button><button data-do="toggle" data-target="post" data-kind="bookmark" data-id="${E(p.id)}" aria-pressed="${!!p.bookmarked}" data-on="저장됨" data-off="저장" data-testid="post-bookmark">${icon("bookmark")} <span data-label>${p.bookmarked ? "저장됨" : "저장"}</span></button><button data-do="share" class="share-button" aria-label="글 링크 복사">${icon("share")}</button></div>${p.company_id ? `<section class="related-companies"><h2>관련 회사</h2><a class="related-company" href="${uri("company.html", { id: p.company_id })}"><span class="company-mark">${E(p.company_name)}</span><p>${E(p.company_name)}<br><span class="muted small">회사 정보와 리뷰 보기</span></p></a></section>` : ""}<section class="comments"><div class="comments-top"><h2>댓글 ${Number(p.comment_count) || 0}</h2>${isVerified() ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" placeholder="좋은 댓글은 응원이 됩니다." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><button class="btn btn-primary btn-small" type="submit">댓글 등록</button></form>` : canReadMember() ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>' : `<div class="guest-lock">${icon("lock")}<h2>댓글과 AI 답변은 인증 회원에게 공개돼요</h2><p>${session ? `현재 상태: ${E(statusLabel())}` : "로그인 후 설계사 인증을 완료해 주세요."}</p>${viewer?.status === "suspended" ? '<a class="btn btn-primary" href="/help.html">이용 정지 안내</a>' : verifyLink()}</div>`}</div>${canReadMember() ? (ordered.length ? ordered.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.")) : ""}${d.ai_reply ? `<article class="comment-item comment-ai" data-testid="ai-reply"><div class="comment-author">보험라이브 AI 참고 답변 <span class="ai-badge">AI</span></div><p class="body-text">${E(d.ai_reply.body)}</p><p class="source-note">AI가 작성한 참고 정보입니다. 약관·공식 자료와 현재 기준을 직접 확인하세요. 사람 댓글과 인기 집계에는 포함되지 않습니다.</p></article>` : ""}</section></article>`;
   }
   async function write() {
     const denied = isAdmin() ? authorization("admin") : authorization();
@@ -367,8 +401,8 @@
         ["reviews", "내 리뷰"],
       ];
     let body = "";
-    if (tab === "posts") body = feeds(d.posts);
-    else if (tab === "bookmarks") body = feeds(d.bookmarks);
+    if (tab === "posts") body = `<div class="item-list">${feeds(d.posts, { mixed: true })}</div>`;
+    else if (tab === "bookmarks") body = `<div class="item-list">${feeds(d.bookmarks, { mixed: true })}</div>`;
     else if (tab === "comments")
       body = d.comments?.length
         ? d.comments
@@ -413,7 +447,7 @@
     const c = d.company;
     if (!c) return empty("회사 정보를 찾을 수 없어요.", "보험사·GA 목록에서 다시 선택해 주세요.");
     const canReview = c.enabled !== false && (isOwner() || (isVerified() && mine?.profile?.company_id === id));
-    return `<div class="company-cover"></div><section class="company-hero"><a class="back-link" href="/company.html">← 보험사·GA 목록</a><div class="section-head"><h1>${E(c.name)}</h1><span class="company-mark">${E(c.kind || "보험사")}</span></div><p class="muted">${E(c.description || "설계사 동료가 나누는 근무 경험입니다.")}</p><div class="metrics"><div><strong>${Number(c.review_count) || 0}개</strong>리뷰</div><div><strong>${c.average != null ? Number(c.average).toFixed(1) : "모으는 중"}</strong>종합 별점</div><div><strong>5항목</strong>설계사 관점</div><div><strong>1년 1건</strong>회사별 작성</div></div>${c.average != null ? `<div class="rating-grid">${scoreNames.map((s, i) => `<div class="review-score"><span>${s}</span><span>${Number(c.scores?.[i] || 0).toFixed(1)} / 5</span></div>`).join("")}</div>` : '<p class="notice">유효한 리뷰가 5개 이상 모이면 전체·항목별 평균 별점을 공개합니다.</p>'}<p></p>${canReview ? btn("리뷰 작성", "review-new", `data-id="${E(c.id)}" data-testid="review-create"`, true) : isOwner() ? '<p class="hint">숨김 처리된 회사입니다. 관리자에서 회사를 공개한 후 리뷰를 작성할 수 있어요.</p>' : `<p class="hint">현재 소속 회사가 인증된 회원만 리뷰를 작성할 수 있어요.</p>${viewer?.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : session ? '<a class="btn" href="/verify.html">내 소속 인증하기</a>' : verifyLink("btn")}`}</section><nav class="company-tabs"><a class="active" href="#company-reviews">리뷰</a><a href="#company-posts">관련 글</a></nav><section id="company-reviews">${d.reviews?.length ? d.reviews.map(reviewHTML).join("") : empty("아직 등록된 리뷰가 없어요.", "현재 소속 회사에 대한 첫 경험을 남겨 주세요.")}</section><section id="company-posts"><h2 class="section">${E(c.name)} 관련 글</h2>${feeds(d.posts, true)}</section>`;
+    return `<div class="company-cover"></div><section class="company-hero"><a class="back-link" href="/company.html">← 보험사·GA 목록</a><div class="section-head"><h1>${E(c.name)}</h1><span class="company-mark">${E(c.kind || "보험사")}</span></div><p class="muted">${E(c.description || "설계사 동료가 나누는 근무 경험입니다.")}</p><div class="metrics"><div><strong>${Number(c.review_count) || 0}개</strong>리뷰</div><div><strong>${c.average != null ? Number(c.average).toFixed(1) : "모으는 중"}</strong>종합 별점</div><div><strong>5항목</strong>설계사 관점</div><div><strong>1년 1건</strong>회사별 작성</div></div>${c.average != null ? `<div class="rating-grid">${scoreNames.map((s, i) => `<div class="review-score"><span>${s}</span><span>${Number(c.scores?.[i] || 0).toFixed(1)} / 5</span></div>`).join("")}</div>` : '<p class="notice">유효한 리뷰가 5개 이상 모이면 전체·항목별 평균 별점을 공개합니다.</p>'}<p></p>${canReview ? btn("리뷰 작성", "review-new", `data-id="${E(c.id)}" data-testid="review-create"`, true) : isOwner() ? '<p class="hint">숨김 처리된 회사입니다. 관리자에서 회사를 공개한 후 리뷰를 작성할 수 있어요.</p>' : `<p class="hint">현재 소속 회사가 인증된 회원만 리뷰를 작성할 수 있어요.</p>${viewer?.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : session ? '<a class="btn" href="/verify.html">내 소속 인증하기</a>' : verifyLink("btn")}`}</section><nav class="company-tabs"><a class="active" href="#company-reviews">리뷰</a><a href="#company-posts">관련 글</a></nav><section id="company-reviews">${d.reviews?.length ? d.reviews.map(reviewHTML).join("") : empty("아직 등록된 리뷰가 없어요.", "현재 소속 회사에 대한 첫 경험을 남겨 주세요.")}</section><section id="company-posts"><h2 class="section">${E(c.name)} 관련 글</h2><div class="item-list">${feeds(d.posts, { mixed: true, compact: true })}</div></section>`;
   }
   // ---- 관리자 화면 (2026-11-09 재구성: 탭별 자료, 목록 → 상세, 한국어 상태, 더 보기) ----
   const adminSections = [
@@ -1161,6 +1195,11 @@
       layout();
       $("#content").innerHTML = html;
       fillAside(stamp);
+      {
+        const chips = $(".chan-chips"),
+          on = chips && $(".active", chips);
+        if (on) chips.scrollLeft = Math.max(0, on.offsetLeft - (chips.clientWidth - on.offsetWidth) / 2);
+      }
       updatePreview();
       updateDisplay();
     } catch (err) {
@@ -1194,7 +1233,6 @@
       id = el.dataset.id;
     if (
       [
-        "toggle",
         "reply",
         "comment-edit",
         "review-new",
@@ -1203,7 +1241,7 @@
         "comment-delete",
         "review-delete",
       ].includes(action) &&
-      !(await requireWriting(action === "toggle" ? el.dataset.kind : ""))
+      !(await requireWriting())
     )
       return;
     if (action === "report" && session && !isActive()) {
@@ -1233,19 +1271,68 @@
           });
       case "logout":
         return logout();
-      case "toggle":
-        await act("toggle", { target: el.dataset.target, id, kind: el.dataset.kind });
-        await refresh();
-        {
-          const sel = `[data-do="toggle"][data-target="${el.dataset.target}"][data-kind="${el.dataset.kind}"][data-id="${CSS.escape(id)}"]`;
-          const b = document.querySelector(sel);
-          if (b && b.getAttribute("aria-pressed") === "true") {
-            b.classList.remove("toggle-pop");
-            void b.offsetWidth;
-            b.classList.add("toggle-pop");
+      case "toggle": {
+        // 누른 자리에서 색과 숫자만 바로 바꾼다(화면 전체를 다시 그리지 않음). 서버가 거절하면 원래대로 되돌린다.
+        const kind = el.dataset.kind,
+          target = el.dataset.target;
+        if (!session) {
+          location.href = loginUrl(here(), kind);
+          return;
+        }
+        if (!isVerified() && !(isActive() && ["bookmark", "follow"].includes(kind))) {
+          notify(
+            viewer?.status === "suspended"
+              ? "이용 정지 상태에서는 이용할 수 없어요. 내 정보의 운영 안내를 확인해 주세요."
+              : kind === "like"
+                ? "좋아요는 설계사 인증을 마친 뒤 누를 수 있어요. 인증 신청·보완을 확인해 주세요."
+                : "설계사 인증을 마친 뒤 이용할 수 있어요. 인증 신청·보완을 확인해 주세요.",
+          );
+          return;
+        }
+        const was = el.getAttribute("aria-pressed") === "true";
+        const same = `[data-do="toggle"][data-target="${target}"][data-kind="${kind}"][data-id="${CSS.escape(id)}"]`;
+        const paint = (active) => {
+          $$(same).forEach((b) => {
+            const before = b.getAttribute("aria-pressed") === "true";
+            if (before === active) return;
+            b.setAttribute("aria-pressed", String(active));
+            const n = $("[data-count]", b);
+            if (n) {
+              n.dataset.count = String(Math.max(0, (Number(n.dataset.count) || 0) + (active ? 1 : -1)));
+              n.textContent = num(n.dataset.count);
+            }
+            if (b.dataset.on) ($("[data-label]", b) || b).textContent = active ? b.dataset.on : b.dataset.off;
+            if (active) {
+              b.classList.remove("toggle-pop");
+              void b.offsetWidth;
+              b.classList.add("toggle-pop");
+            }
+          });
+          if (kind === "follow")
+            $$(`[data-followers="${CSS.escape(id)}"]`).forEach((f) => {
+              const base = Number(f.dataset.base) || 0,
+                first = f.dataset.first === "true";
+              f.textContent = `팔로워 ${Math.max(0, base + (active === first ? 0 : active ? 1 : -1))}명`;
+            });
+          // 화면이 기억하는 값도 맞춰 둔다(댓글 정렬을 바꿔 다시 그릴 때 쓰임)
+          const item = target === "post" ? current?.post : target === "comment" ? current?.comments?.find((c) => c.id === id) : null;
+          if (item && item.id === id) {
+            if (kind === "like") {
+              if (!!item.liked !== active) item.likes = Math.max(0, (Number(item.likes) || 0) + (active ? 1 : -1));
+              item.liked = active;
+            } else if (kind === "bookmark") item.bookmarked = active;
           }
+        };
+        paint(!was);
+        try {
+          const r = await act("toggle", { target, id, kind });
+          if (typeof r.active === "boolean" && r.active !== !was) paint(r.active);
+        } catch (err) {
+          paint(was);
+          throw err;
         }
         return;
+      }
       case "share":
         try {
           await navigator.clipboard.writeText(location.origin + uri("post.html", { id: params.get("id") }));
@@ -1321,7 +1408,7 @@
       case "more-posts": {
         const d = await read("posts", { ...current.list.args, offset: current.list.offset });
         const more = d.posts || [];
-        $("[data-post-list]").insertAdjacentHTML("beforeend", more.map((p) => feed(p)).join(""));
+        $("[data-post-list]").insertAdjacentHTML("beforeend", more.map((p) => feed(p, current.list.opts)).join(""));
         current.list.offset += more.length;
         if (more.length < 20) el.closest(".more-wrap")?.remove();
         return;
