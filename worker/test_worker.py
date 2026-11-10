@@ -268,6 +268,30 @@ class ReferenceSources(unittest.TestCase):
         self.assertNotIn("어떻게", kb.key_words("실비 전환하면 어떻게 되나요?"))
         self.assertIn("암", kb.key_words("암 진단비 서류"))
 
+    def test_title_tags_and_pet_documents(self):
+        import tempfile, sqlite3, zlib as z
+        kb = worker.kb_search
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "kb.sqlite3"
+            db = sqlite3.connect(str(path))
+            db.executescript("""create table docs(id integer primary key, sha text, insurer text, product text, kind text, edition text,
+                category text, category_name text, pages int, source text);
+                create table chunks(id integer primary key, doc_id int, page int, text blob);
+                create virtual table fts using fts5(meta, body, content='', tokenize='unicode61 remove_diacritics 0');
+                create table meta(k text primary key, v text); create table df(term text primary key, doc int) without rowid;""")
+            rows = [(1, "가나손해보험", "튼튼건강보험", "암진단비 청구 서류: 진단서, 조직검사 결과지를 냅니다."),
+                    (2, "가나손해보험", "펫사랑반려견보험", "암진단비 청구 서류: 진단서, 조직검사 결과지를 냅니다. 반려견")]
+            for i, ins, prod, text in rows:
+                db.execute("insert into docs values(?,?,?,?,?,?,?,?,?,?)", (i, "", ins, prod, "약관", "2026-07-01", "", "", 1, "catalog"))
+                db.execute("insert into chunks values(?,?,?,?)", (i, i, 3, z.compress(text.encode())))
+                db.execute("insert into fts(rowid, meta, body) values(?,?,?)", (i, " ".join(kb.tokens(ins + prod)), " ".join(kb.tokens(text))))
+            db.execute("insert into meta values('chunks','2')")
+            db.execute("create virtual table v using fts5vocab(fts,'row')"); db.execute("insert into df select term, doc from v")
+            db.commit(); db.close()
+            found = kb.search("[시험] 암 진단비 청구 서류", "조직검사 결과지도 내야 하나요?", path=path)
+            self.assertEqual([x["상품"] for x in found], ["튼튼건강보험"])
+            self.assertEqual(found[0]["기준"], "2026.7 기준")
+
 
 if __name__ == "__main__":
     unittest.main()

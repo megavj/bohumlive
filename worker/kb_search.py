@@ -27,6 +27,7 @@ QUERY_SECONDS = 6.0
 COMMON_SHARE = 0.25  # 이보다 흔한 조각(보험·니다 등)은 검색어에서 뺀다
 MIN_COVERAGE = 0.55  # 질문 핵심어(드문 말일수록 무겁게)의 이 비율 이상이 들어 있는 발췌만 쓴다
 SPECIAL_SINGLE = frozenset("암뇌")
+PET = re.compile(r"반려|펫|강아지|고양이|애완|동물")
 _RUN = re.compile(r"[가-힣]+|[A-Za-z]+|\d+")
 
 # 질문에서 뜻 없는 말(조사·어미·인사)은 검색어에서 뺀다.
@@ -38,7 +39,7 @@ STOP_WORDS = frozenset("""
 보험 보험사 상품 회사 가입 확인 방법 필요 가능 이유 차이 기준 처리 진행 받을 받는 받아 하면 하는 했는데 해서 하고 입니다 습니다 있어 없어 있는 없는
 쓰고 있는데 받아서 다른 옮기 정리 부탁드립니다 드립니다 상담 설명 고민 고민합니다 좋을 좋을지 좋은 알고 싶습니다 싶어요 하려고 되고 다시 같이 함께 꼭 핵심
 알려 안내 좋을까요 헷갈려 헷갈 예전 돌아갈 받는지 내야 하는지 처리되는지 확인할 있을까요 할지 무엇인지 뭔가요 뭐예요 어떤지 이후 전에 후에 때문에 동안 사이
-중인데 합니다 됩니다 있습니다 없습니다 경우가 정도로 가지 무엇을 어느 누구 얼마나 나오나요 나오는지 되는데 하는데 했더니 했어요 해야 할까 맞는 맞을 고객이 고객님이 고객분 분들 동료분 동료분들
+주세 주시 말고 중인데 합니다 됩니다 있습니다 없습니다 경우가 정도로 가지 무엇을 어느 누구 얼마나 나오나요 나오는지 되는데 하는데 했더니 했어요 해야 할까 맞는 맞을 고객이 고객님이 고객분 분들 동료분 동료분들
 """.split())
 SUFFIXES = sorted("""
 은 는 이 가 을 를 의 에 도 만 과 와 로 요 께 엔
@@ -166,6 +167,8 @@ def search(title: str, body: str = "", path: Path | None = None) -> list[dict]:
     if not path.is_file():
         return []
     started = time.monotonic()
+    # 머리 꼬리표([시험]·[질문]·【급】 등)는 검색어가 아니다.
+    title = re.sub(r"^\s*(?:[\[【(（][^\]】)）]{1,8}[\]】)）]\s*)+", "", title or "")
     question = f"{title or ''}\n{body or ''}"[:1500]
     try:
         db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
@@ -221,7 +224,10 @@ def search(title: str, body: str = "", path: Path | None = None) -> list[dict]:
         weight_sum = sum(weight.values()) or 1
         need = 1 if len(words) <= 1 else 2
         scored = []
+        pets = bool(PET.search(question))
         for cid, doc_id, page, blob, insurer, product, kind, edition, source, rank in rows:
+            if not pets and PET.search(product or ""):
+                continue  # 사람 보험 질문에 반려동물 보험 약관(같은 서식)을 근거로 대지 않는다
             text = zlib.decompress(blob).decode("utf-8")
             body_flat = _squash(text).upper()
             meta_flat = _squash(f"{insurer}{product}{kind}").upper()
@@ -229,8 +235,12 @@ def search(title: str, body: str = "", path: Path | None = None) -> list[dict]:
             ident = [w for w in words if _squash(w).upper() in meta_flat]
             topic = [w for w in words if w not in ident]
             topic_hits = [w for w in topic if _squash(w).upper() in body_flat]
-            topic_cov = (sum(weight[w] for w in topic_hits) / sum(weight[w] for w in topic)) if topic else 1.0
-            coverage = (sum(weight[w] for w in ident) + sum(weight[w] for w in topic_hits)) / weight_sum
+            # 말이 4개 이상이면 안 맞는 말 하나(가장 무거운 것)는 봐준다 — 질문 속 곁가지 한 단어로 근거를 놓치지 않게.
+            missed = sorted((w for w in topic if w not in topic_hits), key=lambda w: -weight[w])
+            spare = missed[0] if len(topic) >= 4 and missed else None
+            topic_total = sum(weight[w] for w in topic if w != spare)
+            topic_cov = (sum(weight[w] for w in topic_hits) / topic_total) if topic and topic_total else 1.0
+            coverage = (sum(weight[w] for w in ident) + sum(weight[w] for w in topic_hits)) / ((weight_sum - (weight[spare] if spare else 0)) or 1)
             hits = ident + topic_hits
             title_hit = (len(title_words & set(hits)) / len(title_words)) if title_words else 0
             if len(hits) < need or coverage < MIN_COVERAGE or topic_cov < 0.5:
