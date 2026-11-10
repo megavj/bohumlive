@@ -328,10 +328,20 @@ def answer_problem(answer: str, sources=(), question: str = "") -> str:
         if missing:
             return "참고 자료 발췌·질문에 없는 금액·비율(" + ", ".join(missing[:3]) + ")은 빼거나 발췌에 적힌 그대로 고쳐 다시 쓰세요."
         allowed = _flat(" ".join(str(s.get("보험사", "")) for s in sources) + question)
-        stray = [n for n in KNOWN_INSURERS if n in answer and _flat(n) not in allowed]
+        # 'DB손보'·'KB라이프'처럼 줄인 이름도 자료의 회사와 같으면 괜찮다(앞 이름으로 비교).
+        stem = lambda n: re.sub(r"(손해보험|손보|라이프생명|생명|화재|해상|라이프|연금보험)$", "", n)
+        stray = [n for n in KNOWN_INSURERS if n in answer and _flat(stem(n)) not in allowed]
         if stray:
             return "질문·참고 자료에 없는 회사 이름(" + ", ".join(stray[:2]) + ")은 빼고 다시 쓰세요."
     return ""
+
+
+REWRITE_REASONS = (("자신 없는", "hedge"), ("450자", "length"), ("참고 자료가 주어지지", "cite_without_source"),
+                   ("참고 자료 발췌", "amount"), ("질문·참고", "insurer"))
+
+
+def rewrite_reason(fix: str) -> str:
+    return next((code for head, code in REWRITE_REASONS if fix.startswith(head)), "other" if fix else "")
 
 
 def generate(job: dict, heartbeat=None, sources=()) -> dict:
@@ -342,14 +352,19 @@ def generate(job: dict, heartbeat=None, sources=()) -> dict:
     first = _generate_once(job, heartbeat, "", sources, deadline)
     fix = answer_problem(first["body"], sources, question)
     first["rewritten"] = False
+    first["rewrite_reason"] = rewrite_reason(fix)
+    if fix and sources and not fix.startswith("참고 자료가 주어지지"):
+        fix += " 질문과 맞는 참고 자료를 쓴 내용은 자료 이름을 짧게 밝히는 규칙을 그대로 지키세요."
     if fix and not STOP and time.monotonic() - started < REWRITE_START_LIMIT:
         try:
             second = _generate_once(job, heartbeat, fix, sources, deadline)
             second_problem = answer_problem(second["body"], sources, question)
             if not second_problem or second_problem[:6] == fix[:6] and len(second["body"]) < len(first["body"]) \
                     or fix.startswith(("참고 자료", "질문·참고")) and not second_problem.startswith(("참고 자료", "질문·참고")):
+                reason = first["rewrite_reason"]
                 first = second
                 first["rewritten"] = True
+                first["rewrite_reason"] = reason
         except WorkerError:
             pass
     if answer_problem(first["body"]).startswith("자신 없는"):
@@ -573,10 +588,11 @@ def process_one(backend: Backend) -> None:
         sources, search_ms = find_sources(job)
         result = generate(job, heartbeat=lambda: backend.rpc("heartbeat", lease), sources=sources)
         rewritten = bool(result.pop("rewritten", False))
+        reason = result.pop("rewrite_reason", "")
         backend.rpc("complete", {**lease, **result})
         log("answer_published", model=MODEL, effort=EFFORT,
             subscription=True, fallback_used=False, elapsed_ms=result["elapsed_ms"],
-            sources=len(sources), search_ms=search_ms, rewritten=rewritten)
+            sources=len(sources), search_ms=search_ms, rewritten=rewritten, rewrite_reason=reason)
     except WorkerError as exc:
         try:
             backend.rpc("fail", {**lease, "error": exc.code})

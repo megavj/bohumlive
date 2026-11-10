@@ -235,6 +235,8 @@ class ReferenceSources(unittest.TestCase):
         self.assertEqual(worker.answer_problem(ok, src, "치매 보장"), "")
         self.assertIn("금액", worker.answer_problem(ok.replace("1,000만원", "2,000만원"), src, "치매 보장"))
         self.assertIn("회사 이름", worker.answer_problem(ok + " 삼성생명도 비슷합니다.", src, "치매 보장"))
+        dsrc = [{"자료": "DB손해보험 간편실손 약관", "보험사": "DB손해보험", "발췌": "진단서"}]
+        self.assertEqual(worker.answer_problem("결론.\n\n• DB손보 간편실손 약관에 따르면 진단서를 냅니다.", dsrc, "q"), "")
         self.assertIn("자료 이름", worker.answer_problem(ok, [], "치매 보장"))
         self.assertEqual(worker.answer_problem("일반 원칙입니다.\n\n• 약관의 청구 조항을 보세요.", [], "q"), "")
 
@@ -261,6 +263,7 @@ class ReferenceSources(unittest.TestCase):
             result = worker.generate({"title": "t", "body": "b"}, sources=[])
         self.assertEqual(result["body"], "일반 원칙으로 보면 됩니다.")
         self.assertTrue(result["rewritten"])
+        self.assertEqual(result["rewrite_reason"], "cite_without_source")
 
     def test_question_words_and_insurer_detection(self):
         kb = worker.kb_search
