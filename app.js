@@ -298,7 +298,7 @@
     channels = d.channels || [];
     const follow = params.get("filter") === "following";
     const list = follow ? channels.filter((c) => c.following) : channels;
-    return `<section class="explore"><h1>채널 탐색</h1><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우한 채널</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card"><div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h2><p>${E(c.description)}</p><p class="follow-count" data-followers="${E(c.id)}" data-base="${Number(c.followers) || 0}" data-first="${!!c.following}">팔로워 ${Number(c.followers) || 0}명</p></div><button type="button" class="follow-small follow-chip" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}" data-on="팔로잉" data-off="팔로우">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}</section>`;
+    return `<section class="explore"><h1>채널 탐색</h1><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우한 채널</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card"><div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h2><p>${E(c.description)}</p><p class="follow-count" data-followers="${E(c.id)}" data-base="${Number(c.followers) || 0}" data-first="${!!c.following}">팔로워 ${Number(c.followers) || 0}명</p></div><button type="button" class="follow-small follow-chip" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}" data-on="팔로잉" data-off="팔로우">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}<p class="channel-request muted small" data-testid="channel-request">원하는 채널이 없나요? <a class="text-link" href="/help.html?topic=channel#inquiry">채널 요청하기</a></p></section>`;
   }
   // 채널 바로가기 줄: 전체 · 인기 · 채널들 · 채널 탐색(옆으로 밀어서 이동)
   function channelChips(activeId, sort) {
@@ -1172,7 +1172,9 @@
   function inquiryForm() {
     if (!session)
       return `<p class="notice">문의는 로그인한 뒤 보낼 수 있어요. <a class="text-link" href="${E(loginUrl("/help.html#inquiry"))}">로그인하기</a></p>`;
-    return `<form data-form="inquiry" class="inquiry-form">${select("kind", "문의 종류", [["", "선택하세요"], ["general", "일반 문의"], ["privacy", "개인정보 열람·정정·삭제 요청"], ["rights", "권리침해 신고"], ["account", "계정 문의"]], "", 'required data-testid="inquiry-kind"')}${field("link", "관련 글 주소 (선택)", "text", "", 'maxlength="300" placeholder="글 화면 주소를 붙여 넣어 주세요"')}${area("body", "문의 내용", "", 'required minlength="5" maxlength="2000" data-testid="inquiry-body" placeholder="주민등록번호 등 필요 없는 개인정보는 적지 마세요."')}${formEnd("문의 보내기")}</form>`;
+    // 채널 탐색의 '채널 요청하기'에서 오면 일반 문의 + [채널 요청] 말머리를 미리 채운다
+    const chReq = params.get("topic") === "channel";
+    return `<form data-form="inquiry" class="inquiry-form">${select("kind", "문의 종류", [["", "선택하세요"], ["general", "일반 문의"], ["privacy", "개인정보 열람·정정·삭제 요청"], ["rights", "권리침해 신고"], ["account", "계정 문의"]], chReq ? "general" : "", 'required data-testid="inquiry-kind"')}${field("link", "관련 글 주소 (선택)", "text", "", 'maxlength="300" placeholder="글 화면 주소를 붙여 넣어 주세요"')}${area("body", "문의 내용", chReq ? "[채널 요청]\n채널 이름: \n필요한 이유: " : "", 'required minlength="5" maxlength="2000" data-testid="inquiry-body" placeholder="주민등록번호 등 필요 없는 개인정보는 적지 마세요."')}${formEnd("문의 보내기")}</form>`;
   }
   function dialog(html) {
     $("#dialog-content").innerHTML = html;
