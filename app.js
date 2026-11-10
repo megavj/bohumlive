@@ -622,21 +622,41 @@
       body = `<section class="section"><h2>${owner ? "현재 권한" : "현재 인증 상태"}</h2><p class="notice ${isVerified() ? "success" : ""}">${E(statusLabel(p))}${!owner && p.review_reason ? `<br>${E(p.review_reason)}` : ""}</p>${owner ? '<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>' : ""}<div class="profile-line"><span>공개 표시</span><span>${E(p.company_name || "소속 미등록")} · ${E((p.nickname || "닉").slice(0, 1))}***</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked || "미등록")}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked || "미등록")}</span></div><div class="profile-line"><span>${owner ? "설계사 인증" : "인증 유효기간"}</span><span>${owner ? "인증 면제" : E(p.verified_until ? new Date(p.verified_until).toLocaleDateString("ko-KR") : "인증 전")}</span></div><p></p>${owner ? '<a class="btn btn-primary" href="/admin/">관리자 모드</a>' : p.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : `<a class="btn btn-primary" href="/verify.html">${isVerified() ? "소속 변경·재인증" : "인증 신청·보완"}</a><p class="hint">소속을 변경하면 재인증 대기로 전환되어 공개 글만 볼 수 있습니다.</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${isActive() ? `<form data-form="profile">${field("nickname", "새 닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20"')}${formEnd("닉네임 저장")}</form>` : '<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>'}<div class="divider section-divider"></div><div class="form-actions">${btn("로그아웃", "logout")}${isAdmin() && !owner ? '<a class="btn" href="/admin/">관리자 모드</a>' : ""}${!owner ? btn("회원 탈퇴", "withdraw") : ""}</div><p class="hint" style="margin-top:16px">${owner ? "대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다." : "탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요."}</p></section>`;
     return `<section class="section"><h1>내 정보</h1><p class="muted">${E(statusLabel(p))}</p></section><nav class="tabs">${tabs.map(([id, label]) => `<a class="${tab === id ? "active" : ""}" href="${uri("me.html", { tab: id })}">${label}</a>`).join("")}</nav>${body}`;
   }
+  // 알림에서 온 주소(#comments·#comment-ai·#comment-번호)면 글을 그린 뒤 그 댓글로 한 번만 이동하고 잠깐 표시한다.
+  let hashJumped = false;
+  function jumpToHash() {
+    const m = /^#(comments|comment-ai|comment-[0-9a-f-]{36})$/i.exec(location.hash);
+    if (hashJumped || !m) return;
+    const el = document.getElementById(m[1]) || document.getElementById("comments");
+    if (!el) return;
+    hashJumped = true;
+    if (el.id !== "comments") el.classList.add("comment-new");
+    el.scrollIntoView({ block: el.id === "comments" ? "start" : "center" });
+  }
+  // 알림 한 줄이 가는 곳과 읽음 처리 범위(묶음이면 그 대상 전체). 누르면 읽음 처리 뒤 이동한다.
+  function noteTarget(n) {
+    const post = (hash) => uri("post.html", { id: n.post_id }) + (hash ? "#" + hash : "");
+    if (n.kind === "follow_group") return { href: uri("channel.html", { id: n.channel_id }), read: { channel_id: n.channel_id }, label: "채널 보기" };
+    if (n.kind === "comment_group") return { href: post("comments"), read: { post_id: n.post_id }, label: "댓글 보기" };
+    if (n.kind === "reply_group") return { href: post(`comment-${n.comment_id}`), read: { comment_id: n.comment_id }, label: "답글 보기" };
+    const read = n.id ? { id: n.id } : null;
+    if (!n.post_id) return { href: "", read, label: "" };
+    return { href: post(n.anchor || ""), read, label: n.kind === "reply" ? "답글 보기" : n.kind === "comment" ? "댓글 보기" : "글 보기" };
+  }
   async function notifications() {
     const denied = authorization("login");
     if (denied) return denied;
     const d = mine || (await read("me"));
     const list = d.notifications || [];
-    // 팔로우한 채널의 새 글: 서버가 읽지 않은 것만 주고, 같은 채널 5개 이상이면 한 줄(follow_group)로 묶어 준다. 읽으면 목록에서 사라진다.
+    // 서버가 같은 종류·같은 대상(채널 새 글·내 글 댓글·내 댓글 답글)의 안 읽은 알림 5개 이상을 한 줄(…_group)로 묶어 준다.
     const item = (n) => {
-      if (n.kind === "follow_group") {
-        const href = uri("channel.html", { id: n.channel_id });
-        return `<article class="notification-item unread follow-note" data-testid="follow-group"><h2><a data-do="notification-channel" data-channel="${E(n.channel_id)}" href="${href}">${E(n.title)}</a></h2><div class="meta"><span>${E(date(n.created_at))}</span><a data-do="notification-channel" data-channel="${E(n.channel_id)}" href="${href}">채널 보기 →</a><button data-do="notification-channel-read" data-channel="${E(n.channel_id)}">읽음 표시</button></div></article>`;
-      }
       const unread = !n.read_at && !n.is_read,
-        href = n.post_id ? uri("post.html", { id: n.post_id }) : "";
-      const title = E(n.title || n.message || n.kind || "새 알림");
-      return `<article class="notification-item ${unread ? "unread" : ""}${n.kind === "follow" ? " follow-note" : ""}"${n.kind === "follow" ? ' data-testid="follow-item"' : ""}><h2>${n.kind === "follow" && href ? `<a data-do="notification-open" data-id="${E(n.id)}" href="${href}">${title}</a>` : title}</h2>${n.body ? `<p>${E(n.body)}</p>` : ""}<div class="meta"><span>${E(date(n.created_at))}</span>${href ? `<a data-do="notification-open" data-id="${E(n.id)}" href="${href}">글 보기 →</a>` : ""}${unread ? `<button data-do="notification-read" data-id="${E(n.id)}">읽음 표시</button>` : ""}</div></article>`;
+        go = noteTarget(n),
+        title = E(n.title || n.message || n.kind || "새 알림"),
+        group = /_group$/.test(n.kind || ""),
+        testid = { follow_group: "follow-group", follow: "follow-item", comment_group: "comment-group", reply_group: "reply-group", comment: "comment-note", reply: "reply-note" }[n.kind],
+        attrs = go.href ? `data-do="notification-go" data-read="${E(JSON.stringify(go.read))}" href="${E(go.href)}"` : "";
+      return `<article class="notification-item ${unread ? "unread" : ""}${n.kind === "follow" || n.kind === "follow_group" ? " follow-note" : ""}${group ? " group-note" : ""}"${testid ? ` data-testid="${testid}"` : ""}><h2>${go.href ? `<a ${attrs}>${title}</a>` : title}</h2>${n.body ? `<p>${E(n.body)}</p>` : ""}<div class="meta"><span>${E(date(n.created_at))}</span>${go.href ? `<a ${attrs}>${go.label} →</a>` : ""}${unread && go.read ? `<button data-do="notification-mark" data-read="${E(JSON.stringify(go.read))}">읽음 표시</button>` : ""}</div></article>`;
     };
     return `<section class="section"><div class="section-head"><h1>알림</h1>${btn("모두 읽음", "notifications-read", 'class="btn btn-small"')}</div><p class="muted">내 글의 댓글, 팔로우한 채널의 새 글, 인증·운영 처리 결과를 확인해요.</p></section>${list.length ? list.map(item).join("") : empty("새로운 알림이 없어요.", "동료가 내 글에 댓글을 남기거나 팔로우한 채널에 새 글이 올라오면 알려드릴게요.")}`;
   }
@@ -1431,6 +1451,7 @@
       restoreDraft();
       updateWrite();
       updateDisplay();
+      if (page === "post") jumpToHash();
     } catch (err) {
       if (stamp !== renderId) return;
       layout();
@@ -1693,6 +1714,19 @@
       case "notification-channel-read":
         await act("notification_read", { channel_id: el.dataset.channel });
         return refresh();
+      case "notification-go": {
+        // 읽음 범위가 없으면 아무것도 읽음 처리하지 않는다({}는 '모두 읽음'이라 보내지 않음).
+        event.preventDefault();
+        const r = JSON.parse(el.dataset.read || "null");
+        if (r && Object.keys(r).length) await act("notification_read", r);
+        location.href = el.href;
+        return;
+      }
+      case "notification-mark": {
+        const r = JSON.parse(el.dataset.read || "null");
+        if (r && Object.keys(r).length) await act("notification_read", r);
+        return refresh();
+      }
       case "more-posts": {
         const d = await read("posts", { ...current.list.args, offset: current.list.offset });
         const more = d.posts || [];
