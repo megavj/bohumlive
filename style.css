@@ -4119,3 +4119,30 @@ h2 {
     padding: 18px 0 26px;
   }
 }
+/* 보험사 상세도 같은 여백으로(빈 회색 띠는 없앰) */
+.company-cover {
+  display: none;
+}
+.company-hero {
+  padding: 16px 16px 12px;
+}
+.company-tabs {
+  gap: 20px;
+  padding: 0 16px;
+  border-bottom-color: #eeedf2;
+}
+.company-tabs a {
+  padding: 12px 0;
+}
+.metrics {
+  margin: 14px 0;
+  padding: 12px 0;
+}
+@media (min-width: 800px) {
+  .company-hero {
+    padding: 4px 0 12px;
+  }
+  .company-tabs {
+    padding: 0;
+  }
+}
