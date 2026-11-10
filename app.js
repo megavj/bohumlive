@@ -45,7 +45,9 @@
     current = null,
     renderId = 0,
     toastTimer,
-    proofPreview;
+    proofPreview,
+    bellOpen = false,
+    bellSeq = 0;
   const isActive = () => !!viewer && !["suspended", "withdrawn"].includes(viewer.status);
   const isOwner = () => viewer?.role === "owner" && isActive() && viewer.verification_exempt !== false;
   const isAdmin = () => ["admin", "owner"].includes(viewer?.role) && isActive() && viewer.can_admin !== false;
@@ -148,9 +150,12 @@
     // 글쓰기는 머리줄의 연필 하나로만 들어간다(채널 화면에서는 그 채널이 미리 골라진다).
     const writeHref = uri("write.html", page === "channel" && params.get("id") ? { channel: params.get("id") } : {});
     const unread = Number(viewer?.unread_count) || 0;
+    // 머리줄을 새로 그리면 알림 창은 닫힌 상태로 시작한다.
+    bellOpen = false;
+    document.body.classList.remove("bell-open");
     const tools = `<a class="tool-btn tool-search" href="/search.html" aria-label="검색" data-testid="header-search-link">${icon("search")}</a>${page === "write" || page === "login" ? "" : `<a class="tool-btn tool-write" href="${E(writeHref)}" aria-label="글쓰기" title="글쓰기" data-testid="header-write">${icon("edit")}<span class="tool-label">글쓰기</span></a>`}${
       session
-        ? `<div class="header-user" data-testid="header-user"><a class="tool-btn notification-link" href="/notifications.html" aria-label="${unread ? `알림 ${unread}개 안 읽음` : "알림"}" title="알림">${icon("bell")}${unread ? `<span class="notification-count" data-testid="unread-count">${unread > 99 ? "99+" : unread}</span>` : ""}</a><a class="header-name" href="/me.html" title="내 정보">${E(displayName())}님</a><span class="header-sep" aria-hidden="true">·</span><button type="button" class="header-logout" data-do="logout" data-testid="header-logout">로그아웃</button></div>`
+        ? `<div class="header-user" data-testid="header-user"><div class="bell-wrap"><button type="button" class="tool-btn notification-link" id="bell-btn" data-do="bell" aria-expanded="false" aria-controls="bell-panel" aria-label="${E(bellLabel(unread))}" title="알림" data-testid="bell">${icon("bell")}${unread ? `<span class="notification-count" data-testid="unread-count">${unread > 99 ? "99+" : unread}</span>` : ""}</button><div class="bell-panel" id="bell-panel" role="region" aria-labelledby="bell-title" hidden data-testid="bell-panel"></div></div><a class="header-name" href="/me.html" title="내 정보">${E(displayName())}님</a><span class="header-sep" aria-hidden="true">·</span><button type="button" class="header-logout" data-do="logout" data-testid="header-logout">로그아웃</button></div>`
         : page === "login"
           ? ""
           : `<a class="header-login" href="${E(loginUrl())}">로그인·가입</a>`
@@ -659,6 +664,142 @@
       return `<article class="notification-item ${unread ? "unread" : ""}${n.kind === "follow" || n.kind === "follow_group" ? " follow-note" : ""}${group ? " group-note" : ""}"${testid ? ` data-testid="${testid}"` : ""}><h2>${go.href ? `<a ${attrs}>${title}</a>` : title}</h2>${n.body ? `<p>${E(n.body)}</p>` : ""}<div class="meta"><span>${E(date(n.created_at))}</span>${go.href ? `<a ${attrs}>${go.label} →</a>` : ""}${unread && go.read ? `<button data-do="notification-mark" data-read="${E(JSON.stringify(go.read))}">읽음 표시</button>` : ""}</div></article>`;
     };
     return `<section class="section"><div class="section-head"><h1>알림</h1>${btn("모두 읽음", "notifications-read", 'class="btn btn-small"')}</div><p class="muted">내 글의 댓글, 팔로우한 채널의 새 글, 인증·운영 처리 결과를 확인해요.</p></section>${list.length ? list.map(item).join("") : empty("새로운 알림이 없어요.", "동료가 내 글에 댓글을 남기거나 팔로우한 채널에 새 글이 올라오면 알려드릴게요.")}`;
+  }
+  // ===== 머리줄 종: 누르면 페이지 이동 없이 종 아래로 알림 창이 펼쳐진다(2026-11-10 추가 지시 3) =====
+  // 열 때마다 알림을 새로 불러오되 창 안과 종 숫자만 바꾼다(화면 전체를 다시 그리지 않음). 알림 화면(/notifications.html)은 그대로 둔다.
+  const BELL_MAX = 20;
+  const bellLabel = (n) => (n ? `알림 ${n}개 안 읽음` : "알림");
+  const noteUnread = (n) => !n.read_at && !n.is_read;
+  function bellItem(n) {
+    const unread = noteUnread(n),
+      go = noteTarget(n),
+      // 글·댓글·채널이 없는 알림(인증·운영 안내 등)은 내용 전체가 보이는 알림 화면으로 간다.
+      href = go.href || "/notifications.html",
+      readRange = unread && go.read && Object.keys(go.read).length ? go.read : null,
+      key = n.id || `${n.kind}:${n.channel_id || n.comment_id || n.post_id || ""}`;
+    return `<li><a class="bell-item${unread ? " unread" : ""}" href="${E(href)}" data-do="bell-go" data-read="${E(JSON.stringify(readRange))}" data-key="${E(key)}" data-kind="${E(n.kind || "")}" data-testid="${/_group$/.test(n.kind || "") ? "bell-group" : "bell-item"}"><span class="bell-text">${E(n.title || n.message || "새 알림")}</span>${unread ? '<span class="sr-only">, 안 읽음,</span>' : ""}<time class="bell-time" datetime="${E(n.created_at || "")}" title="${E(date(n.created_at))}"><span class="sr-only">받은 시간 </span>${E(ago(n.created_at))}</time></a></li>`;
+  }
+  function bellHTML(state) {
+    const list = (mine?.notifications || []).slice(0, BELL_MAX),
+      anyUnread = (Number(viewer?.unread_count) || 0) > 0 || list.some(noteUnread);
+    const body = list.length
+      ? `<ul class="bell-list" data-testid="bell-list">${list.map(bellItem).join("")}</ul>`
+      : state === "loading"
+        ? '<p class="bell-empty" role="status">알림을 불러오는 중이에요</p>'
+        : state === "error"
+          ? '<p class="bell-empty" role="alert">알림을 불러오지 못했어요. <button type="button" class="text-link" data-do="bell-retry">다시 시도</button></p>'
+          : '<p class="bell-empty" data-testid="bell-empty">새 알림이 없어요</p>';
+    return `<div class="bell-head"><h2 id="bell-title">알림</h2><button type="button" class="bell-readall" data-do="bell-read-all" data-testid="bell-read-all"${anyUnread ? "" : ' aria-disabled="true"'}>모두 읽음</button></div><div class="bell-body">${body}</div><a class="bell-all" href="/notifications.html" data-testid="bell-all">알림 전체 보기</a>`;
+  }
+  // 종 숫자만 바꾼다(머리줄은 다시 그리지 않음).
+  function paintBell() {
+    const b = $("#bell-btn");
+    if (!b) return;
+    const n = Number(viewer?.unread_count) || 0;
+    b.setAttribute("aria-label", bellLabel(n));
+    let c = $(".notification-count", b);
+    if (!n) return c?.remove();
+    if (!c) {
+      b.insertAdjacentHTML("beforeend", '<span class="notification-count" data-testid="unread-count"></span>');
+      c = $(".notification-count", b);
+    }
+    c.textContent = n > 99 ? "99+" : String(n);
+  }
+  function renderBell(state) {
+    const panel = $("#bell-panel");
+    if (!panel) return;
+    const a = document.activeElement,
+      key = panel.contains(a) ? a.dataset.key || a.className : null;
+    panel.innerHTML = bellHTML(state);
+    panel.setAttribute("aria-busy", String(state === "loading"));
+    // 창 안에 있던 키보드 초점은 같은 줄(없으면 첫 칸)로 되돌린다.
+    if (key) ([...panel.querySelectorAll("a, button")].find((x) => (x.dataset.key || x.className) === key) || bellFocusables()[0])?.focus({ preventScroll: true });
+  }
+  const bellFocusables = () => [...($("#bell-panel")?.querySelectorAll("a[href], button:not([disabled])") || [])];
+  // 휴대폰: 머리줄 바로 아래부터 화면 폭 전체로. PC: 종 아래 오른쪽 정렬(높이는 화면 안에서만).
+  function placeBell() {
+    const h = $(".site-header");
+    if (h) document.documentElement.style.setProperty("--bell-top", Math.max(0, Math.round(h.getBoundingClientRect().bottom)) + "px");
+  }
+  async function loadBell() {
+    const seq = ++bellSeq,
+      before = `${viewer?.status}/${viewer?.role}`;
+    try {
+      const d = await read("notifications");
+      if (seq !== bellSeq) return;
+      mine = d;
+      paintBell();
+      if (`${viewer?.status}/${viewer?.role}` !== before) {
+        closeBell();
+        return refresh();
+      }
+      if (bellOpen) renderBell("ready");
+    } catch {
+      if (seq === bellSeq && bellOpen) renderBell("error");
+    }
+  }
+  function openBell() {
+    const b = $("#bell-btn"),
+      panel = $("#bell-panel");
+    if (!b || !panel) return;
+    bellOpen = true;
+    placeBell();
+    // 갖고 있던 목록을 먼저 보여 주고, 새로 불러온 목록으로 창 안만 바꾼다.
+    renderBell(mine?.notifications ? "ready" : "loading");
+    panel.hidden = false;
+    b.setAttribute("aria-expanded", "true");
+    document.body.classList.add("bell-open");
+    loadBell();
+  }
+  function closeBell(focusBell = false) {
+    if (!bellOpen) return;
+    bellOpen = false;
+    const b = $("#bell-btn"),
+      panel = $("#bell-panel");
+    if (panel) panel.hidden = true;
+    b?.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("bell-open");
+    if (focusBell) b?.focus({ preventScroll: true });
+  }
+  async function bellReadAll(el) {
+    if (el.getAttribute("aria-disabled") === "true") return;
+    // 종 숫자와 옅은 바탕을 먼저 바꾸고, 서버 결과로 다시 맞춘다.
+    if (viewer) viewer.unread_count = 0;
+    paintBell();
+    $$("#bell-panel .bell-item.unread").forEach((x) => x.classList.remove("unread"));
+    try {
+      await act("notification_read");
+    } finally {
+      await loadBell();
+    }
+    if (bellOpen) $("#bell-panel .bell-readall")?.focus({ preventScroll: true });
+    // 알림 화면을 보고 있었다면 그 목록만 새로 그린다.
+    if (page === "notifications") $("#content").innerHTML = await notifications();
+  }
+  async function bellGo(el, event) {
+    const href = el.getAttribute("href"),
+      r = JSON.parse(el.dataset.read || "null"),
+      marking = r ? act("notification_read", r).catch(() => null) : null;
+    if (event.metaKey || event.ctrlKey || event.shiftKey) {
+      window.open(href, "_blank", "noopener");
+      if (marking) {
+        el.classList.remove("unread");
+        await marking;
+        loadBell();
+      }
+      return;
+    }
+    el.setAttribute("aria-busy", "true");
+    await marking;
+    const to = new URL(href, location.href);
+    if (to.pathname + to.search === location.pathname + location.search) {
+      // 같은 화면이면 주소의 위치(#댓글)만 바꾸고 다시 그린다.
+      closeBell();
+      history.replaceState(history.state, "", to.pathname + to.search + to.hash);
+      hashJumped = false;
+      return refresh();
+    }
+    location.href = href;
   }
   function reviewHTML(r) {
     return `<article class="review" data-testid="review-item"><div class="section-head"><h3>${E(r.title)} ${sampleBadge(r)}</h3>${r.is_mine && isVerified() ? `<div class="form-actions">${btn("수정", "review-edit", `data-id="${E(r.id)}"`)}${btn("삭제", "review-delete", `data-id="${E(r.id)}"`)}</div>` : ""}</div><p class="author">${E(r.author_display)} · ${E(date(r.created_at))}</p><div class="review-scores">${scoreNamesFor(r.company_kind || current?.company?.kind).map((s, i) => `<div class="review-score"><span>${s}</span><span class="stars">${"★".repeat(Number(r.scores?.[i]) || 0)}</span></div>`).join("")}</div><p class="body-text" style="margin-top:16px">${E(r.body)}</p>${r.is_truncated ? '<p class="hint">나머지 리뷰는 인증 후 읽을 수 있어요.</p>' : ""}${r.is_mine ? "" : `<button class="text-link small" data-do="report" data-target="review" data-id="${E(r.id)}">리뷰 신고</button>`}</article>`;
@@ -1722,6 +1863,17 @@
         location.href = el.href;
         return;
       }
+      case "bell":
+        if (bellOpen) closeBell(true);
+        else openBell();
+        return;
+      case "bell-retry":
+        renderBell("loading");
+        return loadBell();
+      case "bell-read-all":
+        return bellReadAll(el);
+      case "bell-go":
+        return bellGo(el, event);
       case "notification-mark": {
         const r = JSON.parse(el.dataset.read || "null");
         if (r && Object.keys(r).length) await act("notification_read", r);
@@ -1992,6 +2144,44 @@
       if (el.isConnected) el.disabled = false;
     }
   });
+  // 알림 창: 바깥 누르기·Esc로 닫고, 창 안에서는 ↑↓·Home·End로 옮겨 다닌다.
+  document.addEventListener("click", (event) => {
+    if (!bellOpen || event.target.closest?.(".bell-wrap")) return;
+    closeBell();
+    // 다른 입력칸·링크·버튼을 누른 게 아니면(빈 곳·글자) 초점을 종으로 돌려 둔다.
+    const a = document.activeElement;
+    if (!a?.matches?.('a[href], button, input, select, textarea, summary, [contenteditable="true"], [tabindex]:not([tabindex="-1"])') || $("#bell-panel")?.contains(a))
+      $("#bell-btn")?.focus({ preventScroll: true });
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!bellOpen) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      return closeBell(true);
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const a = document.activeElement;
+    if (!($("#bell-panel")?.contains(a) || a === $("#bell-btn"))) return;
+    const f = bellFocusables();
+    if (!f.length) return;
+    event.preventDefault();
+    const i = f.indexOf(a),
+      n =
+        event.key === "Home" ? 0 : event.key === "End" ? f.length - 1 : event.key === "ArrowDown" ? (i + 1) % f.length : i <= 0 ? f.length - 1 : i - 1;
+    f[n].focus();
+  });
+  // 키보드로 창 밖(다음 칸)으로 나가면 닫는다(초점은 옮겨 간 곳에 둔다).
+  document.addEventListener("focusout", (event) => {
+    const to = event.relatedTarget;
+    if (bellOpen && to && !to.closest?.(".bell-wrap")) closeBell();
+  });
+  window.addEventListener("resize", () => bellOpen && placeBell());
+  // 뒤로 가기로 돌아온 화면(저장된 화면)에서는 창을 닫고 종 숫자를 다시 맞춘다.
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    closeBell();
+    revalidate();
+  });
   document.addEventListener("click", (event) => {
     $$("details.more-menu[open]").forEach((m) => {
       if (!m.contains(event.target) || event.target.closest(".more-list a, .more-list button")) m.open = false;
@@ -2076,6 +2266,7 @@
       }
       const d = await read("me");
       mine = d;
+      paintBell();
       if (`${viewer?.status}/${viewer?.role}` !== before) {
         closeDialog();
         await refresh();

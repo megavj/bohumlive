@@ -4194,3 +4194,188 @@ h2 {
 .comment-ai-item .ai-badge { margin-left: 0; border-color: #cfc3f3; color: #5b46d6; font-weight: 700; }
 .comment-ai-item .body-text { white-space: pre-line; }
 .channel-request { margin: 20px 0 8px; text-align: center; }
+
+/* 2026-11-10 알림 종 펼침 창 — 누르면 종 아래로 펼침. PC: 오른쪽 정렬 360 폭, 창 안에서만 스크롤. 휴대폰: 머리줄 아래 화면 폭 전체 */
+.bell-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.header-user .notification-link {
+  padding: 0;
+}
+.notification-link[aria-expanded="true"] {
+  background: var(--soft);
+  color: var(--ink);
+}
+.bell-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: -8px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: min(560px, calc(100vh - var(--bell-top, 72px) - 24px));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(36, 33, 43, 0.14), 0 2px 6px rgba(36, 33, 43, 0.06);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+}
+.bell-panel[hidden] {
+  display: none;
+}
+.bell-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 16px;
+  border-bottom: 1px solid #eeedf2;
+}
+.bell-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.bell-readall {
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--link);
+  font-size: 13px;
+  font-weight: 600;
+}
+.bell-readall[aria-disabled="true"] {
+  color: #b5b2bf;
+  cursor: default;
+}
+.bell-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.bell-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bell-list li + li {
+  border-top: 1px solid #f1f0f4;
+}
+.bell-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 16px;
+  color: var(--ink);
+}
+.bell-item:hover {
+  background: #f8f7fa;
+}
+.bell-item.unread {
+  background: #f6f2ff;
+}
+.bell-item.unread:hover {
+  background: #efe8fd;
+}
+.bell-item[aria-busy="true"] {
+  opacity: 0.6;
+}
+.bell-text {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.bell-time {
+  flex: none;
+  padding-top: 1px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.bell-empty {
+  margin: 0;
+  padding: 28px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+.bell-all {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  border-top: 1px solid #eeedf2;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.bell-all:hover {
+  background: #f8f7fa;
+}
+/* 머리줄의 예전 규칙(.header-user a:last-child 11px 등)이 창 안 글자에 번지지 않게 */
+.header-user .bell-panel .bell-item {
+  font-size: 14px;
+}
+.header-user .bell-panel .bell-all,
+.header-user .bell-panel .bell-readall {
+  font-size: 13px;
+}
+.bell-panel a:focus-visible,
+.bell-panel button:focus-visible {
+  outline-offset: -3px;
+}
+@media (min-width: 800px) {
+  /* 종 버튼 누르는 곳 44×44 */
+  .notification-link::before {
+    content: "";
+    position: absolute;
+    inset: -4px;
+  }
+}
+@media (max-width: 799px) {
+  .bell-wrap {
+    position: static;
+  }
+  .bell-panel {
+    position: fixed;
+    top: var(--bell-top, 90px);
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: none;
+    /* 아래에 어두운 띠를 남겨 두어 바깥을 눌러 닫을 수 있게 한다 */
+    max-height: calc(100vh - var(--bell-top, 90px) - 64px);
+    max-height: calc(100dvh - var(--bell-top, 90px) - 64px);
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    box-shadow: 0 12px 24px rgba(36, 33, 43, 0.16);
+  }
+  body.bell-open {
+    overflow: hidden;
+  }
+  body.bell-open::after {
+    content: "";
+    position: fixed;
+    top: var(--bell-top, 90px);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 39;
+    background: rgba(24, 20, 33, 0.32);
+  }
+}
