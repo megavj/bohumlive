@@ -457,6 +457,7 @@
       mineNow.scrollIntoView({ block: "center" });
     }
   }
+  // 글쓰기: 채널·제목·본문·등록만. 나머지(질문 스위치·관련 회사·운영자 설정)는 작게 접어 둔다.
   async function write() {
     const denied = isAdmin() ? authorization("admin") : authorization();
     if (denied) return denied;
@@ -469,25 +470,81 @@
       if (!p.is_mine) return empty("내 글만 수정할 수 있어요.", "글 목록에서 작성한 글을 확인해 주세요.");
     }
     current = { post: p };
-    return `<section class="section"><h1>${p.id ? "글 수정" : "글쓰기"}</h1><p class="notice">회원 글은 개인 의견입니다. 고객의 이름·연락처·계약번호나 타인을 특정할 수 있는 내용을 쓰지 마세요.</p><form data-form="post" id="post-form"><input type="hidden" name="id" value="${E(p.id || "")}"><div class="form-grid">${select(
-      "channel_id",
-      "채널",
-      [["", "채널을 선택하세요"], ...channels.map((c) => [c.id, c.name + (c.anonymous ? " (완전 익명)" : "")])],
-      p.channel_id || params.get("channel") || "",
-      "required",
-    )}${select(
-      "content_kind",
-      "글 종류 (종류에 따라 손님에게 공개되는 범위가 달라요)",
-      Object.entries(kindNames)
-        .filter(([k]) => k !== "weekly" || isAdmin())
-        .map(([k, label]) => [k, `${label} — ${k === "experience" ? "앞 300자만 누구나 보기" : "본문 전체 누구나 보기"}`]),
-      p.content_kind || "experience",
-      "required",
-    )}${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}</div><label class="check-line"><input type="checkbox" name="is_question" ${p.is_question ? "checked" : ""}>AI답변 허용하기 <span class="hint">(체크하면 AI 참고 답변이 함께 달릴 수 있어요)</span></label>${
-      isAdmin()
-        ? `<div class="team-box"><label class="check-line"><input type="checkbox" name="as_team" data-testid="as-team" ${p.as_team || !isVerified() ? "checked" : ""} ${isVerified() ? "" : "required"}>‘보험라이브 운영팀’ 이름으로 쓰기 (작성자 대신 운영팀으로 표시)</label>${p.id ? "" : '<label class="check-line"><input type="checkbox" name="pinned" data-testid="as-notice">공지로 고정 (운영팀 이름일 때만)</label>'}${isVerified() ? "" : '<p class="hint">설계사 인증 전 관리자는 운영팀 이름으로만 쓸 수 있어요.</p>'}</div>`
-        : ""
-    }<div style="height:20px"></div>${field("title", "제목", "text", p.title || "", 'required minlength="2" maxlength="150" data-testid="post-title"')}${area("body", "본문", p.body || "", 'required minlength="5" maxlength="10000" data-testid="post-body-input"')}<p class="notice anon-note" id="anon-note" hidden>완전 익명 채널이에요. 회사명·닉네임 없이 ‘익명’으로 표시되고, 작성자를 짐작할 수 없도록 관련 회사는 고를 수 없어요.</p><section class="preview-box"><h3>공개 미리보기</h3><p class="small muted" id="public-preview-hint"></p><div class="body-text" id="public-preview"></div></section><label class="check-line"><input type="checkbox" name="checked_preview" required>공개 범위와 미리보기를 확인했습니다.</label>${formEnd(p.id ? "수정 저장" : "글 등록")}</form></section>`;
+    const teamOnly = isAdmin() && !isVerified();
+    const adminBox = isAdmin()
+      ? `<details class="write-more write-admin" data-testid="admin-options" ${teamOnly || p.as_team ? "open" : ""}><summary>운영자 설정</summary><div class="write-more-body"><label class="check-line"><input type="checkbox" name="as_team" data-testid="as-team" ${p.as_team || teamOnly ? "checked" : ""} ${teamOnly ? "required" : ""}>‘보험라이브 운영팀’ 이름으로 쓰기</label>${p.id ? "" : '<label class="check-line"><input type="checkbox" name="pinned" data-testid="as-notice">공지로 고정 (운영팀 이름일 때만)</label>'}${teamOnly ? '<p class="hint">설계사 인증 전 관리자는 운영팀 이름으로만 쓸 수 있어요.</p>' : ""}</div></details>`
+      : "";
+    return `<section class="write" data-testid="write"><form data-form="post" id="post-form" class="write-form"><input type="hidden" name="id" value="${E(p.id || "")}"><h1 class="write-heading">${p.id ? "글 수정" : "글쓰기"}</h1><p class="draft-line" data-draft-line hidden><span data-draft-text></span><button type="button" data-do="draft-clear" data-testid="draft-clear">지우고 새로 쓰기</button></p><select name="channel_id" class="write-channel" aria-label="채널" required data-testid="post-channel">${[["", "채널을 선택하세요"], ...channels.map((c) => [c.id, c.name + (c.anonymous ? " (완전 익명)" : "")])]
+      .map((o) => `<option value="${E(o[0])}" ${String(o[0]) === String(p.channel_id || params.get("channel") || "") ? "selected" : ""}>${E(o[1])}</option>`)
+      .join("")}</select><input name="title" class="write-title" type="text" aria-label="제목" placeholder="제목" value="${E(p.title || "")}" required minlength="2" maxlength="150" autocomplete="off" data-testid="post-title"><textarea name="body" class="write-body" aria-label="본문" placeholder="동료와 나누고 싶은 경험이나 궁금한 점을 적어 주세요.&#10;&#10;고객의 이름·연락처·계약번호처럼 누군가를 알아볼 수 있는 내용은 쓰지 마세요. 회원 글은 개인 의견입니다." required minlength="5" maxlength="10000" data-testid="post-body-input">${E(p.body || "")}</textarea><p class="write-range" id="write-range" data-testid="write-range" hidden></p><div class="write-options"><label class="switch"><input type="checkbox" name="is_question" data-testid="post-question" ${p.is_question ? "checked" : ""}><span class="switch-track" aria-hidden="true"></span><span class="switch-text">질문이에요<small>AI 참고 답변이 달릴 수 있어요</small></span></label><details class="write-more" data-testid="write-more" ${p.company_id ? "open" : ""}><summary>더보기</summary><div class="write-more-body">${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}<p class="hint" id="anon-note" hidden>완전 익명 채널에서는 작성자를 짐작할 수 없도록 관련 회사를 고를 수 없어요.</p></div></details>${adminBox}</div><p class="error field-error" data-form-error role="alert"></p><div class="write-actions"><span class="draft-state" data-draft-state aria-live="polite"></span><button type="submit" class="btn btn-primary" data-testid="submit">${p.id ? "수정 저장" : "등록"}</button></div></form></section>`;
+  }
+  // ---- 임시저장: 쓰다가 나가도 이 기기에 남는다(로그아웃하면 지움, 다른 계정에는 보이지 않음) ----
+  const draftKey = () => `bl_draft:${session?.user?.id || ""}:${current?.post?.id || "new"}`;
+  let draftTimer;
+  function readDraft() {
+    try {
+      const d = JSON.parse(localStorage.getItem(draftKey()) || "null");
+      return d && (d.title || d.body) ? d : null;
+    } catch {
+      return null;
+    }
+  }
+  function saveDraft() {
+    const form = $("#post-form");
+    if (!form || !session) return;
+    const f = form.elements;
+    const d = {
+      channel_id: f.channel_id.value,
+      title: f.title.value,
+      body: f.body.value,
+      is_question: f.is_question.checked,
+      company_id: f.company_id.value,
+      at: Date.now(),
+    };
+    try {
+      if (d.title.trim() || d.body.trim()) localStorage.setItem(draftKey(), JSON.stringify(d));
+      else localStorage.removeItem(draftKey());
+      const state = $("[data-draft-state]");
+      if (state) state.textContent = d.title.trim() || d.body.trim() ? "임시저장됨" : "";
+    } catch {}
+  }
+  function saveDraftSoon() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 500);
+  }
+  function clearDraft() {
+    clearTimeout(draftTimer);
+    try {
+      localStorage.removeItem(draftKey());
+    } catch {}
+  }
+  function clearAllDrafts() {
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("bl_draft:"))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {}
+  }
+  function restoreDraft() {
+    const form = $("#post-form");
+    if (!form) return;
+    const d = readDraft();
+    if (!d) return;
+    const f = form.elements,
+      saved = current?.post || {};
+    // 고치는 글은 저장된 원래 내용과 다를 때만 불러온다.
+    if (saved.id && d.title === (saved.title || "") && d.body === (saved.body || "")) return;
+    if (d.channel_id && [...f.channel_id.options].some((o) => o.value === d.channel_id)) f.channel_id.value = d.channel_id;
+    f.title.value = d.title || "";
+    f.body.value = d.body || "";
+    f.is_question.checked = !!d.is_question;
+    if (d.company_id && [...f.company_id.options].some((o) => o.value === d.company_id)) {
+      f.company_id.value = d.company_id;
+      $("[data-testid=write-more]", form).open = true;
+    }
+    const a = ago(d.at);
+    $("[data-draft-text]").textContent = `임시저장한 글을 불러왔어요 (${/^\d+(분|시간|일)$/.test(a) ? a + " 전" : a}).`;
+    $("[data-draft-line]").hidden = false;
   }
   async function login() {
     if (session && params.get("returnTo")) {
@@ -798,7 +855,7 @@
     return adminForm(
       "channel_save",
       c.id,
-      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (자동으로 정해져요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? Math.max(0, ...channels.map((x) => Number(x.display_order) || 0)) + 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>채널 사용(끄면 회원에게 보이지 않아요)</label><label class="check-line"><input type="checkbox" name="anonymous" data-testid="channel-anonymous" ${c.anonymous ? "checked" : ""}>완전 익명 채널(회사명·닉네임 없이 ‘익명’으로 표시)</label><p class="hint">완전 익명을 켜면 이 채널의 글·댓글이 익명으로 바뀌고, 나중에 꺼도 이미 익명인 글은 익명으로 남아요.</p>`,
+      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (자동으로 정해져요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? Math.max(0, ...channels.map((x) => Number(x.display_order) || 0)) + 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>채널 사용(끄면 회원에게 보이지 않아요)</label><label class="check-line"><input type="checkbox" name="anonymous" data-testid="channel-anonymous" ${c.anonymous ? "checked" : ""}>완전 익명 채널(회사명·닉네임 없이 ‘익명’으로 표시)</label><p class="hint">완전 익명을 켜면 이 채널의 글·댓글이 익명으로 바뀌고, 나중에 꺼도 이미 익명인 글은 익명으로 남아요.</p>${select("guest_full", "손님(로그인하지 않은 사람)에게 보이는 범위", [["false", "앞 300자만 보여 주기"], ["true", "본문 전체 보여 주기"]], String(!!c.guest_full), 'data-testid="channel-guest-range"')}<p class="hint">바꾼 뒤에 새로 쓰는 글부터 적용돼요. 이미 쓴 글의 공개 범위는 그대로예요. 댓글은 언제나 인증 회원만 봅니다.</p>`,
       c.id ? "수정 저장" : "채널 추가",
       "",
       c.name || "새",
@@ -1024,7 +1081,7 @@
     },
     channels(d) {
       const list = d.channels || [];
-      return `<p>${btn("+ 채널 추가", "admin-dialog", 'data-kind="channel" data-mode="add" data-testid="channel-add"', true)}</p><div class="admin-list">${list.map((c, i) => `<div class="admin-row static manage-row" data-testid="channel-row"><span class="row-main">${channelDisc(c)}<strong>${E(c.name)}</strong> ${c.enabled !== false ? badge("사용 중", "ok") : badge("숨김", "muted")}</span><span class="row-sub">글 ${Number(c.post_count) || 0}개 · 팔로워 ${Number(c.followers) || 0}명 · ${E(String(c.description || "").slice(0, 60))}</span><span class="row-actions">${btn("▲", "admin-order", `data-op="channel_move" data-dir="up" data-id="${E(c.id)}" aria-label="${E(c.name)} 위로" ${i === 0 ? "disabled" : ""}`)}${btn("▼", "admin-order", `data-op="channel_move" data-dir="down" data-id="${E(c.id)}" aria-label="${E(c.name)} 아래로" ${i === list.length - 1 ? "disabled" : ""}`)}${btn("수정", "admin-dialog", `data-kind="channel" data-mode="edit" data-id="${E(c.id)}" data-testid="channel-edit"`)}${btn("삭제", "admin-dialog", `data-kind="channel" data-mode="delete" data-id="${E(c.id)}" data-danger="1" data-testid="channel-delete"`)}</span></div>`).join("") || empty("채널이 없어요.", "위의 ‘채널 추가’를 눌러 만들어 주세요.")}</div>`;
+      return `<p>${btn("+ 채널 추가", "admin-dialog", 'data-kind="channel" data-mode="add" data-testid="channel-add"', true)}</p><div class="admin-list">${list.map((c, i) => `<div class="admin-row static manage-row" data-testid="channel-row"><span class="row-main">${channelDisc(c)}<strong>${E(c.name)}</strong> ${c.enabled !== false ? badge("사용 중", "ok") : badge("숨김", "muted")}${c.anonymous ? badge("완전 익명", "") : ""}${badge(c.guest_full ? "손님: 전체 공개" : "손님: 앞 300자", c.guest_full ? "accent" : "")}</span><span class="row-sub">글 ${Number(c.post_count) || 0}개 · 팔로워 ${Number(c.followers) || 0}명 · ${E(String(c.description || "").slice(0, 60))}</span><span class="row-actions">${btn("▲", "admin-order", `data-op="channel_move" data-dir="up" data-id="${E(c.id)}" aria-label="${E(c.name)} 위로" ${i === 0 ? "disabled" : ""}`)}${btn("▼", "admin-order", `data-op="channel_move" data-dir="down" data-id="${E(c.id)}" aria-label="${E(c.name)} 아래로" ${i === list.length - 1 ? "disabled" : ""}`)}${btn("수정", "admin-dialog", `data-kind="channel" data-mode="edit" data-id="${E(c.id)}" data-testid="channel-edit"`)}${btn("삭제", "admin-dialog", `data-kind="channel" data-mode="delete" data-id="${E(c.id)}" data-danger="1" data-testid="channel-delete"`)}</span></div>`).join("") || empty("채널이 없어요.", "위의 ‘채널 추가’를 눌러 만들어 주세요.")}</div>`;
     },
     companies(d) {
       const list = d.companies || [];
@@ -1140,23 +1197,36 @@
         )}</div>${area("body", "근무 경험과 의견", r.body || "", 'required minlength="10" maxlength="5000"')}<p class="notice small">리뷰 앞부분 최대 300자는 누구나 볼 수 있습니다. 평균 별점은 유효 리뷰 5개부터 공개됩니다.</p>${formEnd("리뷰 저장")}<p></p>${btn("취소", "dialog-close")}</form>`,
     );
   }
-  function updatePreview() {
+  // 글쓰기 화면: 고른 채널에 따라 '손님에게 어디까지 보이는지' 한 줄과 익명 안내를 맞춘다.
+  function updateWrite() {
     const form = $("#post-form");
-    if (form) {
-      const kind = form.elements.content_kind.value,
-        body = form.elements.body.value;
-      const anon = !!channels.find((c) => c.id === form.elements.channel_id.value)?.anonymous || !!current?.post?.anonymous;
-      $("#anon-note").hidden = !anon;
-      form.elements.company_id.disabled = anon;
-      if (anon) form.elements.company_id.value = "";
-      const partial = kind === "experience";
-      $("#public-preview").textContent = partial ? Array.from(body).slice(0, 300).join("") : body;
-      $("#public-preview-hint").textContent = partial
-        ? Array.from(body).length <= 300
-          ? "이 글은 짧아 본문 전체가 공개됩니다."
-          : "본문 처음부터 300자까지 공개되고 나머지는 인증 회원에게만 보입니다."
-        : "본문 전체가 공개됩니다. 모든 댓글과 AI 답변은 인증 회원만 읽을 수 있습니다.";
+    if (!form) return;
+    const f = form.elements,
+      ch = channels.find((c) => c.id === f.channel_id.value),
+      saved = current?.post || {};
+    const anon = !!ch?.anonymous || !!saved.anonymous;
+    $("#anon-note").hidden = !anon;
+    f.company_id.disabled = anon;
+    if (anon) f.company_id.value = "";
+    const team = !!f.as_team?.checked;
+    if (f.pinned) {
+      f.pinned.disabled = !team;
+      if (!team) f.pinned.checked = false;
     }
+    // 같은 채널에서 고치는 글은 처음 정해진 공개 범위를 그대로 따른다.
+    const keep = saved.id && saved.channel_id === f.channel_id.value;
+    const full = keep ? saved.content_kind !== "experience" : team || !!ch?.guest_full;
+    const range = $("#write-range");
+    range.hidden = !ch;
+    range.textContent = !ch
+      ? ""
+      : `${anon ? "완전 익명 채널이에요. 회사명·닉네임 없이 ‘익명’으로 보여요. " : ""}${
+          team && !keep
+            ? "운영팀 이름 글은 로그인하지 않은 사람도 전체를 볼 수 있어요."
+            : full
+              ? "이 채널의 글은 로그인하지 않은 사람도 본문 전체를 볼 수 있어요. 댓글은 인증 회원만 봅니다."
+              : "이 채널의 글은 로그인하지 않은 사람에게 앞 300자까지만 보여요. 댓글은 인증 회원만 봅니다."
+        }`;
   }
   // 입력하는 대로 000-0000-0000 모양으로(서울 02, 지역번호, 대표번호도 자연스럽게)
   function formatPhone(value) {
@@ -1240,6 +1310,7 @@
     session = null;
     viewer = null;
     mine = null;
+    clearAllDrafts();
   }
   async function logout(message = "로그아웃했어요.") {
     let failed = false;
@@ -1324,7 +1395,9 @@
           on = chips && $(".active", chips);
         if (on) chips.scrollLeft = Math.max(0, on.offsetLeft - (chips.clientWidth - on.offsetWidth) / 2);
       }
-      updatePreview();
+      updateWrite();
+      restoreDraft();
+      updateWrite();
       updateDisplay();
     } catch (err) {
       if (stamp !== renderId) return;
@@ -1506,6 +1579,21 @@
         $$("[data-reply-slot]").forEach((x) => (x.innerHTML = ""));
         slot.innerHTML = `<form data-form="comment" class="comment-form reply-form open"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}"><textarea name="body" rows="2" aria-label="대댓글" placeholder="대댓글을 남겨 주세요." required maxlength="3000" data-testid="reply-body"></textarea><p class="error" data-form-error role="alert"></p><div class="comment-form-actions"><button type="button" class="btn btn-small" data-do="reply-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`;
         slot.querySelector("textarea").focus();
+        return;
+      }
+      case "draft-clear": {
+        clearDraft();
+        const form = $("#post-form"),
+          saved = current?.post || {};
+        form.elements.title.value = saved.title || "";
+        form.elements.body.value = saved.body || "";
+        form.elements.is_question.checked = !!saved.is_question;
+        form.elements.company_id.value = saved.company_id || "";
+        form.elements.channel_id.value = saved.channel_id || params.get("channel") || "";
+        $("[data-draft-line]").hidden = true;
+        $("[data-draft-state]").textContent = "";
+        updateWrite();
+        form.elements.title.focus();
         return;
       }
       case "reply-cancel":
@@ -1714,7 +1802,6 @@
           channel_id: v.channel_id,
           title: v.title.trim(),
           body: v.body.trim(),
-          content_kind: v.content_kind,
           is_question: data.has("is_question"),
         };
         if (form.elements.as_team) payload.as_team = data.has("as_team");
@@ -1722,6 +1809,7 @@
         if (v.id) payload.id = v.id;
         if (v.company_id) payload.company_id = v.company_id;
         const result = await act("post_save", payload);
+        clearDraft();
         location.href = uri("post.html", { id: result.id || v.id });
         return;
       }
@@ -1796,6 +1884,7 @@
         ["enabled", "pinned", "anonymous"].forEach((k) => {
           if (form.elements[k]) payload[k] = data.has(k);
         });
+        if ("guest_full" in payload) payload.guest_full = payload.guest_full === "true";
         ["display_order", "daily_limit", "days"].forEach((k) => {
           if (k in payload && payload[k] !== "") payload[k] = Number(payload[k]);
         });
@@ -1870,7 +1959,10 @@
         !n || n === 14 ? "" : `설계사 고유번호는 숫자 14자리예요. 지금 ${n}자리입니다.`,
       );
     }
-    if (event.target.closest("#post-form")) updatePreview();
+    if (event.target.closest("#post-form")) {
+      updateWrite();
+      saveDraftSoon();
+    }
     if (event.target.closest('form[data-form="verification"]')) updateDisplay();
   });
   document.addEventListener("change", (event) => {
@@ -1886,7 +1978,8 @@
         }
       }
     }
-    updatePreview();
+    updateWrite();
+    if (event.target.closest?.("#post-form")) saveDraftSoon();
     updateDisplay();
   });
   $("#dialog").addEventListener("click", (event) => {
