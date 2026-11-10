@@ -2484,3 +2484,13 @@ dialog::backdrop {
   margin: 22px 0 8px;
   font-size: 16px;
 }
+
+/* 좋아요·저장 채워진 아이콘 (2026-11-10 대표 승인) */
+[data-do="toggle"][data-kind="like"][aria-pressed="true"] { color: #e5484d; }
+[data-do="toggle"][data-kind="like"][aria-pressed="true"] svg.icon { fill: #e5484d; stroke: #e5484d; }
+[data-do="toggle"][data-kind="bookmark"][aria-pressed="true"] { color: #b7791f; }
+[data-do="toggle"][data-kind="bookmark"][aria-pressed="true"] svg.icon { fill: #f5b301; stroke: #d69e00; }
+@media (prefers-reduced-motion: no-preference) {
+  .toggle-pop svg.icon { animation: toggle-pop 0.32s ease-out; }
+  @keyframes toggle-pop { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
+}
