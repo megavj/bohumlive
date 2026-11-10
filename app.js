@@ -360,7 +360,7 @@
         .map(([k, label]) => [k, `${label} — ${k === "experience" ? "앞 300자만 누구나 보기" : "본문 전체 누구나 보기"}`]),
       p.content_kind || "experience",
       "required",
-    )}${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}</div><label class="check-line"><input type="checkbox" name="is_question" ${p.is_question ? "checked" : ""}>동료에게 묻는 질문입니다. AI 참고 답변이 함께 생성될 수 있어요.</label>${
+    )}${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}</div><label class="check-line"><input type="checkbox" name="is_question" ${p.is_question ? "checked" : ""}>AI답변 허용하기 <span class="hint">(체크하면 AI 참고 답변이 함께 달릴 수 있어요)</span></label>${
       isAdmin()
         ? `<div class="team-box"><label class="check-line"><input type="checkbox" name="as_team" data-testid="as-team" ${p.as_team || !isVerified() ? "checked" : ""} ${isVerified() ? "" : "required"}>‘보험라이브 운영팀’ 이름으로 쓰기 (작성자 대신 운영팀으로 표시)</label>${p.id ? "" : '<label class="check-line"><input type="checkbox" name="pinned" data-testid="as-notice">공지로 고정 (운영팀 이름일 때만)</label>'}${isVerified() ? "" : '<p class="hint">설계사 인증 전 관리자는 운영팀 이름으로만 쓸 수 있어요.</p>'}</div>`
         : ""
