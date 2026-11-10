@@ -94,3 +94,9 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - **011 채널**: `bl_channels.anonymous`, `bl_posts.anonymous`, `bl_comments.anonymous`. 익명 글·댓글은 작성자 회사·닉네임을 비워 저장하고 `author_display`는 '익명'(댓글은 글쓴이 본인이면 '글쓴이'). 한 번 익명이면 계속 익명, 익명 채널로 옮겨진 글은 익명으로 바뀜(`bl_anon_sync`). 익명 글은 관련 회사 태그 없음.
 - **012 회원 기능**: 견본 계정 작성자 표시 '견본 계정'. `toggle`의 bookmark·follow는 로그인 회원(정지·탈퇴 제외). `posts`·`search`에 `offset`. 잘못된 글·회사 id는 오류 대신 `unavailable_reason:'not_found'`/`company:null`. `inquiry {kind:'general'|'privacy'|'rights'|'account',link?,body}`(하루 5회, 탈퇴 시 삭제).
 - **013**: 검색어 `%`·`_`는 글자 그대로. 가려진 글은 작성자 본인이 제목·본문을 볼 수 있음(이의신청용). 회사 종류 `생명보험사`·`손해보험사`·`GA`(·`보험사`).
+
+## 2026-11-10 블라인드형 개편 (014~016)
+- **014 조회수·홈**: `bl_posts.view_count`. post DTO에 `views`(목록·상세 공통). `bl_read('post',{id,view:'1'})`일 때만 1 증가 — 화면은 같은 기기·같은 접속에서 글마다 한 번만 `view`를 보낸다. 가려진 글·작성자 본인은 세지 않고, 시험 계정의 조회는 시험 글에서만 센다. `bl_read('home',{v:'3'})` → `{viewer,notices,best,boxes,channels}`: `best`는 공지 제외 인기 글 10개(최근 30일 우선 → 좋아요 → 댓글 → 조회수 → 최신), `boxes`는 사용 중인 채널마다 `{channel_id,posts:[최신 5개, 공지 제외]}`. `bl_read('best')` → `{viewer,best}`(PC 오른쪽 '인기 글'용). `v` 없는 `home` 호출은 예전 응답 그대로.
+- **015 채널별 손님 공개 범위**: `bl_channels.guest_full`(채널 DTO에도 제공). `post_save`가 `content_kind`를 받지 않으면 자동으로 정한다 — ① 같은 채널에서 고치는 글은 원래 값 유지 ② `as_team`(관리자)이면 `weekly` ③ 채널 `guest_full`이면 `practice`, 아니면 `experience`. `content_kind`를 보내면 예전처럼 그 값을 쓴다(`weekly`는 관리자만). 손님 300자 제한 방식(`experience`)과 댓글 권한은 그대로. 관리자 `channel_save`에 `guest_full?:boolean`(없으면 기존 값 유지, 새 채널 기본 false). 채널 설정을 바꿔도 이미 쓴 글의 `content_kind`는 바뀌지 않는다(새 글부터 적용).
+- **016**: 작성자 정보가 없는 글(운영팀 공지·탈퇴 회원 글)을 손님이 열 때도 조회수를 센다(014의 조건 보완).
+- 화면 쪽 약속: 좋아요·저장·팔로우는 `toggle` 응답 `active`로 그 자리에서 반영(전체 다시 그리지 않음), 댓글 저장·삭제 뒤에는 `post`를 다시 읽어 댓글 구역만 갱신. 글쓰기 임시저장은 기기 저장소(`bl_draft:<회원>:<글|new>`)에만 두고 서버로 보내지 않으며 등록·로그아웃 때 지운다.
