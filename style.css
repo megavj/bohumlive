@@ -2879,6 +2879,41 @@ dialog::backdrop {
   color: #4a4658;
   font-weight: 700;
 }
+/* 홈 '팔로우한 채널' 묶음(인기 글 바로 아래) — 채널 상자 모양은 그대로 쓴다 */
+.group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 0;
+  border-top: 8px solid var(--soft);
+}
+.group-label h2 {
+  margin: 0;
+  color: #6f6b7d;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.group-label a {
+  flex: none;
+  padding: 6px 0 6px 12px;
+  color: #8a8796;
+  font-size: 12px;
+}
+.group-label a::after {
+  content: " ›";
+}
+.group-label + .boxes > .box:first-child {
+  border-top: 0;
+  padding-top: 10px;
+}
+.notification-item h2 a {
+  color: inherit;
+}
+.notification-item h2 a:hover {
+  color: var(--link);
+}
 @media (min-width: 800px) {
   .home-search {
     display: none;
@@ -2918,6 +2953,13 @@ dialog::backdrop {
   .quiet-channels {
     padding: 18px 0;
     border-top: 0;
+  }
+  .group-label {
+    padding: 22px 0 2px;
+    border-top: 0;
+  }
+  .group-label + .boxes > .box:first-child {
+    padding-top: 22px;
   }
 }
 .best-list {

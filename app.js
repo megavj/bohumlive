@@ -283,7 +283,13 @@
       const c = byId[b.channel_id];
       return `<section class="box" data-testid="home-box"><div class="box-head"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a></h2><a class="box-more" href="${uri("channel.html", { id: c.id })}" aria-label="${E(c.name)} 더보기">더보기</a></div><ul class="box-list">${b.posts.map((p) => `<li><a href="${uri("post.html", { id: p.id })}">${E(p.title)}</a>${stat("eye", "조회수", p.views)}</li>`).join("")}</ul></section>`;
     };
-    return `<form class="home-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="궁금한 내용을 검색해 보세요" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${noticeLine(d.notices)}${verifyStrip()}<section class="best" data-testid="home-best"><div class="box-head"><h1>인기 글</h1><a class="box-more" href="/channel.html?sort=popular" aria-label="인기 글 더보기">더보기</a></div>${best.length ? `<ol class="best-list">${best.map(bestRow).join("")}</ol>` : empty()}</section><div class="boxes" data-testid="home-boxes">${filled.map(box).join("")}</div>${quiet.length ? `<p class="quiet-channels" data-testid="quiet-channels"><span>첫 글을 기다리는 채널</span>${quiet.map((b) => `<a href="${uri("channel.html", { id: b.channel_id })}">${E(byId[b.channel_id].name)}</a>`).join("")}</p>` : ""}`;
+    // 팔로우한 채널: '인기 글' 바로 아래로 올려 같은 상자 모양으로 보여 준다(아래 채널 상자에서는 빠짐). 팔로우가 없거나 글이 없으면 묶음 자체를 그리지 않는다.
+    const followed = filled.filter((b) => byId[b.channel_id].following),
+      others = followed.length ? filled.filter((b) => !byId[b.channel_id].following) : filled;
+    const followGroup = followed.length
+      ? `<section class="follow-home" data-testid="home-follow"><div class="group-label"><h2>팔로우한 채널</h2><a href="/channels.html?filter=following">채널 관리</a></div><div class="boxes">${followed.map(box).join("")}</div></section>${others.length ? '<div class="group-label group-rest"><h2>다른 채널</h2></div>' : ""}`
+      : "";
+    return `<form class="home-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="궁금한 내용을 검색해 보세요" maxlength="100"><button aria-label="검색">${icon("search")}</button></form>${noticeLine(d.notices)}${verifyStrip()}<section class="best" data-testid="home-best"><div class="box-head"><h1>인기 글</h1><a class="box-more" href="/channel.html?sort=popular" aria-label="인기 글 더보기">더보기</a></div>${best.length ? `<ol class="best-list">${best.map(bestRow).join("")}</ol>` : empty()}</section>${followGroup}<div class="boxes" data-testid="home-boxes">${others.map(box).join("")}</div>${quiet.length ? `<p class="quiet-channels" data-testid="quiet-channels"><span>첫 글을 기다리는 채널</span>${quiet.map((b) => `<a href="${uri("channel.html", { id: b.channel_id })}">${E(byId[b.channel_id].name)}</a>`).join("")}</p>` : ""}`;
   }
   async function channelList() {
     const d = await read("channels");
@@ -619,7 +625,18 @@
     if (denied) return denied;
     const d = mine || (await read("me"));
     const list = d.notifications || [];
-    return `<section class="section"><div class="section-head"><h1>알림</h1>${btn("모두 읽음", "notifications-read", 'class="btn btn-small"')}</div><p class="muted">내 글의 댓글과 인증·운영 처리 결과를 확인해요.</p></section>${list.length ? list.map((n) => `<article class="notification-item ${n.read_at || n.is_read ? "" : "unread"}"><h2>${E(n.title || n.message || n.kind || "새 알림")}</h2>${n.body ? `<p>${E(n.body)}</p>` : ""}<div class="meta"><span>${E(date(n.created_at))}</span>${n.post_id ? `<a data-do="notification-open" data-id="${E(n.id)}" href="${uri("post.html", { id: n.post_id })}">글 보기 →</a>` : ""}${!n.read_at && !n.is_read ? `<button data-do="notification-read" data-id="${E(n.id)}">읽음 표시</button>` : ""}</div></article>`).join("") : empty("새로운 알림이 없어요.", "동료가 내 글에 댓글을 남기면 알려드릴게요.")}`;
+    // 팔로우한 채널의 새 글: 서버가 읽지 않은 것만 주고, 같은 채널 5개 이상이면 한 줄(follow_group)로 묶어 준다. 읽으면 목록에서 사라진다.
+    const item = (n) => {
+      if (n.kind === "follow_group") {
+        const href = uri("channel.html", { id: n.channel_id });
+        return `<article class="notification-item unread follow-note" data-testid="follow-group"><h2><a data-do="notification-channel" data-channel="${E(n.channel_id)}" href="${href}">${E(n.title)}</a></h2><div class="meta"><span>${E(date(n.created_at))}</span><a data-do="notification-channel" data-channel="${E(n.channel_id)}" href="${href}">채널 보기 →</a><button data-do="notification-channel-read" data-channel="${E(n.channel_id)}">읽음 표시</button></div></article>`;
+      }
+      const unread = !n.read_at && !n.is_read,
+        href = n.post_id ? uri("post.html", { id: n.post_id }) : "";
+      const title = E(n.title || n.message || n.kind || "새 알림");
+      return `<article class="notification-item ${unread ? "unread" : ""}${n.kind === "follow" ? " follow-note" : ""}"${n.kind === "follow" ? ' data-testid="follow-item"' : ""}><h2>${n.kind === "follow" && href ? `<a data-do="notification-open" data-id="${E(n.id)}" href="${href}">${title}</a>` : title}</h2>${n.body ? `<p>${E(n.body)}</p>` : ""}<div class="meta"><span>${E(date(n.created_at))}</span>${href ? `<a data-do="notification-open" data-id="${E(n.id)}" href="${href}">글 보기 →</a>` : ""}${unread ? `<button data-do="notification-read" data-id="${E(n.id)}">읽음 표시</button>` : ""}</div></article>`;
+    };
+    return `<section class="section"><div class="section-head"><h1>알림</h1>${btn("모두 읽음", "notifications-read", 'class="btn btn-small"')}</div><p class="muted">내 글의 댓글, 팔로우한 채널의 새 글, 인증·운영 처리 결과를 확인해요.</p></section>${list.length ? list.map(item).join("") : empty("새로운 알림이 없어요.", "동료가 내 글에 댓글을 남기거나 팔로우한 채널에 새 글이 올라오면 알려드릴게요.")}`;
   }
   function reviewHTML(r) {
     return `<article class="review" data-testid="review-item"><div class="section-head"><h3>${E(r.title)} ${sampleBadge(r)}</h3>${r.is_mine && isVerified() ? `<div class="form-actions">${btn("수정", "review-edit", `data-id="${E(r.id)}"`)}${btn("삭제", "review-delete", `data-id="${E(r.id)}"`)}</div>` : ""}</div><p class="author">${E(r.author_display)} · ${E(date(r.created_at))}</p><div class="review-scores">${scoreNames.map((s, i) => `<div class="review-score"><span>${s}</span><span class="stars">${"★".repeat(Number(r.scores?.[i]) || 0)}</span></div>`).join("")}</div><p class="body-text" style="margin-top:16px">${E(r.body)}</p>${r.is_truncated ? '<p class="hint">나머지 리뷰는 인증 후 읽을 수 있어요.</p>' : ""}${r.is_mine ? "" : `<button class="text-link small" data-do="report" data-target="review" data-id="${E(r.id)}">리뷰 신고</button>`}</article>`;
@@ -1664,6 +1681,14 @@
         await act("notification_read", { id });
         location.href = el.href;
         return;
+      case "notification-channel":
+        event.preventDefault();
+        await act("notification_read", { channel_id: el.dataset.channel });
+        location.href = el.href;
+        return;
+      case "notification-channel-read":
+        await act("notification_read", { channel_id: el.dataset.channel });
+        return refresh();
       case "more-posts": {
         const d = await read("posts", { ...current.list.args, offset: current.list.offset });
         const more = d.posts || [];
