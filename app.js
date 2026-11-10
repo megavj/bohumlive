@@ -158,7 +158,15 @@
     $("#footer").innerHTML =
       `<footer class="site-footer"><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html"><b>개인정보처리방침</b></a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">운영 안내·권리침해 신고</a></nav><p class="footer-note">회원 글은 개인 의견이며 회사의 공식 입장이나 보험상품 가입 권유가 아닙니다. 고객정보·주민등록번호·개인 연락처는 올리지 마세요.</p><p class="footer-note footer-copy">© ${new Date().getFullYear()} 보험라이브 · 공개 준비 중(검색 노출 차단)</p></footer>`;
     // 오른쪽 칸: 안내 상자·글쓰기 버튼을 두지 않는다. 목록·글 화면(PC)에서만 '인기 글' 제목 목록을 채운다.
-    const mode = page === "admin" ? "admin" : page === "home" ? "wide" : ["channel", "post", "search"].includes(page) ? "aside" : "narrow";
+    // 둘러보는 화면(홈·채널 탐색·보험사 목록)은 넓게, 읽는 화면(목록·글·검색·보험사 상세)은 본문 + 오른쪽 인기 글, 입력 화면은 가운데 한 칸
+    const mode =
+      page === "admin"
+        ? "admin"
+        : page === "home" || page === "channels" || (page === "company" && !params.get("id"))
+          ? "wide"
+          : ["channel", "post", "search", "company"].includes(page)
+            ? "aside"
+            : "narrow";
     document.body.dataset.layout = mode;
     $("#sidebar").innerHTML = "";
     $("#sidebar").hidden = mode !== "aside";

@@ -4111,3 +4111,11 @@ h2 {
     margin: 24px 0;
   }
 }
+.site-footer {
+  padding-bottom: 20px;
+}
+@media (min-width: 800px) {
+  .site-footer {
+    padding: 18px 0 26px;
+  }
+}
