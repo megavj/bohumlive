@@ -3906,3 +3906,208 @@ dialog::backdrop {
     min-height: 360px;
   }
 }
+/* F. 전체 — 글자·줄 간격·회색 선·여백을 촘촘하고 깔끔하게(휴대폰 먼저), 맨 아래 안내는 짧게 */
+body {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Apple SD Gothic Neo",
+    "Pretendard",
+    "Noto Sans KR",
+    "Malgun Gothic",
+    "맑은 고딕",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+h1 {
+  font-size: 19px;
+  margin-bottom: 12px;
+}
+h2 {
+  font-size: 17px;
+}
+.section {
+  padding: 18px 16px;
+}
+.section-head {
+  margin-bottom: 14px;
+}
+.tabs {
+  gap: 20px;
+  padding: 0 16px;
+  border-bottom-color: #eeedf2;
+}
+.tabs a,
+.tabs button {
+  padding: 12px 0;
+}
+.empty {
+  padding: 36px 20px;
+  font-size: 13px;
+}
+.empty strong {
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.notice {
+  padding: 12px 14px;
+  border-radius: 6px;
+}
+.feed-item,
+.notification-item,
+.review {
+  padding: 14px 16px;
+  border-color: #eeedf2;
+}
+.notification-item h2 {
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+.profile-line {
+  padding: 11px 0;
+  border-color: #eeedf2;
+  font-size: 14px;
+}
+.btn {
+  border-radius: 6px;
+}
+/* 채널 탐색·보험사 목록: 상자 대신 선으로 나눈 촘촘한 줄 */
+.explore {
+  padding: 18px 16px 8px;
+}
+.explore h1 {
+  margin-bottom: 10px;
+}
+.explore .chips {
+  margin: 0 0 6px;
+}
+.channel-cards {
+  gap: 0;
+}
+.channel-card {
+  min-height: 0;
+  padding: 13px 0;
+  border: 0;
+  border-bottom: 1px solid #eeedf2;
+  border-radius: 0;
+  gap: 12px;
+}
+.channel-card h2 {
+  font-size: 15px;
+}
+.channel-card p {
+  font-size: 13px;
+  color: #75727f;
+}
+.channel-card .follow-count {
+  margin-top: 2px;
+  color: #94929e;
+  font-size: 12px;
+}
+.channel-card .follow-small.follow-chip {
+  padding: 5px 12px;
+  color: var(--link);
+  font-size: 12px;
+}
+.channel-card .follow-small.follow-chip[aria-pressed="true"] {
+  color: #8c9099;
+}
+.company-group {
+  margin: 20px 0 2px;
+  font-size: 15px;
+}
+.company-row {
+  padding: 11px 0;
+}
+.company-row::after {
+  content: "›";
+  color: #c4c1cf;
+  font-size: 16px;
+}
+.company-row .small {
+  color: #94929e;
+}
+/* 맨 아래: 링크 한 줄 + 안내 1~2줄 */
+.site-footer {
+  margin-top: 28px;
+  padding: 18px 16px 28px;
+  border-top-color: #eeedf2;
+}
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 10px;
+  color: #5d5969;
+}
+.footer-links a {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+}
+.footer-links b {
+  font-weight: 700;
+}
+.site-footer .footer-note {
+  max-width: none;
+  margin: 0;
+  color: #a2a0ad;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.site-footer .footer-copy {
+  margin-top: 2px;
+}
+@media (max-width: 799px) {
+  .site-footer {
+    margin-top: 20px;
+  }
+  .footer-links {
+    display: flex;
+    grid-template-columns: none;
+  }
+}
+@media (min-width: 800px) {
+  h1 {
+    font-size: 21px;
+  }
+  .section {
+    padding: 8px 0 20px;
+  }
+  .tabs {
+    padding: 0;
+  }
+  .explore {
+    padding: 8px 0;
+  }
+  .channel-cards {
+    column-gap: 40px;
+  }
+  .channel-card {
+    padding: 13px 0;
+  }
+  .feed-item,
+  .notification-item,
+  .review {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .site-footer {
+    padding: 20px 0 36px;
+  }
+  .footer-links {
+    gap: 4px 22px;
+  }
+  .admin-main .section {
+    padding-top: 8px;
+  }
+}
+.section-divider {
+  margin: 24px -16px;
+}
+@media (min-width: 800px) {
+  .section-divider {
+    margin: 24px 0;
+  }
+}
