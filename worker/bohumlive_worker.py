@@ -36,7 +36,7 @@ except Exception:  # pragma: no cover - missing/broken module must never stop an
 
 MODEL = "claude-opus-5-5"
 EFFORT = "medium"  # 2026-11-10 대표 지시: Opus 5.5 medium
-VERSION = "2026-11-10.2"
+VERSION = "2026-11-10.3"
 PROOF_BUCKET = "bl-proofs"
 MAX_SECONDS = 240
 ANSWER_BUDGET = 105  # 답변 1개 2분 안(크론 2분 주기): 첫 작성 + 필요하면 고쳐 쓰기 1회까지 이 시간 안에서만
@@ -645,8 +645,9 @@ def process_one(backend: Backend) -> None:
         rewritten = bool(result.pop("rewritten", False))
         reason = result.pop("rewrite_reason", "")
         scrubbed = bool(result.pop("scrubbed", False))
+        # complete는 AI 회원 계정 없이 bl_comments에 저장하며 같은 글의 댓글을 갱신한다.
         backend.rpc("complete", {**lease, **result})
-        log("answer_published", model=MODEL, effort=EFFORT,
+        log("answer_published", model=MODEL, effort=EFFORT, storage="comment",
             subscription=True, fallback_used=False, elapsed_ms=result["elapsed_ms"],
             sources=len(sources), search_ms=search_ms, rewritten=rewritten, rewrite_reason=reason, scrubbed=scrubbed)
     except WorkerError as exc:

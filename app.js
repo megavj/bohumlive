@@ -427,9 +427,6 @@
   }
   // 댓글 한 개: 회사·닉네임 → 내용 → 작성일·좋아요·대댓글·⋯(신고·수정·삭제)
   function commentHTML(c) {
-    // AI 참고답변도 댓글 한 개처럼(작성자 'AI 참고답변', 좋아요·대댓글·메뉴 없음)
-    if (c.is_ai)
-      return `<article class="comment-item comment-ai-item" id="comment-ai" data-testid="ai-reply"><div class="comment-author"><span class="ai-badge">AI</span> AI 참고답변</div><p class="body-text">${E(c.body)}</p><div class="comment-meta">${timeTag(c.created_at, "comment-time")}</div></article>`;
     const menu = moreMenu(
       [
         c.is_mine && isVerified() ? `<button type="button" data-do="comment-edit" data-id="${E(c.id)}">${icon("edit")} 수정</button>` : "",
@@ -438,11 +435,10 @@
       ],
       "댓글 메뉴 더보기",
     );
-    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${E(c.author_display)}${c.is_mine ? ' <span class="author-badge">내 댓글</span>' : ""}</div><p class="body-text">${E(c.body)}</p><div class="comment-meta">${timeTag(c.created_at, "comment-time")}<button type="button" data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" aria-label="좋아요" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : 'title="좋아요"'}>${icon("heart")}<span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${!c.parent_id && isVerified() ? `<button type="button" data-do="reply" data-id="${E(c.id)}">${icon("comment")}대댓글</button>` : ""}<span class="comment-tools">${menu}</span></div><div data-reply-slot="${E(c.id)}"></div></article>`;
+    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""} ${c.is_ai ? "comment-ai-item" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${c.is_ai ? '<span class="ai-badge">AI</span> ' : ""}${E(c.author_display)}${c.is_mine ? ' <span class="author-badge">내 댓글</span>' : ""}</div><p class="body-text">${E(c.body)}</p><div class="comment-meta">${timeTag(c.created_at, "comment-time")}<button type="button" data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" aria-label="좋아요" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : 'title="좋아요"'}>${icon("heart")}<span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${!c.parent_id && isVerified() ? `<button type="button" data-do="reply" data-id="${E(c.id)}">${icon("comment")}대댓글</button>` : ""}<span class="comment-tools">${menu}</span></div><div data-reply-slot="${E(c.id)}"></div></article>`;
   }
   const commentListHTML = (d) => {
     const all = (d.comments || []).slice();
-    if (d.ai_reply) all.push({ id: "ai", is_ai: true, body: d.ai_reply.body, created_at: d.ai_reply.created_at || d.post?.created_at, likes: 0 });
     const list = orderComments(all, commentSort());
     return list.length ? list.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.");
   };
@@ -450,7 +446,7 @@
     const p = d.post,
       sort = commentSort();
     const sorter =
-      canReadMember() && (d.comments || []).filter((c) => !c.parent_id).length + (d.ai_reply ? 1 : 0) > 1
+      canReadMember() && (d.comments || []).filter((c) => !c.parent_id).length > 1
         ? `<div class="comment-sort" role="group" aria-label="댓글 정렬" data-testid="comment-sort">${commentSorts.map(([k, label]) => `<button type="button" data-do="comment-sort" data-sort="${k}" class="${sort === k ? "active" : ""}" aria-pressed="${sort === k}">${label}</button>`).join("")}</div>`
         : "";
     // 입력칸은 한 줄로 두었다가 누르면 커지고 [취소][등록]이 나온다.
@@ -459,8 +455,7 @@
       : canReadMember()
         ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>'
         : lockBar(session ? `댓글은 설계사 인증 회원만 볼 수 있어요. (지금: ${statusLabel()})` : "댓글은 설계사 인증 회원만 볼 수 있어요.");
-    const ai = d.ai_reply && !canReadMember() ? commentHTML({ is_ai: true, body: d.ai_reply.body, created_at: d.ai_reply.created_at || p.created_at }) : "";
-    return `<section class="comments" id="comments"><div class="comments-top"><h2>댓글 <span data-comment-count>${Number(p.comment_count) || 0}</span></h2>${sorter}${form}</div>${canReadMember() ? `<div data-comment-list>${commentListHTML(d)}</div>` : ""}${ai}</section>`;
+    return `<section class="comments" id="comments"><div class="comments-top"><h2>댓글 <span data-comment-count>${Number(p.comment_count) || 0}</span></h2>${sorter}${form}</div>${canReadMember() ? `<div data-comment-list>${commentListHTML(d)}</div>` : ""}</section>`;
   }
   // 댓글을 쓰거나 지운 뒤에는 댓글 구역만 다시 그린다(읽던 위치가 튀지 않게).
   async function reloadComments(focusId) {
@@ -632,7 +627,7 @@
   function jumpToHash() {
     const m = /^#(comments|comment-ai|comment-[0-9a-f-]{36})$/i.exec(location.hash);
     if (hashJumped || !m) return;
-    const el = document.getElementById(m[1]) || document.getElementById("comments");
+    const el = (m[1] === "comment-ai" ? document.querySelector(".comment-ai-item") : document.getElementById(m[1])) || document.getElementById("comments");
     if (!el) return;
     hashJumped = true;
     if (el.id !== "comments") el.classList.add("comment-new");

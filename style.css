@@ -4189,8 +4189,8 @@ h2 {
   }
 }
 
-/* 2026-11-10 AI 참고답변을 댓글 한 개처럼 */
-.comment-ai-item .comment-author { display: flex; align-items: center; gap: 6px; }
+/* AI 작성 댓글: 동작과 배치는 회원 댓글과 같게, 작성자만 표시 */
+.comment-ai-item .comment-author { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .comment-ai-item .ai-badge { margin-left: 0; border-color: #cfc3f3; color: #5b46d6; font-weight: 700; }
 .comment-ai-item .body-text { white-space: pre-line; }
 .channel-request { margin: 20px 0 8px; text-align: center; }
