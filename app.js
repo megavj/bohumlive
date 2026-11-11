@@ -268,13 +268,12 @@
   // 아이콘 + 숫자(화면 읽기 프로그램에는 이름까지 읽어 준다)
   const stat = (name, label, value) =>
     `<span class="stat stat-${name}" title="${label} ${num(value)}">${icon(name)}<span class="sr-only">${label}</span>${num(value)}</span>`;
-  // 공지는 맨 위에 한 줄. 여러 개면 첫 줄만 보이고 '+n'을 누르면 나머지가 펼쳐진다.
+  // 공지는 맨 위에 최대 3개까지 한 줄씩 보인다(2026-11-11 대표 지시). 4개째부터는 홈에 나오지 않는다(공지 순서로 조정).
   function noticeLine(list = []) {
     if (!list.length) return "";
     const row = (n) =>
       `<a class="notice-row" href="${uri("post.html", { id: n.id })}"><span class="notice-mark">공지</span><span class="notice-title">${E(n.title)}</span></a>`;
-    if (list.length === 1) return `<div class="notice-line" data-testid="notice-line">${row(list[0])}</div>`;
-    return `<details class="notice-line" data-testid="notice-line"><summary>${row(list[0])}<span class="notice-count" title="공지 ${list.length - 1}개 더 보기">+${list.length - 1}</span></summary>${list.slice(1).map(row).join("")}</details>`;
+    return `<div class="notice-line" data-testid="notice-line">${list.slice(0, 3).map(row).join("")}</div>`;
   }
   async function home() {
     const d = await read("home", { v: "3" });

@@ -4379,3 +4379,6 @@ h2 {
     background: rgba(24, 20, 33, 0.32);
   }
 }
+
+/* 2026-11-11 공지 최대 3줄: 줄 사이 옅은 구분선 */
+.notice-line > .notice-row + .notice-row { border-top: 1px solid #ebe6f6; }
