@@ -490,7 +490,7 @@
     current = { post: p };
     const teamOnly = isAdmin() && !isVerified();
     const adminBox = isAdmin()
-      ? `<details class="write-more write-admin" data-testid="admin-options" ${teamOnly || p.as_team ? "open" : ""}><summary>운영자 설정</summary><div class="write-more-body"><label class="check-line"><input type="checkbox" name="as_team" data-testid="as-team" ${p.as_team || teamOnly ? "checked" : ""} ${teamOnly ? "required" : ""}>‘보험라이브 운영팀’ 이름으로 쓰기</label>${p.id ? "" : '<label class="check-line"><input type="checkbox" name="pinned" data-testid="as-notice">공지로 고정 (운영팀 이름일 때만)</label>'}${teamOnly ? '<p class="hint">설계사 인증 전 관리자는 운영팀 이름으로만 쓸 수 있어요.</p>' : ""}</div></details>`
+      ? `<details class="write-more write-admin" data-testid="admin-options" ${teamOnly || p.as_team ? "open" : ""}><summary>운영자 설정</summary><div class="write-more-body"><label class="check-line"><input type="checkbox" name="as_team" data-testid="as-team" ${p.as_team || teamOnly ? "checked" : ""} ${teamOnly ? "required" : ""}><span>‘보험라이브 운영팀’ 이름으로 쓰기</span></label>${p.id ? "" : '<label class="check-line"><input type="checkbox" name="pinned" data-testid="as-notice"><span>공지로 고정 (운영팀 이름일 때만)</span></label>'}${teamOnly ? '<p class="hint">설계사 인증 전 관리자는 운영팀 이름으로만 쓸 수 있어요.</p>' : ""}</div></details>`
       : "";
     return `<section class="write" data-testid="write"><form data-form="post" id="post-form" class="write-form"><input type="hidden" name="id" value="${E(p.id || "")}"><h1 class="write-heading">${p.id ? "글 수정" : "글쓰기"}</h1><p class="draft-line" data-draft-line hidden><span data-draft-text></span><button type="button" data-do="draft-clear" data-testid="draft-clear">지우고 새로 쓰기</button></p><select name="channel_id" class="write-channel" aria-label="채널" required data-testid="post-channel">${[["", "채널을 선택하세요"], ...channels.filter((c) => c.slug !== "notice" || isAdmin()).map((c) => [c.id, c.name + (c.anonymous ? " (완전 익명)" : "")])]
       .map((o) => `<option value="${E(o[0])}" ${String(o[0]) === String(p.channel_id || params.get("channel") || "") ? "selected" : ""}>${E(o[1])}</option>`)
@@ -1040,7 +1040,7 @@
     return adminForm(
       "channel_save",
       c.id,
-      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (자동으로 정해져요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? Math.max(0, ...channels.map((x) => Number(x.display_order) || 0)) + 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>채널 사용(끄면 회원에게 보이지 않아요)</label><label class="check-line"><input type="checkbox" name="anonymous" data-testid="channel-anonymous" ${c.anonymous ? "checked" : ""}>완전 익명 채널(회사명·닉네임 없이 ‘익명’으로 표시)</label><p class="hint">완전 익명을 켜면 이 채널의 글·댓글이 익명으로 바뀌고, 나중에 꺼도 이미 익명인 글은 익명으로 남아요.</p>${select("guest_full", "손님(로그인하지 않은 사람)에게 보이는 범위", [["false", "앞 300자만 보여 주기"], ["true", "본문 전체 보여 주기"]], String(!!c.guest_full), 'data-testid="channel-guest-range"')}<p class="hint">바꾼 뒤에 새로 쓰는 글부터 적용돼요. 이미 쓴 글의 공개 범위는 그대로예요. 댓글은 언제나 인증 회원만 봅니다.</p>`,
+      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (이름을 바꿔도 그대로예요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? Math.max(0, ...channels.map((x) => Number(x.display_order) || 0)) + 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}><span>채널 사용(끄면 회원에게 보이지 않아요)</span></label><label class="check-line"><input type="checkbox" name="anonymous" data-testid="channel-anonymous" ${c.anonymous ? "checked" : ""}><span>완전 익명 채널(회사명·닉네임 대신 ‘익명’ 표시)</span></label><p class="hint">완전 익명을 켜면 이 채널의 글·댓글이 익명으로 바뀌고, 나중에 꺼도 이미 익명인 글은 익명으로 남아요.</p>${select("guest_full", "손님(로그인하지 않은 사람)에게 보이는 범위", [["false", "앞 300자만 보여 주기"], ["true", "본문 전체 보여 주기"]], String(!!c.guest_full), 'data-testid="channel-guest-range"')}<p class="hint">바꾼 뒤에 새로 쓰는 글부터 적용돼요. 이미 쓴 글의 공개 범위는 그대로예요. 댓글은 언제나 인증 회원만 봅니다.</p>`,
       c.id ? "수정 저장" : "채널 추가",
       "",
       c.name || "새",
@@ -1050,7 +1050,7 @@
     return adminForm(
       "company_save",
       c.id,
-      `${field("name", "회사 이름", "text", c.name || "", 'required minlength="2" maxlength="80"')}${select("kind", "회사 종류", companyKinds.map((k) => [k, k]), c.kind || "", 'required')}${area("description", "회사 설명", c.description || "", 'maxlength="1000"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}>회사 사용(끄면 목록에서 숨겨져요)</label>`,
+      `${field("name", "회사 이름", "text", c.name || "", 'required minlength="2" maxlength="80"')}${select("kind", "회사 종류", companyKinds.map((k) => [k, k]), c.kind || "", 'required')}${area("description", "회사 설명", c.description || "", 'maxlength="1000"')}<label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}><span>회사 사용(끄면 목록에서 숨겨져요)</span></label>`,
       c.id ? "수정 저장" : "회사 추가",
       "",
       c.name || "새",
@@ -1060,13 +1060,14 @@
   function removalFormHTML(kind, item, items) {
     const isChannel = kind === "channel",
       label = isChannel ? "채널" : "회사",
+      eul = isChannel ? "채널을" : "회사를",
       count = Number(isChannel ? item.post_count : item.reference_count) || 0;
     const targets = items.filter((x) => x.id !== item.id && x.enabled !== false);
     const detail = isChannel
-      ? `연결된 글 ${count}개`
-      : `관련 글 ${Number(item.post_count) || 0}개 · 리뷰 ${Number(item.total_review_count) || 0}개 · 회원 ${Number(item.member_count) || 0}명`;
+      ? `연결된 글이 ${count}개`
+      : `관련 자료(글 ${Number(item.post_count) || 0}개 · 리뷰 ${Number(item.total_review_count) || 0}개 · 회원 ${Number(item.member_count) || 0}명)가`;
     if (count > 0 && !targets.length)
-      return `<p class="notice">${detail}. 먼저 다른 사용 중인 ${label}를 추가해 주세요. 자료를 옮길 곳이 있어야 삭제할 수 있어요.</p>`;
+      return `<p class="notice">${detail} 있어요. 먼저 다른 사용 중인 ${eul} 추가해 주세요. 자료를 옮길 곳이 있어야 삭제할 수 있어요.</p>`;
     const target =
       count > 0
         ? select(
@@ -1080,7 +1081,7 @@
     return adminForm(
       isChannel ? "channel_delete" : "company_delete",
       item.id,
-      `<p class="notice">${E(count > 0 ? `${detail}. 고른 ${label}로 자료를 모두 옮긴 뒤 이 ${label}를 삭제합니다.` : `연결된 자료가 없어 바로 삭제할 수 있어요.`)} 삭제 내역은 감사 기록에 남습니다.</p>${target}${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_delete" required>‘${E(item.name)}’ ${label} 삭제 내용을 확인했습니다.</label>`,
+      `<p class="notice">${E(count > 0 ? `${detail} 있어요. 고른 ${label}로 ${isChannel ? "글을" : "자료를"} 모두 옮긴 뒤 이 ${eul} 삭제해요.` : `연결된 ${isChannel ? "글이" : "자료가"} 없어 바로 삭제할 수 있어요.`)} 삭제 내역은 감사 기록에 남아요.</p>${target}${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_delete" required><span>위 내용을 확인했고 ‘${E(item.name)}’ ${eul} 삭제합니다.</span></label>`,
       count > 0 ? (isChannel ? "글 옮기고 채널 삭제" : "자료 합치고 회사 삭제") : `${label} 삭제`,
       "",
       item.name,
@@ -1134,7 +1135,7 @@
           ],
           "",
           "required",
-        )}<label class="check-line"><input type="checkbox" name="pinned" ${p.pinned ? "checked" : ""}>공지로 고정</label>${reasonField()}`,
+        )}<label class="check-line"><input type="checkbox" name="pinned" ${p.pinned ? "checked" : ""}><span>공지로 고정</span></label>${reasonField()}`,
         "상태 저장",
         '<input type="hidden" name="target" value="post">',
         p.title,
@@ -1245,7 +1246,7 @@
                 "회원 상태 저장",
                 "",
                 m.nickname,
-              )}</section><section class="admin-card"><h3>닉네임 강제 변경</h3>${adminForm("nickname", m.id, `${field("nickname", "새 닉네임", "text", m.nickname || "", 'required minlength="2" maxlength="20"')}${reasonField()}`, "닉네임 변경", "", m.nickname)}</section><section class="admin-card"><h3>신고 기능 제한</h3><p class="hint">악의적으로 신고를 반복하는 회원의 신고를 막습니다.</p>${adminForm("report_block", m.id, `${select("days", "제한 기간", [["", "선택하세요"], ["7", "7일"], ["30", "30일"], ["90", "90일"], ["36500", "무기한"], ["0", "제한 풀기"]], "", "required")}${reasonField()}`, "신고 제한 저장", "", m.nickname)}</section><section class="admin-card danger-zone"><h3>강제 탈퇴</h3><p class="hint">개인정보와 증빙이 바로 지워지고 되돌릴 수 없어요. 남은 글은 ‘탈퇴한 회원’으로 표시됩니다.</p>${adminForm("member_withdraw", m.id, `${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_withdraw" required>‘${E(m.nickname || "이 회원")}’ 회원을 강제 탈퇴시키는 것을 확인했습니다.</label>`, "강제 탈퇴", "", m.nickname)}</section>`
+              )}</section><section class="admin-card"><h3>닉네임 강제 변경</h3>${adminForm("nickname", m.id, `${field("nickname", "새 닉네임", "text", m.nickname || "", 'required minlength="2" maxlength="20"')}${reasonField()}`, "닉네임 변경", "", m.nickname)}</section><section class="admin-card"><h3>신고 기능 제한</h3><p class="hint">악의적으로 신고를 반복하는 회원의 신고를 막습니다.</p>${adminForm("report_block", m.id, `${select("days", "제한 기간", [["", "선택하세요"], ["7", "7일"], ["30", "30일"], ["90", "90일"], ["36500", "무기한"], ["0", "제한 풀기"]], "", "required")}${reasonField()}`, "신고 제한 저장", "", m.nickname)}</section><section class="admin-card danger-zone"><h3>강제 탈퇴</h3><p class="hint">개인정보와 증빙이 바로 지워지고 되돌릴 수 없어요. 남은 글은 ‘탈퇴한 회원’으로 표시됩니다.</p>${adminForm("member_withdraw", m.id, `${reasonField()}<label class="check-line"><input type="checkbox" name="confirm_withdraw" required><span>‘${E(m.nickname || "이 회원")}’ 회원을 강제 탈퇴시키는 것을 확인했습니다.</span></label>`, "강제 탈퇴", "", m.nickname)}</section>`
       }`;
     },
     posts(d) {
@@ -1277,7 +1278,7 @@
     },
     ai(d) {
       const s = d.settings || {};
-      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에만 답변을 만듭니다. 답변은 검수 없이 바로 공개되고, 댓글 1개처럼 보이며 댓글 수에 포함돼요. 하루 개수 제한은 없어요. 운영팀 Mac에 있는 보험사 공시 자료(약관·상품요약서 등)에서 질문과 맞는 부분을 찾아 정확하게 답하는 데에만 쓰고, 답변에는 자료 이름·출처를 쓰지 않아요.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}>AI 답변 만들기 사용</label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
+      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에만 답변을 만듭니다. 답변은 검수 없이 바로 공개되고, 댓글 1개처럼 보이며 댓글 수에 포함돼요. 하루 개수 제한은 없어요. 운영팀 Mac에 있는 보험사 공시 자료(약관·상품요약서 등)에서 질문과 맞는 부분을 찾아 정확하게 답하는 데에만 쓰고, 답변에는 자료 이름·출처를 쓰지 않아요.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}><span>AI 답변 만들기 사용</span></label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
     },
     settings(d) {
       const words = d.settings?.banned_words || [];
@@ -1453,6 +1454,14 @@
   }
   function dialog(html) {
     $("#dialog-content").innerHTML = html;
+    // 폼 밖에 따로 떨어진 닫기·취소 버튼을 저장 버튼 줄(왼쪽)로 옮겨 버튼 정렬을 맞춘다
+    const box = $("#dialog-content"), fa = box.querySelector("form .form-actions");
+    box.querySelectorAll(':scope > [data-do="dialog-close"], form > [data-do="dialog-close"]').forEach((b) => {
+      if (!fa) return;
+      const prev = b.previousElementSibling;
+      if (prev && prev.tagName === "P" && !prev.textContent.trim() && !prev.className) prev.remove();
+      fa.prepend(b);
+    });
     $("#dialog").showModal();
   }
   function closeDialog() {
@@ -1478,7 +1487,7 @@
           ["other", "기타 권리침해"],
         ],
         appeal ? "appeal" : "privacy",
-      )}${area("reason_detail", "침해 사실과 요청 사항", "", 'required minlength="5" maxlength="2000" data-testid="report-reason" placeholder="어떤 내용으로 어떤 권리가 침해되었는지 적어 주세요. 필요한 소명과 요청하는 조치를 함께 알려 주세요."')}<label class="check-line"><input type="checkbox" required>사실에 근거한 신고이며 악의적 신고가 아님을 확인합니다.</label>${formEnd("신고 접수")}<p></p>${btn("취소", "dialog-close")}</form>`,
+      )}${area("reason_detail", "침해 사실과 요청 사항", "", 'required minlength="5" maxlength="2000" data-testid="report-reason" placeholder="어떤 내용으로 어떤 권리가 침해되었는지 적어 주세요. 필요한 소명과 요청하는 조치를 함께 알려 주세요."')}<label class="check-line"><input type="checkbox" required><span>사실에 근거한 신고이며 악의적 신고가 아님을 확인합니다.</span></label>${formEnd("신고 접수")}<p></p>${btn("취소", "dialog-close")}</form>`,
     );
   }
   function reviewDialog(r = {}, companyId) {
@@ -2023,7 +2032,8 @@
             : kind === "channel"
               ? channelFormHTML(mode === "add" ? {} : item)
               : companyFormHTML(mode === "add" ? {} : item);
-        dialog(`<h2>${E(title)}</h2>${form}<p></p>${btn("닫기", "dialog-close")}`);
+        dialog(`<h2>${E(title)}</h2>${form}${btn("닫기", "dialog-close")}`);
+
         return;
       }
       case "admin-order":

@@ -1110,9 +1110,48 @@ summary:focus-visible {
 .demo-dialog h2 {
   font-size: 18px;
 }
-.demo-dialog input {
+.demo-dialog input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
-  font-size: 13px;
+}
+/* 2026-11-11 관리자 대화상자 정리: 체크박스가 넓게 늘어나 글자가 세로로 쌓이던 문제 */
+.demo-dialog .check-line {
+  margin: 10px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  align-items: flex-start;
+}
+.demo-dialog .check-line > span {
+  flex: 1;
+  min-width: 0;
+}
+.demo-dialog .field input:not([type="checkbox"]):not([type="radio"]),
+.demo-dialog .field select {
+  font-size: 15px;
+  height: 46px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.demo-dialog .field textarea {
+  font-size: 15px;
+}
+/* 삭제 확인 체크 전에는 삭제 버튼을 흐리게, 삭제는 빨간색 */
+.demo-dialog form:has(input[name^="confirm_"]) [data-testid="submit"] {
+  background: #bc3440;
+  border-color: #bc3440;
+}
+.demo-dialog form:has(input[name^="confirm_"]:not(:checked)) [data-testid="submit"] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.demo-dialog .form-actions {
+  flex-wrap: nowrap;
+}
+.demo-dialog .form-actions > .btn {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+.demo-dialog .form-actions > [data-do="dialog-close"] {
+  margin-right: auto;
 }
 .demo-dialog .form-actions {
   justify-content: flex-end;
