@@ -10,8 +10,12 @@ worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
 
 
-@unittest.skip("2026-11-10 대표 지시: 개인정보 치환 규칙 제거")
 class PrivacyBoundary(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(worker, "find_sources", return_value=([], 0))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_direct_identifiers_removed(self):
         value = "010-1234-5678 900101-1234567 test@example.invalid https://example.invalid/private"
         result = worker.redact(value)
@@ -41,12 +45,12 @@ class PrivacyBoundary(unittest.TestCase):
             for gap in (" ", ""):
                 with self.subTest(name=name, role=role, gap=gap):
                     value = f"{name}{gap}{role}이 확인했습니다."
-                    self.assertEqual(worker.redact(value), "[인명 삭제]이 확인했습니다.")
+                    self.assertEqual(worker.redact(value, known_names=[name]), "[인명 삭제]이 확인했습니다.")
 
     def test_generic_phrases_do_not_hide_adjacent_name_leaks(self):
         value = ("이해 수준은 고객이 설명합니다. 홍길동 고객님과 "
                  "<b>김철수</b> 설계사가 확인했습니다. 김\u200b하은 고객이 답했습니다.")
-        result = worker.redact(value)
+        result = worker.redact(value, known_names=["홍길동", "김철수", "김하은"])
         self.assertIn("이해 수준은 고객이 설명합니다.", result)
         for name in ("홍길동", "김철수", "김하은"):
             self.assertNotIn(name, result)
@@ -75,7 +79,7 @@ class PrivacyBoundary(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(worker.redact(value), value)
 
-    def test_grammar_exceptions_cannot_exempt_partial_names_or_strong_honorifics(self):
+    def test_exact_names_are_removed_without_treating_ordinary_words_as_names(self):
         for value, name in (("문서류 고객이 확인합니다.", "문서류"),
                             ("김정보 설계사가 확인합니다.", "김정보"),
                             ("김메모 고객에게 설명합니다.", "김메모"),
@@ -83,13 +87,13 @@ class PrivacyBoundary(unittest.TestCase):
                             ("박민가 수익자가 확인합니다.", "박민가"),
                             ("강하을 씨가 확인합니다.", "강하을"),
                             ("오율님이 확인합니다.", "오율"),
-                            ("제갈민수 고객님이 확인합니다.", "제갈민수"),
-                            ("우선 고객님이 확인합니다.", "우선"),
-                            ("메모에는 고객님이 확인합니다.", "메모에는")):
+                            ("제갈민수 고객님이 확인합니다.", "제갈민수")):
             with self.subTest(value=value):
-                result = worker.redact(value)
+                result = worker.redact(value, known_names=[name])
                 self.assertNotIn(name, result)
                 self.assertIn("[인명 삭제]", result)
+        for value in ("우선 고객님이 확인합니다.", "메모에는 고객님이 확인합니다."):
+            self.assertEqual(worker.redact(value), value)
 
     def test_synthetic_question_bodies_reach_the_model_unchanged(self):
         # The three public, fictional sample questions contain no personal data.
@@ -131,7 +135,7 @@ class PrivacyBoundary(unittest.TestCase):
                                       "id": "DO_NOT_SEND_ID", "proof_path": "DO_NOT_SEND_PROOF"})
         self.assertNotIn("DO_NOT_SEND", value)
         data = json.loads(value.split("\n", 1)[1])
-        self.assertEqual(set(data), {"title", "question", "official_sources"})
+        self.assertEqual(set(data), {"title", "question", "official_sources", "followup_question", "conversation", "peer_sources", "channels", "current_date"})
 
     def test_unrelated_environment_credentials_never_inherited(self):
         with mock.patch.dict(worker.os.environ, {"ANTHROPIC_API_KEY": "fake",
@@ -193,7 +197,7 @@ class PrivacyBoundary(unittest.TestCase):
 
     def test_ai_failure_is_recorded_without_question_or_error_body(self):
         backend = mock.Mock()
-        backend.rpc.side_effect = [{"job": {"id": "job", "lease_token": "lease", "body": "private"}}, {}]
+        backend.rpc.side_effect = [{"job": {"id": "job", "lease_token": "lease", "body": "private"}}, {}, {}]
         with mock.patch.object(worker, "generate", side_effect=worker.WorkerError("subscription_timeout")):
             with self.assertRaises(worker.WorkerError):
                 worker.process_one(backend)
@@ -203,6 +207,11 @@ class PrivacyBoundary(unittest.TestCase):
 
 
 class ReferenceSources(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(worker.insurance_search, "search", return_value=[])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     """2026-11-10 맥 자료 근거: 색인이 없거나 깨져도 멈추지 않고, 근거 규칙을 지킨다."""
 
     def test_missing_or_broken_index_means_no_sources(self):
@@ -261,9 +270,10 @@ class ReferenceSources(unittest.TestCase):
             return {"body": "결론.\n\n• 가나생명 상품요약서 내용대로 진단서를 냅니다.", "model": "claude-opus-5-5", "effort": "medium",
                     "subscription": True, "fallback_used": False, "elapsed_ms": 1}
         with mock.patch.object(worker, "_generate_once", side_effect=fake):
-            with self.assertRaises(worker.WorkerError) as ctx:
-                worker.generate({"title": "t", "body": "b"}, sources=[])
-        self.assertEqual(ctx.exception.code, "answer_source_rejected")
+            result = worker.generate({"title": "t", "body": "b"}, sources=[])
+        self.assertNotIn("상품요약서", result["body"])
+        self.assertEqual(worker.source_problem(result["body"]), "")
+        self.assertGreaterEqual(len(result["body"].splitlines()), 2)
 
     def test_check_point_tail_line_is_dropped(self):
         def fake(job, heartbeat, fix, sources=(), deadline=None):
@@ -288,14 +298,14 @@ class ReferenceSources(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_rewrite_once_for_unsupported_citation(self):
-        answers = iter(["가나생명 약관에 따르면 됩니다.", "일반 원칙으로 보면 됩니다."])
+        answers = iter(["가나생명 약관에 따르면 됩니다.", "일반 원칙에 맞춰 필요한 항목을 먼저 정리하세요."])
 
         def fake(job, heartbeat, fix, sources=(), deadline=None):
             return {"body": next(answers), "model": "claude-opus-5-5", "effort": "medium",
                     "subscription": True, "fallback_used": False, "elapsed_ms": 1}
         with mock.patch.object(worker, "_generate_once", side_effect=fake):
             result = worker.generate({"title": "t", "body": "b"}, sources=[])
-        self.assertEqual(result["body"], "일반 원칙으로 보면 됩니다.")
+        self.assertEqual(result["body"], "일반 원칙에 맞춰 필요한 항목을 먼저 정리하세요.")
         self.assertTrue(result["rewritten"])
         self.assertEqual(result["rewrite_reason"], "source_named")
 

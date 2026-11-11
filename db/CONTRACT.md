@@ -127,3 +127,17 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - `bl_worker complete`는 댓글을 upsert하고 `{ok,status:'published',comment_id}`를 반환한다. 글당 AI 1건은 부분 고유 색인으로 강제한다. 재작성은 ID·최초 시각·좋아요·답글을 유지하며 본문·갱신 시각을 바꾼다. 관리자 AI 수정/숨김/다시 생성도 같은 댓글을 사용한다. 모델·노력 수준·형식·바로 공개·자료 참고·출처 미표기 규칙은 유지한다.
 - `comment_count`는 공개 댓글(AI 포함)만 한 번 센다. 022 인기 점수의 댓글×2에도 동일한 저장소의 AI가 포함된다. AI 댓글 좋아요는 `target='comment'`여서 글 좋아요×3에 들어가지 않는다. 최근 30일 우선·10개·시간 감쇠 지수 1.2 등 나머지 기준은 유지한다.
 - 댓글 열람 권한은 기존대로 인증 회원·관리자이며 손님은 댓글 수만 본다. 화면의 AI 작성자 문구만 변경하고 관리자 안내·약관·글쓰기 체크칸은 그대로 둔다. 과거 `#comment-ai` 링크도 새 댓글로 이동한다.
+
+
+## 026 — AI 자료·후속 답변·채택 (준비됨, 운영자 적용 필요)
+
+- 023~025 적용 상태에서 처리기를 멈춘 뒤 `026_ai_upgrade.sql`을 적용한다. 함수 정의를 비공개 RLS 백업 테이블에 보존하고 지정 문맥이 한 번만 일치할 때 교체한다. 기존 ACL·증빙 판정·탈퇴 정리·heartbeat/fail은 보존한다.
+- `bl_ai_jobs`: post_id 단일 unique 대신 최초 job 부분 unique + `trigger_comment_id` 부분 unique. `comment_id`로 출력 댓글 하나를 지정하고 `question_updated_at`로 후속 질문 변경을 검사한다. 이미 존재하는 AI 댓글은 최초 job에 연결한다.
+- 원글 AI 허용 상태에서 인증된 회원이 공개 AI 댓글에 사람 답글을 삽입하면 후속 job을 예약한다. 생성된 AI(숨김/삭제 포함)+대기 예약은 글당 최대 5개이며 post row lock·삽입 trigger·완료 시 재검사로 제한한다. 재생성은 기존 ID·답글·좋아요를 유지한다.
+- worker `claim`의 job: 기존 필드 + `trigger_comment_id`, `comment_id`, `ai_reply_count`, `ai_reply_limit`, `question`, `conversation[{is_ai,body,is_accepted,…}]`, `peer_sources[{post_id,title,body,comments[{body,is_accepted}]}]`, `channels[{id,name}]`. DB와 worker 두 단계로 개인정보를 제거한다.
+- worker `skip({id,lease_token})`: 정상 `skipped`, error_code=null, lease 해제. `complete`의 `related_posts[{id,title}]`는 ID만 신뢰하고 현재 공개 글 제목을 다시 조회한다.
+- `bl_action('comment_accept',{post_id,comment_id})`: 원글 작성자·쓰기 권한·같은 글의 공개된 다른 사람 댓글만 허용. `comment_id:null`은 취소. 변경 가능, AI/자기댓글 불가.
+- post JSON: `ai_upgrade:true`, `ai_reply_limit:5`, `ai_reply_count`, `ai_followup_available`, `accepted_comment_id`. comment JSON: `is_accepted`, `related_posts`. 화면은 이 값이 없는 026 이전 응답도 수용한다.
+- 관련 글 및 참고 자료는 현재 글·삭제/숨김·test/sample·완전익명 채널/익명 글을 제외한다. 사람 댓글만 참고하며 채택 답변을 우선한다. 읽기 시 관련 글 공개 범위를 다시 확인한다. 후속 댓글은 숨긴 조상까지 검사한다.
+- 관리자 AI 조회/수정/숨김/공개/재생성은 job.comment_id 한 건을 대상으로 한다. 026 마지막 SELECT로 구형 문구가 있는 재생성 대상을 확인하고 기존 관리자 ‘다시 만들기’를 사용한다. SELECT는 대상 지정만 한다.
+- 복구: 처리기를 멈추고 구 처리기/화면 복원 파일을 확보한 뒤 `026_ai_upgrade_rollback.sql` 적용. 추가 AI/job/연결 데이터와 채택 정보를 비공개 archive에 보존하고 사람 후속 댓글을 최초 AI 아래로 재연결한다. 적용 직전 함수 정의와 글당 AI 1개 계약을 복원한다. 함수 backup은 archive로 옮긴 뒤 표식 테이블을 제거한다. archive는 남겨 두며 재적용 전 운영자가 별도 검토한다. 적용 후 함수가 수정된 경우 rollback은 자동 중단한다.

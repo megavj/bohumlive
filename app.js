@@ -416,16 +416,64 @@
   }
   function orderComments(comments, sort) {
     const t = (c) => Date.parse(c.created_at) || 0;
+    const byId = new Map(comments.map((c) => [c.id, c]));
+    const children = new Map();
+    comments.forEach((c) => {
+      if (!c.parent_id || !byId.has(c.parent_id)) return;
+      if (!children.has(c.parent_id)) children.set(c.parent_id, []);
+      children.get(c.parent_id).push(c);
+    });
+    children.forEach((list) => list.sort((a, b) => t(a) - t(b)));
     const roots = comments
-      .filter((c) => !c.parent_id)
+      .filter((c) => !c.parent_id || !byId.has(c.parent_id))
       .sort((a, b) =>
         sort === "latest" ? t(b) - t(a) : sort === "best" ? (Number(b.likes) || 0) - (Number(a.likes) || 0) || t(a) - t(b) : t(a) - t(b),
       );
-    // 대댓글은 언제나 원댓글 바로 아래에 쓴 순서대로
-    return roots.flatMap((c) => [c, ...comments.filter((x) => x.parent_id === c.id).sort((a, b) => t(a) - t(b))]);
+    // AI 답변 → 질문 → AI 답변 흐름을 부모 바로 아래에 묶는다. 깊어져도 들여쓰기는 한 단계만 쓴다.
+    const ordered = [], seen = new Set();
+    const visit = (c) => {
+      if (seen.has(c.id)) return;
+      seen.add(c.id);
+      ordered.push(c);
+      (children.get(c.id) || []).forEach(visit);
+    };
+    roots.forEach(visit);
+    comments.forEach(visit);
+    return ordered;
+  }
+  const commentPublished = (c) => !c.status || c.status === "published";
+  const aiFollowupAllowed = (d) => d?.post?.ai_upgrade === true && d.post.is_question === true && (!d.post.status || d.post.status === "published") && d.post.ai_followup_available === true && Number(d.post.ai_reply_count || 0) < 5;
+  const canAcceptComment = (c, d) => d?.post?.ai_upgrade === true && d.post.is_mine === true && (!d.post.status || d.post.status === "published") && isVerified() && !c.is_ai && !c.is_mine && commentPublished(c);
+  const commentAccepted = (c, d) => !c.is_ai && commentPublished(c) && (c.is_accepted === true || d?.post?.accepted_comment_id === c.id);
+  function canReplyComment(c, d) {
+    if (!isVerified() || !commentPublished(c)) return false;
+    if (c.is_ai && d?.post?.ai_upgrade === true) return aiFollowupAllowed(d);
+    return !c.parent_id;
+  }
+  function relatedPostsHTML(c, d) {
+    if (!c.is_ai || !Array.isArray(c.related_posts)) return "";
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const seen = new Set([String(d?.post?.id || "").toLowerCase()]);
+    const related = c.related_posts.filter((p) => {
+      if (!p || typeof p.id !== "string" || !uuid.test(p.id) || typeof p.title !== "string" || !p.title.trim()) return false;
+      const id = p.id.toLowerCase();
+      if (seen.has(id) || p.anonymous === true || p.is_test === true || (p.status && p.status !== "published")) return false;
+      seen.add(id);
+      return true;
+    }).slice(0, 2);
+    // 서버가 준 URL은 쓰지 않는다. 검증한 UUID로 같은 사이트 글 주소만 만든다.
+    return related.length ? `<aside class="ai-related-posts" aria-label="함께 보면 좋은 동료 글" data-testid="ai-related-posts"><span>함께 보면 좋은 동료 글</span><ul>${related.map((p) => `<li><a href="${E(uri("post.html", { id: p.id }))}">${E(p.title.trim().slice(0, 150))}</a></li>`).join("")}</ul></aside>` : "";
   }
   // 댓글 한 개: 회사·닉네임 → 내용 → 작성일·좋아요·대댓글·⋯(신고·수정·삭제)
-  function commentHTML(c) {
+  function commentHTML(c, d) {
+    const accepted = commentAccepted(c, d);
+    const parent = (d?.comments || []).find((x) => x.id === c.parent_id);
+    const context = parent && (c.is_ai || parent.is_ai)
+      ? `<a class="comment-reply-context" href="#comment-${E(parent.id)}">${c.is_ai ? "질문에 대한 AI 답변" : "AI 답변에 이어 묻기"}</a>`
+      : "";
+    const accept = canAcceptComment(c, d)
+      ? `<button type="button" class="comment-accept" data-do="comment-accept" data-id="${E(c.id)}" aria-pressed="${accepted}" data-testid="comment-accept">${accepted ? "채택 취소" : "채택"}</button>`
+      : "";
     const menu = moreMenu(
       [
         c.is_mine && isVerified() ? `<button type="button" data-do="comment-edit" data-id="${E(c.id)}">${icon("edit")} 수정</button>` : "",
@@ -434,12 +482,12 @@
       ],
       "댓글 메뉴 더보기",
     );
-    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""} ${c.is_ai ? "comment-ai-item" : ""}" id="comment-${E(c.id)}" data-testid="comment-item"><div class="comment-author">${c.is_ai ? '<span class="ai-badge">AI</span> ' : ""}${E(c.author_display)}${c.is_mine ? ' <span class="author-badge">내 댓글</span>' : ""}</div><p class="body-text">${E(c.body)}</p><div class="comment-meta">${timeTag(c.created_at, "comment-time")}<button type="button" data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" aria-label="좋아요" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : 'title="좋아요"'}>${icon("heart")}<span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${!c.parent_id && isVerified() ? `<button type="button" data-do="reply" data-id="${E(c.id)}">${icon("comment")}대댓글</button>` : ""}<span class="comment-tools">${menu}</span></div><div data-reply-slot="${E(c.id)}"></div></article>`;
+    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""} ${c.is_ai ? "comment-ai-item" : ""} ${accepted ? "comment-accepted" : ""}" id="comment-${E(c.id)}" data-testid="comment-item">${context}<div class="comment-author">${c.is_ai ? '<span class="ai-badge">AI</span> ' : ""}${E(c.is_ai ? "AI 답변은 참고만 하세요" : c.author_display)}${c.is_mine ? ' <span class="author-badge">내 댓글</span>' : ""}${accepted ? ' <span class="accepted-badge" data-testid="comment-accepted">글쓴이 채택</span>' : ""}</div><p class="body-text">${E(c.body)}</p>${relatedPostsHTML(c, d)}<div class="comment-meta">${timeTag(c.created_at, "comment-time")}<button type="button" data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" aria-label="좋아요" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : 'title="좋아요"'}>${icon("heart")}<span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${canReplyComment(c, d) ? `<button type="button" data-do="reply" data-id="${E(c.id)}">${icon("comment")}${c.is_ai && d?.post?.ai_upgrade ? "답글" : "대댓글"}</button>` : ""}${accept}<span class="comment-tools">${menu}</span></div><div data-reply-slot="${E(c.id)}"></div></article>`;
   }
   const commentListHTML = (d) => {
     const all = (d.comments || []).slice();
     const list = orderComments(all, commentSort());
-    return list.length ? list.map(commentHTML).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.");
+    return list.length ? list.map((c) => commentHTML(c, d)).join("") : empty("아직 동료의 댓글이 없어요.", "첫 경험이나 의견을 남겨 주세요.");
   };
   function commentsSection(d) {
     const p = d.post,
@@ -454,7 +502,10 @@
       : canReadMember()
         ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>'
         : lockBar(session ? `댓글은 설계사 인증 회원만 볼 수 있어요. (지금: ${statusLabel()})` : "댓글은 설계사 인증 회원만 볼 수 있어요.");
-    return `<section class="comments" id="comments"><div class="comments-top"><h2>댓글 <span data-comment-count>${Number(p.comment_count) || 0}</span></h2>${sorter}${form}</div>${canReadMember() ? `<div data-comment-list>${commentListHTML(d)}</div>` : ""}</section>`;
+    const aiHint = canReadMember() && p.ai_upgrade === true && p.is_question && (aiFollowupAllowed(d) || Number(p.ai_reply_count) >= 5) && (d.comments || []).some((c) => c.is_ai)
+      ? `<p class="ai-followup-hint" data-testid="ai-followup-hint">${Number(p.ai_reply_count) >= 5 ? "이 글의 AI 답변 5회를 모두 사용했어요. 동료들과 댓글로 이어가 주세요." : "인증 회원 누구나 AI 답변의 ‘답글’로 이어서 물을 수 있어요. 첫 답변 포함 글당 최대 5회예요."}</p>`
+      : "";
+    return `<section class="comments" id="comments"><div class="comments-top"><h2>댓글 <span data-comment-count>${Number(p.comment_count) || 0}</span></h2>${sorter}${form}${aiHint}</div>${canReadMember() ? `<div data-comment-list>${commentListHTML(d)}</div>` : ""}</section>`;
   }
   // 댓글을 쓰거나 지운 뒤에는 댓글 구역만 다시 그린다(읽던 위치가 튀지 않게).
   async function reloadComments(focusId) {
@@ -839,7 +890,7 @@
     review: "검토 대기",
     complete: "공개됨",
     failed: "생성 실패",
-    skipped: "반려됨",
+    skipped: "답변 생략",
   };
   const aiAnswerNames = { review: "검토 대기", published: "공개 중", hidden: "숨김" };
   const aiErrorNames = {
@@ -1278,7 +1329,7 @@
     },
     ai(d) {
       const s = d.settings || {};
-      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에만 답변을 만듭니다. 답변은 검수 없이 바로 공개되고, 댓글 1개처럼 보이며 댓글 수에 포함돼요. 하루 개수 제한은 없어요. 운영팀 Mac에 있는 보험사 공시 자료(약관·상품요약서 등)에서 질문과 맞는 부분을 찾아 정확하게 답하는 데에만 쓰고, 답변에는 자료 이름·출처를 쓰지 않아요.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}><span>AI 답변 만들기 사용</span></label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
+      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에 보험 자료와 웹을 참고해 답변하며 출처는 표시하지 않아요. 공개된 일반 채널의 동료 글·댓글도 개인정보를 제거해 참고합니다. 답변은 사전 검수 없이 댓글로 공개되며, 의미 없는 글은 답변을 생략해요. 인증 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회예요. 글쓴이가 채택한 동료 댓글은 우선 참고합니다.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}><span>AI 답변 만들기 사용</span></label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
     },
     settings(d) {
       const words = d.settings?.banned_words || [];
@@ -1334,7 +1385,7 @@
 <h2>5. 보험 정보</h2>
 <p>회원 글과 리뷰는 개인 의견이며, 보험라이브는 보험계약 판매·중개나 가입·해지 권유 서비스를 제공하지 않습니다. 상품 가입 권유, 상담 고객 유치와 모집 광고는 금지하며, 계약 판단에는 해당 약관과 보험사의 공식 자료를 확인해 주세요.</p>
 <h2>6. AI 답변</h2>
-<p>‘AI답변 허용하기’를 켠 글은 제목·본문을 Anthropic의 Claude에 전달해 답변을 생성하며, 다른 기능은 AI 허용 여부와 관계없이 이용합니다. 답변은 공시 자료를 참고하며 출처·사전 검수 없이 AI 표시와 참고용 안내를 붙여 댓글로 공개합니다. 오류 가능성이 있으므로 공식 자료를 확인하고, 오류·권리침해는 신고해 주세요.</p>
+<p>‘AI답변 허용하기’를 켠 글의 제목·본문과 이어 묻기 흐름을 개인정보 제거 후 Anthropic의 Claude에 전달합니다. 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처·사전 검수 없이 AI 표시와 참고용 안내를 붙여 댓글로 공개합니다. 인증 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. 오류 가능성이 있으므로 공식 자료를 확인하고, 오류·권리침해는 신고해 주세요.</p>
 <h2>7. 이용 제한과 권리침해 처리</h2>
 <p>운영팀은 위반 정도·피해·반복 여부에 따라 게시물 가림·삭제, 인증 보완·반려, 일시 또는 계속적 이용 제한을 적용하고 사유와 결과를 알립니다. 권리침해 신고는 소명을 검토해 삭제 등 필요한 조치를 하며, 판단이 어렵거나 다툼이 예상될 때는 최대 30일 임시조치 후 미결 건을 자동 복구하되 별도 법정 절차를 우선합니다. 신고 방법과 이의신청은 <a class="text-link" href="/help.html">운영 안내·권리침해 신고</a>에서 확인해 주세요.</p>
 <h2>8. 탈퇴</h2>
@@ -1352,8 +1403,8 @@
 <ul class="policy-list">
 <li><b>로그인·회원 관리</b>: 이메일, 로그인 방식, 제공자의 계정 식별정보·메타정보, 가입·마지막 로그인 시각을 받아 계정을 확인·관리합니다.</li>
 <li><b>설계사 인증</b>: 이름·닉네임·현재 소속·연락처·설계사 고유번호·증빙 사진 1장으로 설계사와 소속을 확인합니다. 중복 가입 확인값, 심사 상태·시각·사유, 글자인식 비교 결과와 일부 가린 요약도 처리합니다.</li>
-<li><b>커뮤니티 제공</b>: 글·댓글·리뷰, 좋아요·저장·팔로우, 조회·이용 시각, 알림, AI 답변 허용 여부를 게시·집계·알림에 이용합니다.</li>
-<li><b>AI 답변 생성</b>: AI를 허용한 글의 제목·본문, 생성 답변과 처리 내역을 답변 생성·공개·오류 처리에 이용합니다.</li>
+<li><b>커뮤니티 제공</b>: 글·댓글·리뷰, 좋아요·저장·팔로우·댓글 채택, 조회·이용 시각, 알림, AI 답변 허용 여부를 게시·집계·알림에 이용합니다.</li>
+<li><b>AI 답변 생성</b>: AI를 허용한 글의 제목·본문, 이어 묻기 질문·답변, 생성·처리 내역을 이용합니다. 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하되 출처는 표시하지 않습니다. 작성자 정보·개인정보는 AI에 보내기 전에 제거하며 고객 자료는 이용하지 않습니다.</li>
 <li><b>신고·문의 처리</b>: 신고·이의신청·문의 내용, 관련 계정·게시물과 처리 내역을 민원 답변·권리 보호·부정 이용 대응에 이용합니다. 관리자 처리·증빙 열람 기록은 운영 책임 확인에 이용합니다.</li>
 <li><b>접속·보안</b>: 외부 호스팅·로그인 서비스의 IP 주소, 기기·브라우저 정보와 접속 기록 처리는 아래 업체별 정책에 따릅니다.</li>
 </ul>
@@ -1381,11 +1432,11 @@
 <tr><td><a class="text-link" href="https://policies.google.com/privacy?hl=ko">Google</a></td><td>Google 로그인</td><td>이메일·계정 식별정보·접속 정보</td><td>미국 등</td></tr>
 <tr><td><a class="text-link" href="https://resend.com/legal/privacy-policy">Resend</a></td><td>로그인 메일 발송</td><td>이메일 주소·로그인 메일 내용</td><td>미국 등</td></tr>
 <tr><td><a class="text-link" href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Pages</a></td><td>웹 화면 제공</td><td>IP 주소 등 접속 기술 정보</td><td>미국 등</td></tr>
-<tr><td><a class="text-link" href="https://www.anthropic.com/legal/privacy">Anthropic(Claude)</a></td><td>AI 답변 생성</td><td>AI 허용 글의 제목·본문</td><td>미국 등</td></tr>
+<tr><td><a class="text-link" href="https://www.anthropic.com/legal/privacy">Anthropic(Claude)</a></td><td>AI 답변 생성</td><td>개인정보를 제거한 AI 허용 글·이어 묻기 흐름·공개 일반 채널 동료 글·댓글</td><td>미국 등</td></tr>
 </tbody></table></div>
 <p>가입·인증·서비스 이용, Google 로그인, 메일 요청, 웹 방문, AI 답변 생성 시 각 업무에 필요한 정보를 HTTPS로 전송합니다. 외부 업체의 로그·백업 등은 각 서비스·계약의 보관 기준을 따르며 보험라이브 탈퇴만으로 모두 즉시 삭제되지는 않습니다.</p>
-<p>생성형 AI에는 글 제목·본문을 전달하며 계정의 이름·연락처·닉네임·증빙을 별도 입력하지 않습니다. 제목·본문에 직접 적은 개인정보는 함께 전달됩니다.</p>
-<p>AI 전송을 원하지 않으면 ‘AI답변 허용하기’를 끄세요. 이미 전송한 내용과 공개된 답변은 자동 회수되지 않으므로 관련 요청은 운영팀 문의로 보내 주세요. Google 로그인 대신 이메일 로그인을 선택해도 Supabase·Resend를 이용합니다. 기본 기능의 국외 처리를 원하지 않으면 가입하지 않거나 탈퇴해야 하며 회원 기능은 이용하지 못합니다.</p>
+<p>AI에 전달하는 글·댓글·대화에서 개인정보를 제거하며 계정의 이름·연락처·닉네임·증빙을 별도 입력하지 않습니다. 인증 회원은 AI 답변에 답글로 이어서 물을 수 있고 첫 답변 포함 글당 최대 5회입니다. 글쓴이가 채택·변경·취소할 수 있는 동료 답은 이후 AI 답변에서 우선 참고합니다.</p>
+<p>내 글의 AI 답변 생성을 원하지 않으면 ‘AI답변 허용하기’를 끄세요. 공개된 일반 채널의 글·댓글은 작성자 정보·개인정보를 제거한 뒤 다른 질문의 참고 내용으로 이용될 수 있습니다. 이미 전송한 내용과 공개된 답변은 자동 회수되지 않으므로 관련 요청은 운영팀 문의로 보내 주세요. Google 로그인 대신 이메일 로그인을 선택해도 Supabase·Resend를 이용합니다. 기본 기능의 국외 처리를 원하지 않으면 가입하지 않거나 탈퇴해야 하며 회원 기능은 이용하지 못합니다.</p>
 <h2>6. 자동 인증</h2>
 <p>기기 내 글자인식으로 증빙의 이름·14자리 설계사 고유번호·소속을 신청 정보와 비교해 일치하면 자동 승인, 명확히 다르면 자동 반려하며 불명확하면 운영자가 확인합니다. 결과는 인증 상태·회원 기능에 바로 반영되고 내 정보·알림으로 안내합니다. 이 과정에 외부 생성형 AI는 사용하지 않습니다.</p>
 <p>자동 인증의 설명·의견 제출·운영자 재검토는 ‘운영팀 문의’의 ‘개인정보 열람·정정·삭제 요청’으로 신청해 주세요.</p>
@@ -1416,6 +1467,8 @@
 <li>사칭·계정 거래·권한 우회·도배·좋아요와 리뷰 조작·악의적 신고</li>
 </ul>
 <p>익명 채널과 AI 질문에도 같은 기준을 적용합니다. 사실에 근거한 비판이나 불리한 회사 평가라는 이유만으로 제한하지 않습니다.</p>
+<p>AI는 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처는 표시하지 않습니다. 인증 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다.</p>
+<p>글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. AI 댓글과 자기 댓글은 채택할 수 없으며, 채택된 동료 답은 이후 AI 답변에서 우선 참고합니다.</p>
 <h2>2. 신고와 조치</h2>
 <p>인증 회원은 다른 회원의 글·댓글·리뷰와 AI 댓글을 신고합니다. 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상이면 자동으로 임시 가림하고 신고자·작성자에게 알립니다. 운영 공지는 자동 가림에서 제외하되 운영팀이 직접 검토합니다.</p>
 <p>소명된 권리침해 요청은 신고 수와 관계없이 지체 없이 검토합니다. 판단이 어렵거나 다툼이 예상될 때의 임시조치는 최대 30일이며, 소명 검토 후 복구 또는 최종 가림·삭제를 결정합니다. 미결 건은 기간 종료 후 자동 복구하며 불법정보·저작권 등 별도 법정 절차를 우선합니다.</p>
@@ -1429,7 +1482,8 @@
 <p class="document-meta">변경 요지: 이용 순서와 신고·소명·문의 방법을 간결하게 정리했습니다.</p>
 <h2>1. 이용 순서</h2>
 <ol><li>Google 또는 이메일로 로그인합니다.</li><li>설계사 인증에 이름·닉네임·소속·연락처·설계사 고유번호와 증빙 사진 1장을 제출합니다. 사진의 불필요한 개인정보는 가려 주세요.</li><li>내 정보·알림에서 인증 승인을 확인한 뒤 글·댓글·좋아요·리뷰를 이용합니다. 팔로우·글 저장은 로그인만 하면 됩니다.</li></ol>
-<p>‘AI답변 허용하기’를 켜면 제목·본문으로 생성한 AI 댓글이 사전 검수 없이 공개됩니다. 출처가 표시되지 않는 참고 정보이므로 공식 자료를 확인하고 고객정보는 적지 마세요.</p>
+<p>‘AI답변 허용하기’를 켜면 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고한 AI 댓글이 출처 표시·사전 검수 없이 공개됩니다. 공식 자료를 확인하고 고객정보는 적지 마세요.</p>
+<p>인증 회원 누구나 AI 답변의 ‘답글’로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 글쓴이는 동료 댓글 1개를 채택하고 변경·취소할 수 있습니다.</p>
 <h2>2. 권리침해 신고 방법</h2>
 <p>인증 회원은 게시물의 ‘신고’를 이용합니다. 피해자 본인이나 적법한 대리인은 로그인 후 아래 문의에서 ‘권리침해 신고’를 선택해 주세요. 설계사 미인증·이용 정지 회원도 문의하며, 신고 버튼의 횟수 제한과 별개로 접수합니다.</p>
 <ul class="policy-list"><li>대상 글·댓글·리뷰의 주소와 문제 부분</li><li>침해된 권리·구체적 사실과 본인 또는 대리인 여부</li><li>최소한의 소명 자료와 원하는 조치(삭제·접근 차단·반박 내용 게재)</li></ul>
@@ -1748,6 +1802,7 @@
     if (
       [
         "reply",
+        "comment-accept",
         "comment-edit",
         "review-new",
         "review-edit",
@@ -1888,15 +1943,27 @@
           "탈퇴 즉시 회원 전용 접근이 차단됩니다. 남은 글과 댓글은 ‘탈퇴한 회원’으로 표시됩니다.",
         );
       case "reply": {
+        const parent = current?.comments?.find((c) => c.id === id);
+        if (!parent || !canReplyComment(parent, current)) return;
         const slot = $(`[data-reply-slot="${CSS.escape(id)}"]`);
+        if (!slot) return;
         if (slot.firstChild) {
           slot.innerHTML = "";
           return;
         }
         $$("[data-reply-slot]").forEach((x) => (x.innerHTML = ""));
-        slot.innerHTML = `<form data-form="comment" class="comment-form reply-form open"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}"><textarea name="body" rows="2" aria-label="대댓글" placeholder="대댓글을 남겨 주세요." required maxlength="3000" data-testid="reply-body"></textarea><p class="error" data-form-error role="alert"></p><div class="comment-form-actions"><button type="button" class="btn btn-small" data-do="reply-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`;
+        const followup = parent.is_ai && aiFollowupAllowed(current);
+        slot.innerHTML = `<form data-form="comment" class="comment-form reply-form open"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}"><textarea name="body" rows="2" aria-label="${followup ? "AI에 이어서 묻기" : "대댓글"}" placeholder="${followup ? "앞선 답변에서 더 궁금한 점을 물어보세요." : "대댓글을 남겨 주세요."}" required maxlength="3000" data-testid="reply-body"></textarea>${followup ? '<p class="hint">AI 답변은 첫 답변 포함 글당 최대 5회예요. 고객정보는 적지 마세요.</p>' : ""}<p class="error" data-form-error role="alert"></p><div class="comment-form-actions"><button type="button" class="btn btn-small" data-do="reply-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`;
         slot.querySelector("textarea").focus();
         return;
+      }
+      case "comment-accept": {
+        const comment = current?.comments?.find((c) => c.id === id);
+        if (!comment || !canAcceptComment(comment, current)) return;
+        const cancel = commentAccepted(comment, current);
+        await act("comment_accept", { post_id: current.post.id, comment_id: cancel ? null : id });
+        notify(cancel ? "댓글 채택을 취소했어요." : "이 댓글을 채택했어요.");
+        return reloadComments(id);
       }
       case "draft-clear": {
         clearDraft();

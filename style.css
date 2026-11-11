@@ -4232,6 +4232,48 @@ h2 {
 .comment-ai-item .comment-author { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .comment-ai-item .ai-badge { margin-left: 0; border-color: #cfc3f3; color: #5b46d6; font-weight: 700; }
 .comment-ai-item .body-text { white-space: pre-line; }
+/* AI 이어 묻기와 동료 댓글 채택: 기존 댓글 간격과 한 단계 들여쓰기를 유지한다. */
+.accepted-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.comment-meta > .comment-accept { color: var(--link); white-space: nowrap; }
+.comment-meta > .comment-accept[aria-pressed="true"] { color: var(--muted); }
+.comment-reply-context {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: #81798f;
+  font-size: 11px;
+}
+.comment-reply-context:hover { color: var(--link); }
+.ai-followup-hint {
+  margin: 10px 0 0;
+  color: #81798f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ai-related-posts {
+  margin: 12px 0 6px;
+  padding: 10px 12px;
+  border-left: 2px solid #ded5ef;
+  background: #faf9fc;
+  font-size: 12px;
+}
+.ai-related-posts > span { color: #81798f; }
+.ai-related-posts ul { margin: 5px 0 0; padding: 0; list-style: none; }
+.ai-related-posts li + li { margin-top: 4px; }
+.ai-related-posts a { color: var(--link); overflow-wrap: anywhere; }
+.ai-related-posts a:hover { text-decoration: underline; }
+@media (max-width: 420px) {
+  .comment-meta { gap: 10px; flex-wrap: wrap; }
+}
 .channel-request { margin: 20px 0 8px; text-align: center; }
 
 /* 2026-11-10 알림 종 펼침 창 — 누르면 종 아래로 펼침. PC: 오른쪽 정렬 360 폭, 창 안에서만 스크롤. 휴대폰: 머리줄 아래 화면 폭 전체 */
