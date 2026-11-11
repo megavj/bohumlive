@@ -60,7 +60,7 @@
       : p?.status === "verified" && !validVerification(p)
         ? "인증 기간 만료 · 재인증 필요"
         : statusNames[p?.status] || "계정 확인 중";
-  const sampleBadge = (p) => (p?.is_sample ? '<span class="tag sample-badge" title="정식 공개 전 화면 확인용으로 만든 글입니다">견본 글</span>' : "");
+  const sampleBadge = (p) => (p?.is_sample ? '<span class="tag sample-badge" title="운영팀이 이용 예시로 작성한 글입니다">견본 글</span>' : "");
   const icon = (name) => {
     const paths = {
       search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
@@ -163,7 +163,7 @@
     $("#header").innerHTML =
       `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><picture><source media="(prefers-reduced-motion: reduce)" srcset="/assets/logo-live-still.png?v=20261109"><source media="(max-width: 799px)" srcset="/assets/logo-live-m.gif?v=20261109b"><img class="wm-logo" src="/assets/logo-live.gif?v=20261109b" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></picture></a><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a><a class="${active === "company" ? "active" : ""}" href="/company.html">보험사 리뷰</a>${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="궁금한 내용 검색" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form><div class="header-tools">${tools}</div></div>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
     $("#footer").innerHTML =
-      `<footer class="site-footer"><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html"><b>개인정보처리방침</b></a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">운영 안내·권리침해 신고</a></nav><p class="footer-note">보험라이브는 무료 커뮤니티입니다. AI 답변은 참고용이며 보험 모집·가입 권유·광고와 개인정보 게시는 금지합니다.</p><p class="footer-note footer-copy">© ${new Date().getFullYear()} 보험라이브 · 공개 준비 중(검색 노출 차단)</p></footer>`;
+      `<footer class="site-footer"><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html"><b>개인정보처리방침</b></a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">운영 안내·권리침해 신고</a></nav><p class="footer-note">보험라이브는 무료 커뮤니티입니다. AI 답변은 참고용이며 보험 모집·가입 권유·광고와 개인정보 게시는 금지합니다.</p><p class="footer-note footer-copy">© ${new Date().getFullYear()} 보험라이브</p></footer>`;
     // 오른쪽 칸: 안내 상자·글쓰기 버튼을 두지 않는다. 목록·글 화면(PC)에서만 '인기 글' 제목 목록을 채운다.
     // 둘러보는 화면(홈·채널 탐색·보험사 목록)은 넓게, 읽는 화면(목록·글·검색·보험사 상세)은 본문 + 오른쪽 인기 글, 입력 화면은 가운데 한 칸
     const mode =
