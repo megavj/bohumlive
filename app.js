@@ -52,7 +52,9 @@
   const isOwner = () => viewer?.role === "owner" && isActive() && viewer.verification_exempt !== false;
   const isAdmin = () => ["admin", "owner"].includes(viewer?.role) && isActive() && viewer.can_admin !== false;
   const validVerification = (p) => p?.status === "verified" && Date.parse(p.verified_until) > Date.now();
-  const isVerified = () => isOwner() || (validVerification(viewer) && viewer.can_write !== false);
+  // 2026-11-12 이사님 결정: 미인증 회원도 활동은 똑같이(서버 can_write 기준). 소속 회사 표시·회사 리뷰만 인증 회원.
+  const isCertified = () => isOwner() || (validVerification(viewer) && viewer.can_write !== false);
+  const isVerified = () => isOwner() || (isActive() && viewer?.can_write === true);
   const canReadMember = () => isVerified() || isAdmin();
   const statusLabel = (p = viewer) =>
     isOwner()
@@ -193,20 +195,20 @@
   }
   // 로그인했지만 아직 글을 쓸 수 없는 회원에게만 보이는 얇은 한 줄 안내
   function verifyStrip() {
-    if (!session || !viewer || isVerified() || isAdmin()) return "";
+    if (!session || !viewer || isCertified() || isAdmin()) return "";
     const s = viewer.status;
     const [text, label, href] =
       s === "suspended"
         ? ["이용 정지 상태예요. 공개 글만 읽을 수 있어요.", "안내 보기", "/help.html"]
         : s === "pending"
-          ? ["설계사 인증을 심사하고 있어요. 결과는 알림으로 알려 드려요.", "신청 내용 보기", "/me.html"]
+          ? ["설계사 인증을 심사하고 있어요. 그동안 이름 옆 소속은 ‘소속 미확인’으로 보여요.", "신청 내용 보기", "/me.html"]
           : s === "supplement"
             ? ["인증 신청에 보완이 필요해요.", "보완하기", "/verify.html"]
             : s === "rejected"
               ? ["인증 신청이 반려됐어요. 내용을 확인하고 다시 신청해 주세요.", "다시 신청", "/verify.html"]
               : s === "verified"
-                ? ["인증 기간이 끝났어요. 다시 인증하면 글·댓글을 쓸 수 있어요.", "재인증하기", "/verify.html"]
-                : ["설계사 인증을 마치면 글·댓글을 쓸 수 있어요.", "인증하기", "/verify.html"];
+                ? ["인증 기간이 끝나 이름 옆 소속이 ‘소속 미확인’으로 보여요. 다시 인증하면 회사 이름이 표시돼요.", "재인증하기", "/verify.html"]
+                : ["지금도 글·댓글을 쓸 수 있어요. 설계사 인증을 마치면 ‘소속 미확인’ 대신 회사 이름이 표시돼요.", "인증하기", "/verify.html"];
     return `<p class="verify-strip" data-testid="verify-strip"><span>${E(text)}</span><a href="${href}">${E(label)}</a></p>`;
   }
   function authorization(kind = "verified") {
@@ -217,7 +219,7 @@
     if (kind === "admin" && !isAdmin())
       return empty("관리자만 사용할 수 있어요.", "권한은 서버에서 확인합니다. 내 정보에서 현재 상태를 확인해 주세요.");
     if (kind === "verified" && !isVerified())
-      return `<section class="section"><h1>설계사 인증 후 이용할 수 있어요</h1><p class="notice">현재 상태: ${E(statusLabel())}${mine?.profile?.review_reason ? `<br>${E(mine.profile.review_reason)}` : ""}</p>${viewer?.status === "suspended" ? '<p>정지 상태에서는 공개 글만 읽을 수 있습니다.</p><a class="btn" href="/help.html">운영 안내</a>' : '<a class="btn btn-primary" href="/verify.html">인증 신청·보완하기</a>'}</section>`;
+      return `<section class="section"><h1>지금은 이용할 수 없어요</h1><p class="notice">현재 상태: ${E(statusLabel())}${mine?.profile?.review_reason ? `<br>${E(mine.profile.review_reason)}` : ""}</p>${viewer?.status === "suspended" ? '<p>정지 상태에서는 공개 글만 읽을 수 있습니다.</p><a class="btn" href="/help.html">운영 안내</a>' : '<a class="btn btn-primary" href="/verify.html">인증 신청·보완하기</a>'}</section>`;
     return "";
   }
   // NOW·HOT 기준(숫자만 바꾸면 됨) — HOT: 좋아요 5개 이상 또는 댓글 10개 이상 / NOW: 24시간 안에 올라와 댓글 3개 이상 또는 좋아요 2개 이상
@@ -399,7 +401,7 @@
       ? `<p class="post-company"><a href="${uri("company.html", { id: p.company_id })}" data-testid="post-company"><span class="muted">관련 회사</span> ${E(p.company_name)} ›</a></p>`
       : "";
     const actions = `<div class="post-actions"><button type="button" data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 <span data-count="${Number(p.likes) || 0}">${num(p.likes)}</span></button><a class="post-comment-link" href="#comments">${icon("comment")} 댓글 ${num(p.comment_count)}</a><button type="button" data-do="share" class="share-button" aria-label="공유(글 링크 복사)" title="공유(글 링크 복사)">${icon("share")}</button></div>`;
-    return `<article class="post" data-testid="post">${header}${band}<div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? lockBar("뒷부분은 설계사 인증 회원만 볼 수 있어요.") : ""}${company}${actions}${commentsSection(d)}<section class="more-posts" data-more-posts data-channel="${E(p.channel_id)}" data-post="${E(p.id)}" data-name="${E(p.channel_name)}" data-testid="more-posts-list" hidden></section></article>`;
+    return `<article class="post" data-testid="post">${header}${band}<div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? lockBar("뒷부분은 로그인한 회원만 볼 수 있어요.") : ""}${company}${actions}${commentsSection(d)}<section class="more-posts" data-more-posts data-channel="${E(p.channel_id)}" data-post="${E(p.id)}" data-name="${E(p.channel_name)}" data-testid="more-posts-list" hidden></section></article>`;
   }
   // 댓글 정렬: 추천순(좋아요 많은 순, 같으면 먼저 쓴 순) · 등록순 · 최신순. 고른 값은 이 기기에 기억한다.
   const commentSorts = [
@@ -500,10 +502,10 @@
     const form = isVerified()
       ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" rows="1" placeholder="좋은 댓글은 응원이 됩니다." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><div class="comment-form-actions"><button type="button" class="btn btn-small" data-do="comment-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`
       : canReadMember()
-        ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요. 글·댓글·리뷰 작성은 설계사 인증 후 이용해 주세요. <a href="/verify.html">인증 신청·보완하기</a></p>'
-        : lockBar(session ? `댓글은 설계사 인증 회원만 볼 수 있어요. (지금: ${statusLabel()})` : "댓글은 설계사 인증 회원만 볼 수 있어요.");
+        ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요.</p>'
+        : lockBar(session ? `댓글은 회원만 볼 수 있어요. (지금: ${statusLabel()})` : "댓글은 로그인한 회원만 볼 수 있어요.");
     const aiHint = canReadMember() && p.ai_upgrade === true && p.is_question && (aiFollowupAllowed(d) || Number(p.ai_reply_count) >= 5) && (d.comments || []).some((c) => c.is_ai)
-      ? `<p class="ai-followup-hint" data-testid="ai-followup-hint">${Number(p.ai_reply_count) >= 5 ? "이 글의 AI 답변 5회를 모두 사용했어요. 동료들과 댓글로 이어가 주세요." : "인증 회원 누구나 AI 답변의 ‘답글’로 이어서 물을 수 있어요. 첫 답변 포함 글당 최대 5회예요."}</p>`
+      ? `<p class="ai-followup-hint" data-testid="ai-followup-hint">${Number(p.ai_reply_count) >= 5 ? "이 글의 AI 답변 5회를 모두 사용했어요. 동료들과 댓글로 이어가 주세요." : "회원 누구나 AI 답변의 ‘답글’로 이어서 물을 수 있어요. 첫 답변 포함 글당 최대 5회예요."}</p>`
       : "";
     return `<section class="comments" id="comments"><div class="comments-top"><h2>댓글 <span data-comment-count>${Number(p.comment_count) || 0}</span></h2>${sorter}${form}${aiHint}</div>${canReadMember() ? `<div data-comment-list>${commentListHTML(d)}</div>` : ""}</section>`;
   }
@@ -669,7 +671,7 @@
             owner ? "회사에 대한 경험을 남길 수 있어요." : "인증된 현재 소속 회사의 리뷰를 남길 수 있어요.",
           );
     else
-      body = `<section class="section"><h2>${owner ? "현재 권한" : "현재 인증 상태"}</h2><p class="notice ${isVerified() ? "success" : ""}">${E(statusLabel(p))}${!owner && p.review_reason ? `<br>${E(p.review_reason)}` : ""}</p>${owner ? '<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>' : ""}<div class="profile-line"><span>공개 표시</span><span>${E(p.company_name || "소속 미등록")} · ${E((p.nickname || "닉").slice(0, 1))}***</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked || "미등록")}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked || "미등록")}</span></div><div class="profile-line"><span>${owner ? "설계사 인증" : "인증 유효기간"}</span><span>${owner ? "인증 면제" : E(p.verified_until ? new Date(p.verified_until).toLocaleDateString("ko-KR") : "인증 전")}</span></div><p></p>${owner ? '<a class="btn btn-primary" href="/admin/">관리자 모드</a>' : p.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : `<a class="btn btn-primary" href="/verify.html">${isVerified() ? "소속 변경·재인증" : "인증 신청·보완"}</a><p class="hint">소속을 변경하면 재인증 대기로 전환되어 공개 글만 볼 수 있습니다.</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${isActive() ? `<form data-form="profile">${field("nickname", "새 닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20"')}${formEnd("닉네임 저장")}</form>` : '<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>'}<div class="divider section-divider"></div><div class="form-actions">${btn("로그아웃", "logout")}${isAdmin() && !owner ? '<a class="btn" href="/admin/">관리자 모드</a>' : ""}${!owner ? btn("회원 탈퇴", "withdraw") : ""}</div><p class="hint" style="margin-top:16px">${owner ? "대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다." : "탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요."}</p></section>`;
+      body = `<section class="section"><h2>${owner ? "현재 권한" : "현재 인증 상태"}</h2><p class="notice ${isCertified() ? "success" : ""}">${E(statusLabel(p))}${!owner && p.review_reason ? `<br>${E(p.review_reason)}` : ""}</p>${owner ? '<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>' : ""}<div class="profile-line"><span>공개 표시</span><span>${E(p.company_name || "소속 미등록")} · ${E((p.nickname || "닉").slice(0, 1))}***</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked || "미등록")}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked || "미등록")}</span></div><div class="profile-line"><span>${owner ? "설계사 인증" : "인증 유효기간"}</span><span>${owner ? "인증 면제" : E(p.verified_until ? new Date(p.verified_until).toLocaleDateString("ko-KR") : "인증 전")}</span></div><p></p>${owner ? '<a class="btn btn-primary" href="/admin/">관리자 모드</a>' : p.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : `<a class="btn btn-primary" href="/verify.html">${isVerified() ? "소속 변경·재인증" : "인증 신청·보완"}</a><p class="hint">소속을 변경하면 재인증 전까지 이름 옆 소속이 ‘소속 미확인’으로 표시됩니다.</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${isActive() ? `<form data-form="profile">${field("nickname", "새 닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20"')}${formEnd("닉네임 저장")}</form>` : '<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>'}<div class="divider section-divider"></div><div class="form-actions">${btn("로그아웃", "logout")}${isAdmin() && !owner ? '<a class="btn" href="/admin/">관리자 모드</a>' : ""}${!owner ? btn("회원 탈퇴", "withdraw") : ""}</div><p class="hint" style="margin-top:16px">${owner ? "대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다." : "탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요."}</p></section>`;
     return `<section class="section"><h1>내 정보</h1><p class="muted">${E(statusLabel(p))}</p></section><nav class="tabs">${tabs.map(([id, label]) => `<a class="${tab === id ? "active" : ""}" href="${uri("me.html", { tab: id })}">${label}</a>`).join("")}</nav>${body}`;
   }
   // 알림에서 온 주소(#comments·#comment-ai·#comment-번호)면 글을 그린 뒤 그 댓글로 한 번만 이동하고 잠깐 표시한다.
@@ -847,7 +849,7 @@
     location.href = href;
   }
   function reviewHTML(r) {
-    return `<article class="review" data-testid="review-item"><div class="section-head"><h3>${E(r.title)} ${sampleBadge(r)}</h3>${r.is_mine && isVerified() ? `<div class="form-actions">${btn("수정", "review-edit", `data-id="${E(r.id)}"`)}${btn("삭제", "review-delete", `data-id="${E(r.id)}"`)}</div>` : ""}</div><p class="author">${E(r.author_display)} · ${E(date(r.created_at))}</p><div class="review-scores">${scoreNamesFor(r.company_kind || current?.company?.kind).map((s, i) => `<div class="review-score"><span>${s}</span><span class="stars">${"★".repeat(Number(r.scores?.[i]) || 0)}</span></div>`).join("")}</div><p class="body-text" style="margin-top:16px">${E(r.body)}</p>${r.is_truncated ? '<p class="hint">나머지 리뷰는 인증 후 읽을 수 있어요.</p>' : ""}${r.is_mine ? "" : `<button class="text-link small" data-do="report" data-target="review" data-id="${E(r.id)}">리뷰 신고</button>`}</article>`;
+    return `<article class="review" data-testid="review-item"><div class="section-head"><h3>${E(r.title)} ${sampleBadge(r)}</h3>${r.is_mine && isCertified() ? `<div class="form-actions">${btn("수정", "review-edit", `data-id="${E(r.id)}"`)}${btn("삭제", "review-delete", `data-id="${E(r.id)}"`)}</div>` : ""}</div><p class="author">${E(r.author_display)} · ${E(date(r.created_at))}</p><div class="review-scores">${scoreNamesFor(r.company_kind || current?.company?.kind).map((s, i) => `<div class="review-score"><span>${s}</span><span class="stars">${"★".repeat(Number(r.scores?.[i]) || 0)}</span></div>`).join("")}</div><p class="body-text" style="margin-top:16px">${E(r.body)}</p>${r.is_truncated ? '<p class="hint">나머지 리뷰는 인증 후 읽을 수 있어요.</p>' : ""}${r.is_mine ? "" : `<button class="text-link small" data-do="report" data-target="review" data-id="${E(r.id)}">리뷰 신고</button>`}</article>`;
   }
   async function company() {
     companies = (await read("companies")).companies || [];
@@ -862,7 +864,7 @@
     current = d;
     const c = d.company;
     if (!c) return empty("회사 정보를 찾을 수 없어요.", "보험사·GA 목록에서 다시 선택해 주세요.");
-    const canReview = c.enabled !== false && (isOwner() || (isVerified() && mine?.profile?.company_id === id));
+    const canReview = c.enabled !== false && (isOwner() || (isCertified() && mine?.profile?.company_id === id));
     return `<div class="company-cover"></div><section class="company-hero"><a class="back-link" href="/company.html">← 보험사·GA 목록</a><div class="section-head"><h1>${E(c.name)}</h1><span class="company-mark">${E(c.kind || "보험사")}</span></div><p class="muted">${E(c.description || "설계사 동료가 나누는 근무 경험입니다.")}</p><div class="metrics"><div><strong>${Number(c.review_count) || 0}개</strong>리뷰</div><div><strong>${c.average != null ? Number(c.average).toFixed(1) : "모으는 중"}</strong>종합 별점</div><div><strong>5항목</strong>설계사 관점</div><div><strong>1년 1건</strong>회사별 작성</div></div>${c.average != null ? `<div class="rating-grid">${scoreNamesFor(c.kind).map((s, i) => `<div class="review-score"><span>${s}</span><span>${Number(c.scores?.[i] || 0).toFixed(1)} / 5</span></div>`).join("")}</div>` : '<p class="notice">유효한 리뷰가 5개 이상 모이면 전체·항목별 평균 별점을 공개합니다.</p>'}<p></p>${canReview ? btn("리뷰 작성", "review-new", `data-id="${E(c.id)}" data-testid="review-create"`, true) : isOwner() ? '<p class="hint">숨김 처리된 회사입니다. 관리자에서 회사를 공개한 후 리뷰를 작성할 수 있어요.</p>' : `<p class="hint">현재 소속 회사가 인증된 회원만 리뷰를 작성할 수 있어요.</p>${viewer?.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : session ? '<a class="btn" href="/verify.html">내 소속 인증하기</a>' : verifyLink("btn")}`}</section><nav class="company-tabs"><a class="active" href="#company-reviews">리뷰</a><a href="#company-posts">관련 글</a></nav><section id="company-reviews">${d.reviews?.length ? d.reviews.map(reviewHTML).join("") : empty("아직 등록된 리뷰가 없어요.", "현재 소속 회사에 대한 첫 경험을 남겨 주세요.")}</section><section id="company-posts"><h2 class="section">${E(c.name)} 관련 글</h2><div class="item-list">${feeds(d.posts, { mixed: true, compact: true })}</div></section>`;
   }
   // ---- 관리자 화면 (2026-11-09 재구성: 탭별 자료, 목록 → 상세, 한국어 상태, 더 보기) ----
@@ -1091,7 +1093,7 @@
     return adminForm(
       "channel_save",
       c.id,
-      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (이름을 바꿔도 그대로예요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? Math.max(0, ...channels.map((x) => Number(x.display_order) || 0)) + 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}><span>채널 사용(끄면 회원에게 보이지 않아요)</span></label><label class="check-line"><input type="checkbox" name="anonymous" data-testid="channel-anonymous" ${c.anonymous ? "checked" : ""}><span>완전 익명 채널(회사명·닉네임 대신 ‘익명’ 표시)</span></label><p class="hint">완전 익명을 켜면 이 채널의 글·댓글이 익명으로 바뀌고, 나중에 꺼도 이미 익명인 글은 익명으로 남아요.</p>${select("guest_full", "손님(로그인하지 않은 사람)에게 보이는 범위", [["false", "앞 300자만 보여 주기"], ["true", "본문 전체 보여 주기"]], String(!!c.guest_full), 'data-testid="channel-guest-range"')}<p class="hint">바꾼 뒤에 새로 쓰는 글부터 적용돼요. 이미 쓴 글의 공개 범위는 그대로예요. 댓글은 언제나 인증 회원만 봅니다.</p>`,
+      `${field("name", "채널 이름", "text", c.name || "", 'required minlength="2" maxlength="40" data-testid="channel-name"')}${area("description", "설명", c.description || "", 'required maxlength="500"')}${c.slug ? `<p class="hint">영문 주소: ${E(c.slug)} (이름을 바꿔도 그대로예요)</p><input type="hidden" name="slug" value="${E(c.slug)}">` : '<p class="hint">영문 주소는 이름에서 자동으로 만들어져요.</p>'}<input type="hidden" name="display_order" value="${E(c.display_order ?? Math.max(0, ...channels.map((x) => Number(x.display_order) || 0)) + 10)}"><label class="check-line"><input type="checkbox" name="enabled" ${c.enabled !== false ? "checked" : ""}><span>채널 사용(끄면 회원에게 보이지 않아요)</span></label><label class="check-line"><input type="checkbox" name="anonymous" data-testid="channel-anonymous" ${c.anonymous ? "checked" : ""}><span>완전 익명 채널(회사명·닉네임 대신 ‘익명’ 표시)</span></label><p class="hint">완전 익명을 켜면 이 채널의 글·댓글이 익명으로 바뀌고, 나중에 꺼도 이미 익명인 글은 익명으로 남아요.</p>${select("guest_full", "손님(로그인하지 않은 사람)에게 보이는 범위", [["false", "앞 300자만 보여 주기"], ["true", "본문 전체 보여 주기"]], String(!!c.guest_full), 'data-testid="channel-guest-range"')}<p class="hint">바꾼 뒤에 새로 쓰는 글부터 적용돼요. 이미 쓴 글의 공개 범위는 그대로예요. 댓글은 언제나 로그인한 회원만 봅니다.</p>`,
       c.id ? "수정 저장" : "채널 추가",
       "",
       c.name || "새",
@@ -1329,7 +1331,7 @@
     },
     ai(d) {
       const s = d.settings || {};
-      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에 보험 자료와 웹을 참고해 답변하며 출처는 표시하지 않아요. 공개된 일반 채널의 동료 글·댓글도 개인정보를 제거해 참고합니다. 답변은 사전 검수 없이 댓글로 공개되며, 의미 없는 글은 답변을 생략해요. 인증 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회예요. 글쓴이가 채택한 동료 댓글은 우선 참고합니다.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}><span>AI 답변 만들기 사용</span></label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
+      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에 보험 자료와 웹을 참고해 답변하며 출처는 표시하지 않아요. 공개된 일반 채널의 동료 글·댓글도 개인정보를 제거해 참고합니다. 답변은 사전 검수 없이 댓글로 공개되며, 의미 없는 글은 답변을 생략해요. 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회예요. 글쓴이가 채택한 동료 댓글은 우선 참고합니다.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}><span>AI 답변 만들기 사용</span></label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
     },
     settings(d) {
       const words = d.settings?.banned_words || [];
@@ -1375,7 +1377,7 @@
 <p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 11일 · 보험라이브</p>
 <p class="document-meta">변경 요지: 필수 이용 조건과 회원 권리 중심으로 간결하게 정리했습니다.</p>
 <h2>1. 서비스와 가입</h2>
-<p>보험라이브는 성인 보험설계사를 위한 무료 커뮤니티이며 결제 기능은 없습니다. Google 또는 이메일로 로그인하고 설계사 인증을 마쳐야 회원 전용 글·댓글·AI 답변을 읽고 글·댓글·리뷰를 작성합니다.</p>
+<p>보험라이브는 성인 보험설계사를 위한 무료 커뮤니티이며 결제 기능은 없습니다. Google 또는 이메일로 로그인한 회원은 회원 전용 글·댓글·AI 답변을 읽고 글·댓글을 작성합니다. 설계사 인증을 마치지 않은 회원은 이름 옆 소속이 ‘소속 미확인’으로 표시되며, 회사 리뷰는 현재 소속이 인증된 회원만 작성합니다.</p>
 <h2>2. 회원의 의무</h2>
 <p>가입 정보와 증빙은 본인의 현재 정보로 제출하고, 소속이 바뀌면 재인증을 신청해 주세요. 개인정보·고객자료 게시, 타인의 권리 침해, 불법정보, 광고·모집, 사칭·계정 거래, 도배·조작·악의적 신고는 금지합니다.</p>
 <h2>3. 공개 범위와 익명 표시</h2>
@@ -1385,7 +1387,7 @@
 <h2>5. 보험 정보</h2>
 <p>회원 글과 리뷰는 개인 의견이며, 보험라이브는 보험계약 판매·중개나 가입·해지 권유 서비스를 제공하지 않습니다. 상품 가입 권유, 상담 고객 유치와 모집 광고는 금지하며, 계약 판단에는 해당 약관과 보험사의 공식 자료를 확인해 주세요.</p>
 <h2>6. AI 답변</h2>
-<p>‘AI답변 허용하기’를 켠 글의 제목·본문과 이어 묻기 흐름을 개인정보 제거 후 Anthropic의 Claude에 전달합니다. 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처·사전 검수 없이 AI 표시와 참고용 안내를 붙여 댓글로 공개합니다. 인증 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. 오류 가능성이 있으므로 공식 자료를 확인하고, 오류·권리침해는 신고해 주세요.</p>
+<p>‘AI답변 허용하기’를 켠 글의 제목·본문과 이어 묻기 흐름을 개인정보 제거 후 Anthropic의 Claude에 전달합니다. 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처·사전 검수 없이 AI 표시와 참고용 안내를 붙여 댓글로 공개합니다. 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. 오류 가능성이 있으므로 공식 자료를 확인하고, 오류·권리침해는 신고해 주세요.</p>
 <h2>7. 이용 제한과 권리침해 처리</h2>
 <p>운영팀은 위반 정도·피해·반복 여부에 따라 게시물 가림·삭제, 인증 보완·반려, 일시 또는 계속적 이용 제한을 적용하고 사유와 결과를 알립니다. 권리침해 신고는 소명을 검토해 삭제 등 필요한 조치를 하며, 판단이 어렵거나 다툼이 예상될 때는 최대 30일 임시조치 후 미결 건을 자동 복구하되 별도 법정 절차를 우선합니다. 신고 방법과 이의신청은 <a class="text-link" href="/help.html">운영 안내·권리침해 신고</a>에서 확인해 주세요.</p>
 <h2>8. 탈퇴</h2>
@@ -1408,7 +1410,7 @@
 <li><b>신고·문의 처리</b>: 신고·이의신청·문의 내용, 관련 계정·게시물과 처리 내역을 민원 답변·권리 보호·부정 이용 대응에 이용합니다. 관리자 처리·증빙 열람 기록은 운영 책임 확인에 이용합니다.</li>
 <li><b>접속·보안</b>: 외부 호스팅·로그인 서비스의 IP 주소, 기기·브라우저 정보와 접속 기록 처리는 아래 업체별 정책에 따릅니다.</li>
 </ul>
-<p>정보는 회원 입력, 로그인 제공자, 서비스 이용 과정에서 수집합니다. 로그인·기본 기능은 계약 이행에 필요한 범위에서, 인증 정보는 신청 시 받은 동의에 따라 처리합니다. 인증 정보를 제출하지 않으면 인증 회원 기능을 이용하지 못하며 선택 기능의 정보는 해당 기능을 이용할 때 처리합니다.</p>
+<p>정보는 회원 입력, 로그인 제공자, 서비스 이용 과정에서 수집합니다. 로그인·기본 기능은 계약 이행에 필요한 범위에서, 인증 정보는 신청 시 받은 동의에 따라 처리합니다. 인증 정보를 제출하지 않아도 회원 기능은 이용할 수 있으나 소속 회사가 표시되지 않고 회사 리뷰를 작성할 수 없으며, 선택 기능의 정보는 해당 기능을 이용할 때 처리합니다.</p>
 <p>주민등록번호는 수집하지 않습니다. 증빙은 필요한 이름·소속·설계사 고유번호만 남기고 주소·주민등록번호·고객정보를 가려 주세요. 글과 AI 질문에도 타인의 개인정보·건강정보·계약번호·고객 자료를 넣지 마세요.</p>
 <h2>2. 공개 범위</h2>
 <p>일반 채널에는 회사명과 닉네임 첫 글자·별표 3개를 표시하고, 완전익명 채널에는 ‘익명’, 원글 작성자의 댓글에는 ‘글쓴이’를 표시합니다. 본문 공개 범위는 글쓰기 화면에서 확인해 주세요. 인증용 실명·연락처·고유번호·증빙은 공개하지 않습니다.</p>
@@ -1435,7 +1437,7 @@
 <tr><td><a class="text-link" href="https://www.anthropic.com/legal/privacy">Anthropic(Claude)</a></td><td>AI 답변 생성</td><td>개인정보를 제거한 AI 허용 글·이어 묻기 흐름·공개 일반 채널 동료 글·댓글</td><td>미국 등</td></tr>
 </tbody></table></div>
 <p>가입·인증·서비스 이용, Google 로그인, 메일 요청, 웹 방문, AI 답변 생성 시 각 업무에 필요한 정보를 HTTPS로 전송합니다. 외부 업체의 로그·백업 등은 각 서비스·계약의 보관 기준을 따르며 보험라이브 탈퇴만으로 모두 즉시 삭제되지는 않습니다.</p>
-<p>AI에 전달하는 글·댓글·대화에서 개인정보를 제거하며 계정의 이름·연락처·닉네임·증빙을 별도 입력하지 않습니다. 인증 회원은 AI 답변에 답글로 이어서 물을 수 있고 첫 답변 포함 글당 최대 5회입니다. 글쓴이가 채택·변경·취소할 수 있는 동료 답은 이후 AI 답변에서 우선 참고합니다.</p>
+<p>AI에 전달하는 글·댓글·대화에서 개인정보를 제거하며 계정의 이름·연락처·닉네임·증빙을 별도 입력하지 않습니다. 회원은 AI 답변에 답글로 이어서 물을 수 있고 첫 답변 포함 글당 최대 5회입니다. 글쓴이가 채택·변경·취소할 수 있는 동료 답은 이후 AI 답변에서 우선 참고합니다.</p>
 <p>내 글의 AI 답변 생성을 원하지 않으면 ‘AI답변 허용하기’를 끄세요. 공개된 일반 채널의 글·댓글은 작성자 정보·개인정보를 제거한 뒤 다른 질문의 참고 내용으로 이용될 수 있습니다. 이미 전송한 내용과 공개된 답변은 자동 회수되지 않으므로 관련 요청은 운영팀 문의로 보내 주세요. Google 로그인 대신 이메일 로그인을 선택해도 Supabase·Resend를 이용합니다. 기본 기능의 국외 처리를 원하지 않으면 가입하지 않거나 탈퇴해야 하며 회원 기능은 이용하지 못합니다.</p>
 <h2>6. 자동 인증</h2>
 <p>기기 내 글자인식으로 증빙의 이름·14자리 설계사 고유번호·소속을 신청 정보와 비교해 일치하면 자동 승인, 명확히 다르면 자동 반려하며 불명확하면 운영자가 확인합니다. 결과는 인증 상태·회원 기능에 바로 반영되고 내 정보·알림으로 안내합니다. 이 과정에 외부 생성형 AI는 사용하지 않습니다.</p>
@@ -1467,10 +1469,10 @@
 <li>사칭·계정 거래·권한 우회·도배·좋아요와 리뷰 조작·악의적 신고</li>
 </ul>
 <p>익명 채널과 AI 질문에도 같은 기준을 적용합니다. 사실에 근거한 비판이나 불리한 회사 평가라는 이유만으로 제한하지 않습니다.</p>
-<p>AI는 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처는 표시하지 않습니다. 인증 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다.</p>
+<p>AI는 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처는 표시하지 않습니다. 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다.</p>
 <p>글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. AI 댓글과 자기 댓글은 채택할 수 없으며, 채택된 동료 답은 이후 AI 답변에서 우선 참고합니다.</p>
 <h2>2. 신고와 조치</h2>
-<p>인증 회원은 다른 회원의 글·댓글·리뷰와 AI 댓글을 신고합니다. 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상이면 자동으로 임시 가림하고 신고자·작성자에게 알립니다. 운영 공지는 자동 가림에서 제외하되 운영팀이 직접 검토합니다.</p>
+<p>회원은 다른 회원의 글·댓글·리뷰와 AI 댓글을 신고합니다. 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상이면 자동으로 임시 가림하고 신고자·작성자에게 알립니다. 운영 공지는 자동 가림에서 제외하되 운영팀이 직접 검토합니다.</p>
 <p>소명된 권리침해 요청은 신고 수와 관계없이 지체 없이 검토합니다. 판단이 어렵거나 다툼이 예상될 때의 임시조치는 최대 30일이며, 소명 검토 후 복구 또는 최종 가림·삭제를 결정합니다. 미결 건은 기간 종료 후 자동 복구하며 불법정보·저작권 등 별도 법정 절차를 우선합니다.</p>
 <h2>3. 제재</h2>
 <p>위반 정도·피해·반복 여부에 따라 게시물 가림·삭제, 인증 보완·반려, 일시 이용 제한, 중대한·반복 위반의 계속적 이용 제한을 적용합니다. 긴급한 피해 방지에는 먼저 조치하고, 사유·결과를 안내해 소명을 받습니다.</p>
@@ -1485,7 +1487,7 @@
 <p>‘AI답변 허용하기’를 켜면 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고한 AI 댓글이 출처 표시·사전 검수 없이 공개됩니다. 공식 자료를 확인하고 고객정보는 적지 마세요.</p>
 <p>인증 회원 누구나 AI 답변의 ‘답글’로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 글쓴이는 동료 댓글 1개를 채택하고 변경·취소할 수 있습니다.</p>
 <h2>2. 권리침해 신고 방법</h2>
-<p>인증 회원은 게시물의 ‘신고’를 이용합니다. 피해자 본인이나 적법한 대리인은 로그인 후 아래 문의에서 ‘권리침해 신고’를 선택해 주세요. 설계사 미인증·이용 정지 회원도 문의하며, 신고 버튼의 횟수 제한과 별개로 접수합니다.</p>
+<p>회원은 게시물의 ‘신고’를 이용합니다. 피해자 본인이나 적법한 대리인은 로그인 후 아래 문의에서 ‘권리침해 신고’를 선택해 주세요. 이용 정지 회원도 문의하며, 신고 버튼의 횟수 제한과 별개로 접수합니다.</p>
 <ul class="policy-list"><li>대상 글·댓글·리뷰의 주소와 문제 부분</li><li>침해된 권리·구체적 사실과 본인 또는 대리인 여부</li><li>최소한의 소명 자료와 원하는 조치(삭제·접근 차단·반박 내용 게재)</li></ul>
 <p>주민등록번호·고객의 민감한 자료는 적지 마세요. 보완 요청과 답변은 서비스 내 알림으로 안내합니다.</p>
 <h2>3. 처리 절차</h2>
@@ -1594,8 +1596,8 @@
           team && !keep
             ? "운영팀 이름 글은 로그인하지 않은 사람도 전체를 볼 수 있어요."
             : full
-              ? "이 채널의 글은 로그인하지 않은 사람도 본문 전체를 볼 수 있어요. 댓글은 인증 회원만 봅니다."
-              : "이 채널의 글은 로그인하지 않은 사람에게 앞 300자까지만 보여요. 댓글은 인증 회원만 봅니다."
+              ? "이 채널의 글은 로그인하지 않은 사람도 본문 전체를 볼 수 있어요. 댓글은 로그인한 회원만 봅니다."
+              : "이 채널의 글은 로그인하지 않은 사람에게 앞 300자까지만 보여요. 댓글은 로그인한 회원만 봅니다."
         }`;
   }
   // 입력하는 대로 000-0000-0000 모양으로(서울 02, 지역번호, 대표번호도 자연스럽게)
@@ -1791,8 +1793,8 @@
       viewer?.status === "suspended"
         ? "이용 정지 상태에서는 작성할 수 없어요. 내 정보의 운영 안내를 확인해 주세요."
         : why === "like"
-          ? "좋아요는 설계사 인증을 마친 뒤 누를 수 있어요. 인증 신청·보완을 확인해 주세요."
-          : "설계사 인증을 마친 뒤 이용할 수 있어요. 인증 신청·보완을 확인해 주세요.",
+          ? "좋아요는 로그인한 회원만 누를 수 있어요."
+          : "로그인한 회원만 이용할 수 있어요. 내 정보에서 계정 상태를 확인해 주세요.",
     );
     return false;
   }
@@ -1853,8 +1855,8 @@
             viewer?.status === "suspended"
               ? "이용 정지 상태에서는 이용할 수 없어요. 내 정보의 운영 안내를 확인해 주세요."
               : kind === "like"
-                ? "좋아요는 설계사 인증을 마친 뒤 누를 수 있어요. 인증 신청·보완을 확인해 주세요."
-                : "설계사 인증을 마친 뒤 이용할 수 있어요. 인증 신청·보완을 확인해 주세요.",
+                ? "좋아요는 로그인한 회원만 누를 수 있어요."
+                : "로그인한 회원만 이용할 수 있어요. 내 정보에서 계정 상태를 확인해 주세요.",
           );
           return;
         }
@@ -1918,7 +1920,7 @@
           return;
         }
         if (!isVerified() && !isAdmin()) {
-          notify("신고는 설계사 인증을 마친 회원만 할 수 있어요. 인증 신청 후 이용해 주세요.");
+          notify("신고는 로그인한 회원만 할 수 있어요. 내 정보에서 계정 상태를 확인해 주세요.");
           return;
         }
         return reportDialog(el.dataset.target, id);
