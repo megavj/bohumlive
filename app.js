@@ -385,6 +385,8 @@
       return d.unavailable_reason === "not_found"
         ? empty("글을 찾을 수 없어요.", "주소가 바뀌었거나 삭제된 글이에요. 채널에서 다른 글을 골라 주세요.")
         : `<section class="section"><h1>${d.unavailable_reason === "temporary_hidden" ? "운영 검토를 위해 임시 가림한 글입니다" : "글을 표시할 수 없어요"}</h1><p class="notice">이 글은 삭제되었거나 신고 접수에 따른 운영 검토로 가려졌습니다. 임시조치는 접수 후 최대 30일 안에 검토합니다.${d.hidden_until ? `<br>검토 예정: ${E(date(d.hidden_until))}` : ""}</p><a class="btn" href="/channel.html">다른 글 보기</a><a class="btn" href="/help.html">신고·이의신청 안내</a></section>`;
+    // 브라우저 탭·방문 기록에 글 제목이 보이게 한다.
+    if (p.title) document.title = `${p.title} | 보험라이브`;
     const following = !!mine?.follows?.includes(p.channel_id);
     const menu = moreMenu(
       [
