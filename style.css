@@ -2119,7 +2119,7 @@ dialog::backdrop {
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: #e0313d;
+  background: #d92b37;
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -2820,7 +2820,7 @@ dialog::backdrop {
   flex: none;
   position: relative;
   padding: 8px 0 8px 12px;
-  color: #8a8796;
+  color: #6b6878;
   font-size: 12px;
 }
 .box-more::after {
@@ -2855,7 +2855,7 @@ dialog::backdrop {
 .best-channel {
   grid-column: 1 / -1;
   justify-self: start;
-  color: #8a8796;
+  color: #6b6878;
   font-size: 12px;
 }
 .best-title {
@@ -2908,7 +2908,7 @@ dialog::backdrop {
   margin: 0;
   padding: 16px;
   border-top: 8px solid var(--soft);
-  color: #8a8796;
+  color: #6b6878;
   font-size: 12px;
 }
 .quiet-channels a {
@@ -2937,7 +2937,7 @@ dialog::backdrop {
 .group-label a {
   flex: none;
   padding: 6px 0 6px 12px;
-  color: #8a8796;
+  color: #6b6878;
   font-size: 12px;
 }
 .group-label a::after {
@@ -3068,7 +3068,7 @@ dialog::backdrop {
 }
 .chan-chips .chip-more {
   border-style: dashed;
-  color: #8a8796;
+  color: #6b6878;
 }
 .list-head {
   padding: 16px 16px 12px;
@@ -3128,7 +3128,7 @@ dialog::backdrop {
 }
 .list-desc {
   margin: 6px 0 0;
-  color: #8a8796;
+  color: #6b6878;
   font-size: 13px;
   line-height: 1.55;
 }
@@ -3154,7 +3154,7 @@ dialog::backdrop {
   align-items: center;
   gap: 6px;
   margin-bottom: 4px;
-  color: #8a8796;
+  color: #6b6878;
   font-size: 12px;
   line-height: 1.4;
 }
@@ -3844,7 +3844,7 @@ dialog::backdrop {
 }
 .write-range {
   margin: 8px 4px 0;
-  color: #8a8796;
+  color: #6b6878;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -4610,14 +4610,23 @@ h2 {
    팔로우·목록 저장·종·로그아웃·댓글 좋아요는 2026-11-09에 이미 넓혀 두었고, 여기서는 남은 곳만 채운다. */
 @media (max-width: 799px) {
   /* 머리줄 검색·글쓰기·종·이름: 사이를 띄워 서로의 누르는 범위가 겹치지 않게 */
-  .header-tools,
-  .header-tools .header-user {
+  .header-tools {
     gap: 8px;
+    min-width: 0;
+    max-width: calc(100% - 104px); /* 로고(100px) 옆 한 줄에 머문다 — 자리가 모자라면 아래 이름이 먼저 줄어든다 */
   }
+  .header-tools .header-user {
+    gap: 10px;
+    min-width: 0;
+  }
+  /* 이름은 길면 말줄임(넘침 숨김)이라 가상 요소로는 못 넓힌다 → 안쪽 여백으로 넓히고 같은 만큼 바깥 여백을 빼서 자리는 그대로 */
   .header-user .header-name {
-    position: relative;
+    box-sizing: content-box;
+    min-width: 34px;
+    padding: 12px 5px;
+    margin: -12px -5px;
+    text-align: center;
   }
-  .header-user .header-name::before,
   .tool-mark::before,
   .more-menu > summary::before {
     content: "";
@@ -4677,6 +4686,10 @@ h2 {
 .help-tip-below {
   display: block;
   margin-top: 6px;
+}
+.eclean-line a {
+  display: inline-block;
+  padding: 13px 0;
 }
 .check-line > span {
   flex: 1;
