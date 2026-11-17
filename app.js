@@ -275,17 +275,17 @@
   }
   const feeds = (posts, opts = {}) => (posts?.length ? posts.map((p) => feed(p, opts)).join("") : empty());
   const channelDisc = (c) => `<span class="topic-disc ${E(c.slug)}">${E(c.name?.slice(0, 1) || "보")}</span>`;
-  // 짧은 시간 표시: 방금 · 5분 · 2시간 · 어제 · 3일 · 11.07 · 2025.11.07
+  // 짧은 시간 표시: 방금 · 5분 전 · 2시간 전 · 어제 · 3일 전 · 11.07 · 2025.11.07
   const ago = (v) => {
     if (!v) return "";
     const t = new Date(v),
       now = new Date(),
       min = Math.floor((now - t) / 60000);
     if (min < 1) return "방금";
-    if (min < 60) return `${min}분`;
-    if (min < 1440) return `${Math.floor(min / 60)}시간`;
+    if (min < 60) return `${min}분 전`;
+    if (min < 1440) return `${Math.floor(min / 60)}시간 전`;
     if (min < 2880) return "어제";
-    if (min < 10080) return `${Math.floor(min / 1440)}일`;
+    if (min < 10080) return `${Math.floor(min / 1440)}일 전`;
     const md = `${String(t.getMonth() + 1).padStart(2, "0")}.${String(t.getDate()).padStart(2, "0")}`;
     return t.getFullYear() === now.getFullYear() ? md : `${t.getFullYear()}.${md}`;
   };
@@ -295,8 +295,11 @@
     return n >= 10000 ? `${(n / 10000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, "")}만` : n.toLocaleString("ko-KR");
   };
   // 아이콘 + 숫자(화면 읽기 프로그램에는 이름까지 읽어 준다)
-  const stat = (name, label, value) =>
-    `<span class="stat stat-${name}" title="${label} ${num(value)}">${icon(name)}<span class="sr-only">${label}</span>${num(value)}</span>`;
+  const stat = (name, label, value, always = false) =>
+    !always && !(Number(value) > 0)
+      ? ""
+      : `<span class="stat stat-${name}" title="${label} ${num(value)}">${icon(name)}<span class="sr-only">${label}</span>${num(value)}</span>`;
+  const followersText = (n) => (Number(n) > 0 ? `팔로워 ${Number(n)}명` : "");
   // 공지는 맨 위에 최대 3개까지 한 줄씩 보인다(2026-11-11 대표 지시). 4개째부터는 홈에 나오지 않는다(공지 순서로 조정).
   function noticeLine(list = []) {
     if (!list.length) return "";
@@ -310,7 +313,7 @@
     const byId = Object.fromEntries(channels.map((c) => [c.id, c]));
     const boxes = (d.boxes || []).filter((b) => byId[b.channel_id]);
     const filled = boxes.filter((b) => b.posts.length),
-      quiet = boxes.filter((b) => !b.posts.length);
+      quiet = boxes.filter((b) => !b.posts.length && byId[b.channel_id].slug !== "notice");
     const best = d.best || [];
     const bestRow = (p) =>
       `<li class="best-row" data-testid="best-item"><a class="best-channel" href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name || "")}</a><a class="best-title" href="${uri("post.html", { id: p.id })}">${E(p.title)}</a><span class="best-info">${stat("heart", "좋아요", p.likes)}${stat("comment", "댓글", p.comment_count)}</span></li>`;
@@ -331,7 +334,7 @@
     channels = d.channels || [];
     const follow = params.get("filter") === "following";
     const list = follow ? channels.filter((c) => c.following) : channels;
-    return `<section class="explore"><h1>채널 탐색</h1><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우한 채널</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card"><div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h2><p>${E(c.description)}</p><p class="follow-count" data-followers="${E(c.id)}" data-base="${Number(c.followers) || 0}" data-first="${!!c.following}">팔로워 ${Number(c.followers) || 0}명</p></div><button type="button" class="follow-small follow-chip" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}" data-on="팔로잉" data-off="팔로우">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}<p class="channel-request muted small" data-testid="channel-request">원하는 채널이 없나요? <a class="text-link" href="/help.html?topic=channel#inquiry">채널 요청하기</a></p></section>`;
+    return `<section class="explore"><h1>채널 탐색</h1><nav class="chips"><a class="chip ${!follow ? "active" : ""}" href="/channels.html">모든 채널</a><a class="chip ${follow ? "active" : ""}" href="/channels.html?filter=following">팔로우한 채널</a></nav><div class="channel-cards">${list.map((c) => `<article class="channel-card"><div class="channel-card-info"><h2><a href="${uri("channel.html", { id: c.id })}">${E(c.name)}</a>${c.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h2><p>${E(c.description)}</p><p class="follow-count" data-followers="${E(c.id)}" data-base="${Number(c.followers) || 0}" data-first="${!!c.following}">${followersText(c.followers)}</p></div><button type="button" class="follow-small follow-chip" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(c.id)}" aria-pressed="${!!c.following}" data-on="팔로잉" data-off="팔로우">${c.following ? "팔로잉" : "팔로우"}</button></article>`).join("")}</div>${!list.length ? empty("아직 팔로우한 채널이 없어요.", "모든 채널에서 관심 있는 주제를 선택해 주세요.") : ""}<p class="channel-request muted small" data-testid="channel-request">원하는 채널이 없나요? <a class="text-link" href="/help.html?topic=channel#inquiry">채널 요청하기</a></p></section>`;
   }
   // 채널 바로가기 줄: 전체 · 인기 · 채널들 · 채널 탐색(옆으로 밀어서 이동)
   function channelChips(activeId, sort) {
@@ -358,11 +361,11 @@
     current = { list: { args: listArgs, offset: posts.length, opts } };
     const sortLink = (key, label) =>
       `<a class="${sort === key ? "active" : ""}" ${sort === key ? 'aria-current="true"' : ""} href="${uri(isSearch ? "search.html" : "channel.html", { ...(id ? { id } : {}), ...(q ? { q } : {}), ...(key === "popular" ? { sort: "popular" } : {}) })}">${label}</a>`;
-    const sorter = `<nav class="list-sort" aria-label="정렬" data-testid="list-sort">${sortLink("latest", "최신순")}${sortLink("popular", "추천순")}</nav>`;
+    const sorter = `<nav class="list-sort" aria-label="정렬" data-testid="list-sort">${sortLink("latest", "최신순")}${sortLink("popular", "인기순")}</nav>`;
     const head = isSearch
       ? `<header class="list-head"><div class="list-title"><h1>검색 결과</h1>${q ? sorter : ""}</div><form class="search-form" action="/search.html"><input name="q" aria-label="검색할 내용" value="${E(q)}" maxlength="100" placeholder="궁금한 내용을 검색하세요" required><button class="btn" type="submit">검색</button></form><p class="list-desc">${q ? `“${E(q)}” 검색 결과 ${posts.length >= 20 ? "20개 이상" : `${posts.length}개`}` : "검색어를 입력해 주세요."}</p></header>`
       : `${channelChips(id, sort)}<header class="list-head"><div class="list-title"><h1>${E(channel?.name || (sort === "popular" ? "인기 글" : "전체 글"))}${channel?.anonymous ? ' <span class="tag anon-tag">완전 익명</span>' : ""}</h1>${channel ? `<button type="button" class="follow-chip" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(channel.id)}" aria-pressed="${!!channel.following}" data-on="팔로잉" data-off="팔로우">${channel.following ? "팔로잉" : "팔로우"}</button>` : ""}${sorter}</div>${channel?.description ? `<p class="list-desc">${E(channel.description)}</p>` : ""}${channel?.anonymous ? '<p class="list-desc">이 채널의 글과 댓글은 회사명·닉네임 없이 ‘익명’으로만 보여요. 운영자는 신고 처리 때만 기록을 남기고 작성자를 확인합니다.</p>' : ""}</header>${verifyStrip()}`;
-    return `${head}${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : `<div class="item-list" data-post-list>${feeds(posts, opts)}</div>${posts.length >= 20 ? `<p class="more-wrap">${btn("더 보기", "more-posts", 'data-testid="more-posts"')}</p>` : ""}`}`;
+    return `${head}${isSearch && !q ? empty("궁금한 내용을 찾아보세요.", "제목과 공개 범위에 맞는 본문을 검색합니다.") : `<div class="item-list" data-post-list>${isSearch && !posts.length ? empty(`‘${q}’에 맞는 글이 없어요.`, "다른 낱말로 찾아보세요. 찾는 내용이 없으면 직접 질문을 올려 보세요.") : feeds(posts, opts)}</div>${posts.length >= 20 ? `<p class="more-wrap">${btn("더 보기", "more-posts", 'data-testid="more-posts"')}</p>` : ""}`}`;
   }
   // ⋯ 메뉴: 링크 복사·신고·수정·삭제처럼 가끔 쓰는 기능을 접어 둔다.
   const moreMenu = (items, label = "더보기") =>
@@ -423,7 +426,7 @@
       ],
       "글 메뉴 더보기",
     );
-    const header = `<header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a>${p.anonymous ? '<span class="tag anon-tag">완전 익명</span>' : ""}<span class="crumb-dot" aria-hidden="true">·</span><button type="button" class="crumb-follow" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(p.channel_id)}" aria-pressed="${following}" data-on="팔로잉" data-off="팔로우">${following ? "팔로잉" : "팔로우"}</button></div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="post-info">${timeTag(p.created_at, "post-time")}${stat("eye", "조회수", p.views)}${stat("comment", "댓글", p.comment_count)}<span class="post-tools">${markButton(p, "tool-mark").replace("<button", '<button data-testid="post-bookmark"')}${menu}</span></div></header>`;
+    const header = `<header class="post-header"><div class="breadcrumb"><a href="/channels.html">채널</a><span>›</span><a href="${uri("channel.html", { id: p.channel_id })}">${E(p.channel_name)}</a>${p.anonymous ? '<span class="tag anon-tag">완전 익명</span>' : ""}<span class="crumb-dot" aria-hidden="true">·</span><button type="button" class="crumb-follow" data-do="toggle" data-target="channel" data-kind="follow" data-id="${E(p.channel_id)}" aria-pressed="${following}" data-on="팔로잉" data-off="팔로우">${following ? "팔로잉" : "팔로우"}</button></div><h1>${E(p.title)}</h1><p class="post-author"><span class="company-name">${E(p.author_display)}</span></p><div class="post-info">${timeTag(p.created_at, "post-time")}${stat("eye", "조회수", p.views, true)}${stat("comment", "댓글", p.comment_count, true)}<span class="post-tools">${markButton(p, "tool-mark").replace("<button", '<button data-testid="post-bookmark"')}${menu}</span></div></header>`;
     const band =
       p.status && p.status !== "published"
         ? `<div class="status-band" data-testid="status-band"><b>${p.status === "hidden" ? "숨김 상태인 글" : "삭제된 글"}</b> — 다른 회원에게는 보이지 않아요.${p.is_mine && p.status === "hidden" ? `<br>운영 조치에 의견이 있으면 이의신청을 남겨 주세요. ${btn("내 글 조치에 이의신청", "appeal", `data-target="post" data-id="${E(p.id)}" data-testid="appeal-button"`)}` : ""}</div>`
@@ -497,7 +500,7 @@
     // 서버가 준 URL은 쓰지 않는다. 검증한 UUID로 같은 사이트 글 주소만 만든다.
     return related.length ? `<aside class="ai-related-posts" aria-label="함께 보면 좋은 동료 글" data-testid="ai-related-posts"><span>함께 보면 좋은 동료 글</span><ul>${related.map((p) => `<li><a href="${E(uri("post.html", { id: p.id }))}">${E(p.title.trim().slice(0, 150))}</a></li>`).join("")}</ul></aside>` : "";
   }
-  // 댓글 한 개: 회사·닉네임 → 내용 → 작성일·좋아요·대댓글·⋯(신고·수정·삭제)
+  // 댓글 한 개: 회사·닉네임 → 내용 → 작성일·좋아요·답글·⋯(신고·수정·삭제)
   function commentHTML(c, d) {
     const accepted = commentAccepted(c, d);
     const parent = (d?.comments || []).find((x) => x.id === c.parent_id);
@@ -515,7 +518,7 @@
       ],
       "댓글 메뉴 더보기",
     );
-    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""} ${c.is_ai ? "comment-ai-item" : ""} ${accepted ? "comment-accepted" : ""}" id="comment-${E(c.id)}" data-testid="comment-item">${context}<div class="comment-author">${c.is_ai ? '<span class="ai-badge">AI</span> ' : ""}${E(c.is_ai ? "AI 답변은 참고만 하세요" : c.author_display)}${c.is_mine ? ' <span class="author-badge">내 댓글</span>' : ""}${accepted ? ' <span class="accepted-badge" data-testid="comment-accepted">글쓴이 채택</span>' : ""}</div><p class="body-text">${E(c.body)}</p>${relatedPostsHTML(c, d)}<div class="comment-meta">${timeTag(c.created_at, "comment-time")}<button type="button" data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" aria-label="좋아요" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : 'title="좋아요"'}>${icon("heart")}<span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${canReplyComment(c, d) ? `<button type="button" data-do="reply" data-id="${E(c.id)}">${icon("comment")}${c.is_ai && d?.post?.ai_upgrade ? "답글" : "대댓글"}</button>` : ""}${accept}<span class="comment-tools">${menu}</span></div><div data-reply-slot="${E(c.id)}"></div></article>`;
+    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""} ${c.is_ai ? "comment-ai-item" : ""} ${accepted ? "comment-accepted" : ""}" id="comment-${E(c.id)}" data-testid="comment-item">${context}<div class="comment-author">${c.is_ai ? '<span class="ai-badge">AI</span> ' : ""}${E(c.is_ai ? "AI 답변은 참고만 하세요" : c.author_display)}${c.is_mine ? ' <span class="author-badge">내 댓글</span>' : ""}${accepted ? ' <span class="accepted-badge" data-testid="comment-accepted">글쓴이 채택</span>' : ""}</div><p class="body-text">${E(c.body)}</p>${relatedPostsHTML(c, d)}<div class="comment-meta">${timeTag(c.created_at, "comment-time")}<button type="button" data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" aria-label="좋아요" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : 'title="좋아요"'}>${icon("heart")}<span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${canReplyComment(c, d) ? `<button type="button" data-do="reply" data-id="${E(c.id)}">${icon("comment")}답글</button>` : ""}${accept}<span class="comment-tools">${menu}</span></div><div data-reply-slot="${E(c.id)}"></div></article>`;
   }
   const commentListHTML = (d) => {
     const all = (d.comments || []).slice();
@@ -653,7 +656,7 @@
       $("[data-testid=write-more]", form).open = true;
     }
     const a = ago(d.at);
-    $("[data-draft-text]").textContent = `임시저장한 글을 불러왔어요 (${/^\d+(분|시간|일)$/.test(a) ? a + " 전" : a}).`;
+    $("[data-draft-text]").textContent = `임시저장한 글을 불러왔어요 (${a}).`;
     $("[data-draft-line]").hidden = false;
   }
   async function login() {
@@ -2016,7 +2019,7 @@
             $$(`[data-followers="${CSS.escape(id)}"]`).forEach((f) => {
               const base = Number(f.dataset.base) || 0,
                 first = f.dataset.first === "true";
-              f.textContent = `팔로워 ${Math.max(0, base + (active === first ? 0 : active ? 1 : -1))}명`;
+              f.textContent = followersText(Math.max(0, base + (active === first ? 0 : active ? 1 : -1)));
             });
           // 화면이 기억하는 값도 맞춰 둔다(댓글 정렬을 바꿔 다시 그릴 때 쓰임)
           const item = target === "post" ? current?.post : target === "comment" ? current?.comments?.find((c) => c.id === id) : null;
@@ -2091,7 +2094,7 @@
         }
         $$("[data-reply-slot]").forEach((x) => (x.innerHTML = ""));
         const followup = parent.is_ai && aiFollowupAllowed(current);
-        slot.innerHTML = `<form data-form="comment" class="comment-form reply-form open"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}"><textarea name="body" rows="2" aria-label="${followup ? "AI에 이어서 묻기" : "대댓글"}" placeholder="${followup ? "앞선 답변에서 더 궁금한 점을 물어보세요." : "대댓글을 남겨 주세요."}" required maxlength="3000" data-testid="reply-body"></textarea>${followup ? '<p class="hint">AI 답변은 첫 답변 포함 글당 최대 5회예요. 고객정보는 적지 마세요.</p>' : ""}<p class="error" data-form-error role="alert"></p><div class="comment-form-actions"><button type="button" class="btn btn-small" data-do="reply-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`;
+        slot.innerHTML = `<form data-form="comment" class="comment-form reply-form open"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}"><textarea name="body" rows="2" aria-label="${followup ? "AI에 이어서 묻기" : "답글"}" placeholder="${followup ? "앞선 답변에서 더 궁금한 점을 물어보세요." : "답글을 남겨 주세요."}" required maxlength="3000" data-testid="reply-body"></textarea>${followup ? '<p class="hint">AI 답변은 첫 답변 포함 글당 최대 5회예요. 고객정보는 적지 마세요.</p>' : ""}<p class="error" data-form-error role="alert"></p><div class="comment-form-actions"><button type="button" class="btn btn-small" data-do="reply-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`;
         slot.querySelector("textarea").focus();
         return;
       }
