@@ -64,7 +64,7 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - worker `status`: `{ai_enabled,ai_daily_limit,queued,review}`.
 - worker `cleanup_users`: `{}` -> `{ids:[withdrawn uuid...]}`. 미삭제증빙/Storage객체 없는 탈퇴회원만 반환. Auth Admin hard delete 후 `cleanup_user_done:{id}`. DB는 실제 auth.users 삭제 확인 후 tombstone에 auth_deleted_at 기록. bl_profiles UUID는 익명 콘텐츠 관계를 위해 유지되며 auth.users FK는 없음.
 - 인증 신청자에게는 본인 증빙 원본 SELECT 권한 없음. admin `proof_access` 기록 후 Storage sign60초; Storage SELECT도 관리자 검사와 별도 열람감사 기록.
-- 신고는 로그인 회원부터 가능(설계사 인증 전 포함). 방문자는 로그인 안내. 이의신청은 대표 이메일·실명·연락처 없이 앱 내부 통지.
+- 신고는 로그인 회원부터 가능(설계사 인증 전 포함) → **029(2026-11-17)부터 설계사 인증 완료 회원·대표·관리자만**(맨 아래 029 참조). 방문자는 로그인 안내. 이의신청은 대표 이메일·실명·연락처 없이 앱 내부 통지.
 
 - 검색 매칭과 일반 게시글 목록(home/posts/search/company/me)의 경험형 본문은 인증 여부와 무관하게 앞 300자만 반환합니다. 인증회원의 나머지 본문은 post 상세 조회에서만 반환하며 관리자 심사용 조회는 예외입니다.
 
@@ -77,7 +77,7 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 ## 006 권한·관리 보완 (2026-11-08)
 - `viewer`에 `{can_write,can_admin,verification_exempt,is_sample}`를 추가합니다. 권한 판단은 서버 값이 우선입니다. 대표(owner)는 인증·소속 면제, 일반 관리자는 운영 권한과 회원 작성 권한을 분리합니다. 일반 관리자의 글·댓글·리뷰와 반응은 유효기간 내 인증이 필요합니다. 보완·반려·만료·정지·탈퇴도 작성·수정·삭제·반응이 차단됩니다.
 - 대표는 인증이나 소속 등록 없이 닉네임만 변경할 수 있고, 활성 회사에 리뷰를 작성할 수 있습니다. 대표의 정지·역할 회수·직접 탈퇴는 계속 차단됩니다. 타인 본문 수정은 허용하지 않으며 운영자는 기존 콘텐츠 관리 기능으로 숨김·삭제·복구합니다.
-- 신고는 미인증·대기·보완·반려·만료를 포함한 로그인 회원에게 허용합니다(댓글 신고는 댓글 열람 권한 필요). 정지·탈퇴는 신고 차단, 정지 회원의 본인 가림 콘텐츠 이의신청은 유지합니다. 알림 조회는 로그인 사용자, 읽음 처리는 탈퇴 외 로그인 사용자에게 허용합니다.
+- 신고는 미인증·대기·보완·반려·만료를 포함한 로그인 회원에게 허용합니다(댓글 신고는 댓글 열람 권한 필요). → **029(2026-11-17)부터 설계사 인증 완료 회원·대표·관리자만**(맨 아래 029 참조). 정지·탈퇴는 신고 차단, 정지 회원의 본인 가림 콘텐츠 이의신청은 유지합니다. 알림 조회는 로그인 사용자, 읽음 처리는 탈퇴 외 로그인 사용자에게 허용합니다.
 - `admin channel_delete`: `{operation:'channel_delete',id,target_channel_id?,reason?}`. 연결 글이 있으면 서로 다른 활성 대상 채널이 필수입니다. 가림·삭제 글을 포함해 모든 글을 이동하며 팔로우도 중복 없이 옮깁니다. 빈 채널은 바로 삭제합니다. 한 트랜잭션으로 수행하고 `admin_channel_delete`, 글 이동 시 `admin_channel_move`를 기록합니다. 응답 `{ok:true,id,moved_posts}`.
 - `admin company_delete`: `{operation:'company_delete',id,target_company_id?,reason?}`. 연결 글·리뷰·회원이 있으면 서로 다른 활성 대상 회사가 필수입니다. 글 태그·리뷰·현재 회원 소속을 병합하고 회사명도 맞춥니다. 기존 작성 시점의 작성자 회사 표시값은 보존합니다. 한 트랜잭션으로 수행하며 `admin_company_delete`, 병합 시 `admin_company_merge`를 기록합니다. 응답 `{ok:true,id,moved_posts,moved_reviews,moved_members}`. 회사 이름 수정 시 현재 연결 회원의 소속명도 반영합니다.
 - 관리자 채널 DTO에 `post_count`, 회사 DTO에 `post_count,total_review_count,member_count,reference_count`를 제공합니다. 일반 조회에서는 이 관리용 값이 null입니다. 삭제 여부는 숨김·삭제 콘텐츠까지 포함한 전체 연결 수를 기준으로 합니다.
@@ -89,7 +89,7 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 ## 2026-11-09 수정 (007~013)
 - **007 인증 신청**: `profile_submit`의 `registration_number`(설계사 고유번호)는 숫자 14자리 필수. 활성 신청·회원(대기·보완·인증·정지)과 중복이면 `'이미 등록된 설계사 고유번호입니다.'`(탈퇴·반려·미인증 제외). 원번호는 30일 정리 규칙을 따르고 `bl_profiles.registration_digest`(확인값)만 탈퇴 전까지 보관. 주민번호 모양 차단 삭제. 하루 5회. `profile_precheck`(사진 올리기 전 같은 검사 → `{ok,proof_slots_left,cleaning}`), `proof_discard {proof_path}`(실패한 신청 사진을 즉시 정리 대상으로). 증빙 5장 한도는 정리 예정 사진을 빼고 센다. unique 위반은 한국어 안내.
 - **008 증빙 자동 판정**: worker `proof_queue` → `{items:[{id,proof_path,name,registration_number,company_id,company_name}],companies}`, `proof_judgment {id,proof_path,decision:'approve'|'reject'|'hold',reasons,fields,read,company_id?}`. 승인은 기존 회사 목록의 회사로만 연결(없으면 보류). `bl_profiles.auto_result/auto_checked_at`, 감사 `auto_verification`(이름 첫 글자·번호 끝 4자리). 관리자 `verification`은 직접 입력 회사를 `company_id`로 기존 회사에 연결해야 승인(회사 자동 생성 없음).
-- **009 신고·알림**: `report`는 인증 회원·관리자만, 본인 글 불가, 서로 다른 신고자 3명 이상이면 임시 가림(공지·운영팀 글은 가리지 않음), 응답 `{ok,hidden}`. 30일 자동 복구는 실제로 가린 콘텐츠만. 관리자 앱 알림 kind `admin_todo`(새 신고·새 인증 신청·자동 판정 보류·이의신청·문의, 시험 계정 건은 시험 관리자에게만). `viewer.unread_count`.
+- **009 신고·알림**: `report`는 인증 회원·관리자만(028에서 로그인 회원 전체로 넓어졌다가 029에서 다시 인증 회원·대표·관리자만), 본인 글 불가, 서로 다른 신고자 3명 이상이면 임시 가림(공지·운영팀 글은 가리지 않음), 응답 `{ok,hidden}`. 30일 자동 복구는 실제로 가린 콘텐츠만. 관리자 앱 알림 kind `admin_todo`(새 신고·새 인증 신청·자동 판정 보류·이의신청·문의, 시험 계정 건은 시험 관리자에게만). `viewer.unread_count`.
 - **010 관리자**: `bl_read('admin',{v:'2',section,q,status,offset,limit<=100,id?,channel_id?})` → 탭별 자료만(`dashboard{todo,trend}`, `verifications`, `members`, `member`, `posts`, `comments`, `reviews`, `reports`, `inquiries`, `channels`, `companies`, `ai`, `audit`, `admins`, `settings`). 개인정보가 담긴 조회(인증 심사 목록·회원 상세)만 감사 기록. 새 operation: `member_status`(+`days`: 1·3·7·30·90·365·0, 기간 끝나면 worker `temporary_review`가 해제), `member_withdraw`, `report_block {days:0|7|30|90|36500}`, `post_move {channel_id}`, `notice_order {direction}`, `channel_move {direction}`, `ai_edit {body}`, `ai_retry`, `ai_regenerate`, `banned_words {words}`, `reveal_author {target,id,reason}`(011), `inquiry_answer {answer}`(012). `channel_save`의 `slug`는 비우면 자동. `post_save`의 `as_team`·`pinned`(관리자, 인증 없이 운영팀 이름 가능). 작성자 표시: 소속 없으면 `닉***`, `as_team`이면 '보험라이브 운영팀'. 금칙어가 든 글·댓글·리뷰는 거부.
 - **011 채널**: `bl_channels.anonymous`, `bl_posts.anonymous`, `bl_comments.anonymous`. 익명 글·댓글은 작성자 회사·닉네임을 비워 저장하고 `author_display`는 '익명'(댓글은 글쓴이 본인이면 '글쓴이'). 한 번 익명이면 계속 익명, 익명 채널로 옮겨진 글은 익명으로 바뀜(`bl_anon_sync`). 익명 글은 관련 회사 태그 없음.
 - **012 회원 기능**: 견본 계정 작성자 표시 '견본 계정'. `toggle`의 bookmark·follow는 로그인 회원(정지·탈퇴 제외). `posts`·`search`에 `offset`. 잘못된 글·회사 id는 오류 대신 `unavailable_reason:'not_found'`/`company:null`. `inquiry {kind:'general'|'privacy'|'rights'|'account',link?,body}`(하루 5회, 탈퇴 시 삭제).
@@ -141,3 +141,11 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - 관련 글 및 참고 자료는 현재 글·삭제/숨김·test/sample·완전익명 채널/익명 글을 제외한다. 사람 댓글만 참고하며 채택 답변을 우선한다. 읽기 시 관련 글 공개 범위를 다시 확인한다. 후속 댓글은 숨긴 조상까지 검사한다.
 - 관리자 AI 조회/수정/숨김/공개/재생성은 job.comment_id 한 건을 대상으로 한다. 026 마지막 SELECT로 구형 문구가 있는 재생성 대상을 확인하고 기존 관리자 ‘다시 만들기’를 사용한다. SELECT는 대상 지정만 한다.
 - 복구: 처리기를 멈추고 구 처리기/화면 복원 파일을 확보한 뒤 `026_ai_upgrade_rollback.sql` 적용. 추가 AI/job/연결 데이터와 채택 정보를 비공개 archive에 보존하고 사람 후속 댓글을 최초 AI 아래로 재연결한다. 적용 직전 함수 정의와 글당 AI 1개 계약을 복원한다. 함수 backup은 archive로 옮긴 뒤 표식 테이블을 제거한다. archive는 남겨 두며 재적용 전 운영자가 별도 검토한다. 적용 후 함수가 수정된 경우 rollback은 자동 중단한다.
+
+## 029 — 신고는 설계사 인증을 마친 회원만 (2026-11-17 이사님 결정)
+
+- **적용 상태(2026-11-17 13:30 기준): 화면은 배포, 운영 DB에는 아직 적용 전.** 관리 SQL 도구의 대시보드 로그인이 만료되어 `029_report_verified_only.sql`을 실행하지 못했다. 적용 순서·확인 방법은 `비서작업기록/팀쿡/20261117_보라신고인증/RESULT.md`. 적용하면 이 줄을 고친다. 그때까지 서버는 028 상태(로그인 회원 누구나 신고 접수)다.
+- `bl_action('report',{target,id,reason})` 접수 조건: `bl_verified()`(status='verified'이고 `verified_until`이 지나지 않음) **또는** 대표(`bl_is_owner()`) **또는** 관리자(`bl_is_admin()`). 그 밖의 로그인 회원(미인증·대기·보완·반려·만료)은 `'신고는 설계사 인증을 마친 회원만 할 수 있어요.'`로 거절한다. 028에서 `bl_can_write()`가 넓어지며 미인증 회원도 신고할 수 있게 된 것을 되돌린 것이다.
+- 그대로인 것: 미인증 회원의 읽기·글·댓글·좋아요(028), `bl_can_write()` 정의, AI 하루 한도, 신고 하루 10회·중복 접수 거절·본인 글 신고 불가·신고 제한 계정, 서로 다른 신고자 3명 이상이면 최대 30일 임시 가림(공지·운영팀 글 제외), 응답 `{ok,hidden}`, 이미 접수된 신고 자료. 이의신청(`appeal`)과 문의(권리침해 신고 포함)는 인증 여부와 무관하게 기존대로다.
+- 적용 방식: `029_report_verified_only.sql`은 `bl_action_internal(text,jsonb)`의 실제 정의를 읽어 신고 구간 안의 조건문 한 줄만 바꾼다(문맥이 다르면 중단, 다시 실행해도 변화 없음). 되돌리기는 `029_report_verified_only_rollback.sql`(같은 방식으로 그 한 줄만 원래대로).
+- 화면: 인증 전 회원이 ‘신고’를 누르면 안내 창(‘신고는 설계사 인증을 마친 회원만 할 수 있어요.’ + ‘설계사 인증하기’)을 보여 준다. 판단 기준은 `viewer.status==='verified'`이고 `verified_until`이 남아 있는지(대표·관리자는 통과)이며, 최종 판정은 서버다.
