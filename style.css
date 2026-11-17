@@ -4489,7 +4489,11 @@ h2 {
   margin-top: 12px;
 }
 .login-sent-actions .btn {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
   min-height: 44px;
+  margin: 0;
   font-size: 13px;
 }
 .login-sent-actions [aria-disabled="true"] {
@@ -4668,6 +4672,7 @@ h2 {
 .verify-intro {
   margin: 0 0 20px;
   padding: 12px 14px 12px 30px;
+  list-style: disc outside;
   border-radius: 8px;
   background: #f8f7fb;
   color: #4a4658;
