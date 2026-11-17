@@ -1,12 +1,12 @@
 :root {
   --ink: #24212b;
-  --muted: #8a8796;
+  --muted: #6b6878;
   --line: #e4e2ea;
   --soft: #f3f1f7;
   --accent: #6d3fd8;
   --accent-soft: #f1ebfd;
   --link: #5b46d6;
-  --company: #8a5cf6;
+  --company: #7446e0;
   --dark: #2a2140;
   --star: #f5b23d;
 }
@@ -1031,14 +1031,14 @@ summary:focus-visible {
   white-space: nowrap;
 }
 .channel-card .follow-small[aria-pressed="true"] {
-  color: #8c9099;
+  color: #6b6878;
 }
 .site-footer {
   border-top: 1px solid var(--line);
   margin: 40px auto 0;
   max-width: 1040px;
   padding: 40px 24px;
-  color: #8c9099;
+  color: #6b6878;
   font-size: 12px;
 }
 .footer-logo {
@@ -1419,7 +1419,7 @@ details > summary {
 }
 .author {
   font-size: 12px;
-  color: #8c9099;
+  color: #6b6878;
   margin: 0 0 12px;
 }
 .demo-dialog {
@@ -2830,7 +2830,7 @@ dialog::backdrop {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  color: #94929e;
+  color: #6b6878;
   font-size: 12px;
   white-space: nowrap;
 }
@@ -3097,14 +3097,14 @@ dialog::backdrop {
 }
 .follow-chip[aria-pressed="true"] {
   border-color: var(--line);
-  color: #8c9099;
+  color: #6b6878;
 }
 .list-sort {
   flex: none;
   display: flex;
   align-items: center;
   margin-left: auto;
-  color: #94929e;
+  color: #6b6878;
   font-size: 13px;
 }
 .list-sort a {
@@ -3172,7 +3172,7 @@ dialog::backdrop {
   background: var(--accent);
 }
 .heat-hot {
-  background: #e5484d;
+  background: #cf2f36;
 }
 .item-title {
   display: -webkit-box;
@@ -3203,7 +3203,7 @@ dialog::backdrop {
   gap: 10px;
   min-height: 32px;
   margin-top: 6px;
-  color: #94929e;
+  color: #6b6878;
   font-size: 12px;
 }
 .item-name {
@@ -3299,7 +3299,7 @@ dialog::backdrop {
   font-weight: 700;
 }
 .breadcrumb .crumb-follow[aria-pressed="true"] {
-  color: #8c9099;
+  color: #6b6878;
 }
 .post-header h1 {
   margin: 0 0 10px;
@@ -3315,7 +3315,7 @@ dialog::backdrop {
   align-items: center;
   gap: 12px;
   min-height: 36px;
-  color: #94929e;
+  color: #6b6878;
   font-size: 12px;
 }
 .post-tools {
@@ -3530,7 +3530,7 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   margin-left: auto;
-  color: #94929e;
+  color: #6b6878;
   font-size: 13px;
 }
 .comment-sort button {
@@ -3631,7 +3631,7 @@ dialog::backdrop {
   align-items: center;
   gap: 14px;
   min-height: 36px;
-  color: #94929e;
+  color: #6b6878;
   font-size: 12px;
 }
 .comment-meta > button {
@@ -3731,7 +3731,7 @@ dialog::backdrop {
 }
 .comment-ai .source-note {
   margin: 4px 0 0;
-  color: #94929e;
+  color: #6b6878;
   font-size: 11px;
   line-height: 1.5;
 }
@@ -3905,7 +3905,7 @@ dialog::backdrop {
 }
 .switch-text small {
   margin-left: 6px;
-  color: #94929e;
+  color: #6b6878;
   font-size: 12px;
 }
 .write-more {
@@ -3962,7 +3962,7 @@ dialog::backdrop {
 }
 .draft-state {
   margin-right: auto;
-  color: #94929e;
+  color: #6b6878;
   font-size: 12px;
 }
 .write-actions .btn {
@@ -4083,7 +4083,7 @@ h2 {
 }
 .channel-card .follow-count {
   margin-top: 2px;
-  color: #94929e;
+  color: #6b6878;
   font-size: 12px;
 }
 .channel-card .follow-small.follow-chip {
@@ -4092,7 +4092,7 @@ h2 {
   font-size: 12px;
 }
 .channel-card .follow-small.follow-chip[aria-pressed="true"] {
-  color: #8c9099;
+  color: #6b6878;
 }
 .company-group {
   margin: 20px 0 2px;
@@ -4107,7 +4107,7 @@ h2 {
   font-size: 16px;
 }
 .company-row .small {
-  color: #94929e;
+  color: #6b6878;
 }
 /* 맨 아래: 링크 한 줄 + 안내 1~2줄 */
 .site-footer {
@@ -4133,7 +4133,7 @@ h2 {
 .site-footer .footer-note {
   max-width: none;
   margin: 0;
-  color: #a2a0ad;
+  color: #716e7e;
   font-size: 11px;
   line-height: 1.6;
 }
@@ -4249,13 +4249,13 @@ h2 {
 .comment-reply-context {
   display: inline-block;
   margin-bottom: 5px;
-  color: #81798f;
+  color: #6b6878;
   font-size: 11px;
 }
 .comment-reply-context:hover { color: var(--link); }
 .ai-followup-hint {
   margin: 10px 0 0;
-  color: #81798f;
+  color: #6b6878;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -4266,7 +4266,7 @@ h2 {
   background: #faf9fc;
   font-size: 12px;
 }
-.ai-related-posts > span { color: #81798f; }
+.ai-related-posts > span { color: #6b6878; }
 .ai-related-posts ul { margin: 5px 0 0; padding: 0; list-style: none; }
 .ai-related-posts li + li { margin-top: 4px; }
 .ai-related-posts a { color: var(--link); overflow-wrap: anywhere; }
@@ -4533,5 +4533,75 @@ h2 {
   }
   100% {
     background-position: 0 50%;
+  }
+}
+
+/* [7] 읽기 쉽게: 흐린 회색 글자를 대비 4.5:1 이상으로(위쪽 색 값도 함께 고침), 보조 글자는 13px·가장 작은 글자는 12px */
+.header-login,
+.header-user,
+.small,
+.meta,
+.btn-small,
+.chip,
+.breadcrumb,
+.breadcrumb button,
+.breadcrumb .crumb-follow,
+.post-author,
+.comment-author,
+.guest-lock .text-link,
+.channel-card p,
+.channel-card .follow-small,
+.channel-card .follow-small.follow-chip,
+.channel-card .follow-count,
+.site-footer,
+.field .hint,
+.hint,
+.separator,
+.document-meta,
+.notice-mark,
+.notice-count,
+.box-more,
+.stat,
+.best-channel,
+.quiet-channels,
+.group-label a,
+.follow-chip,
+.item-top,
+.item-sub,
+.post-info,
+.comment-meta,
+.write-range,
+.switch-text small,
+.draft-state,
+.ai-followup-hint,
+.ai-related-posts,
+.bell-time,
+.author {
+  font-size: 13px;
+}
+.footer-note,
+.site-footer .footer-note,
+.author-badge,
+.ai-badge,
+.accepted-badge,
+.comment-reply-context,
+.anon-tag,
+.write-more > summary::after {
+  font-size: 12px;
+}
+.heat,
+.notification-count {
+  font-size: 11px;
+}
+@media (max-width: 799px) {
+  .header-user .header-name,
+  .header-user .header-logout,
+  .header-user a:last-child {
+    font-size: 13px;
+  }
+}
+@media (min-width: 800px) {
+  .channel-card .follow-small {
+    font-size: 13px;
   }
 }
