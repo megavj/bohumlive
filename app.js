@@ -49,6 +49,31 @@
     proofPreview,
     bellOpen = false,
     bellSeq = 0;
+  // 기기에 로그인 기록이 남아 있으면 첫 그림부터 회원용 머리줄로 그린다(화면을 열 때마다 '로그인·가입'이 잠깐 보였다 바뀌던 것을 없앰).
+  let booting = true;
+  const storedLogin = () => {
+    try {
+      return Object.keys(localStorage).some((k) => /^sb-.+-auth-token$/.test(k) && !!localStorage.getItem(k));
+    } catch {
+      return false;
+    }
+  };
+  const rememberedName = () => {
+    try {
+      return localStorage.getItem("bl_name") || "";
+    } catch {
+      return "";
+    }
+  };
+  const rememberName = () => {
+    try {
+      if (viewer?.nickname) localStorage.setItem("bl_name", viewer.nickname);
+      else localStorage.removeItem("bl_name");
+    } catch {}
+  };
+  // 불러오는 동안 보이는 회색 줄(화면 읽기 프로그램에는 문장으로 알려 준다)
+  const skeleton =
+    '<div class="loading skeleton" role="status"><span class="sr-only">화면을 불러오는 중입니다.</span><i class="sk-title"></i><i></i><i></i><i></i><i></i><i></i></div>';
   const isActive = () => !!viewer && !["suspended", "withdrawn"].includes(viewer.status);
   const isOwner = () => viewer?.role === "owner" && isActive() && viewer.verification_exempt !== false;
   const isAdmin = () => ["admin", "owner"].includes(viewer?.role) && isActive() && viewer.can_admin !== false;
@@ -156,8 +181,9 @@
     // 머리줄을 새로 그리면 알림 창은 닫힌 상태로 시작한다.
     bellOpen = false;
     document.body.classList.remove("bell-open");
+    const signedIn = !!session || (booting && storedLogin());
     const tools = `<a class="tool-btn tool-search" href="/search.html" aria-label="검색" data-testid="header-search-link">${icon("search")}</a>${page === "write" || page === "login" ? "" : `<a class="tool-btn tool-write" href="${E(writeHref)}" aria-label="글쓰기" title="글쓰기" data-testid="header-write">${icon("edit")}<span class="tool-label">글쓰기</span></a>`}${
-      session
+      signedIn
         ? `<div class="header-user" data-testid="header-user"><div class="bell-wrap"><button type="button" class="tool-btn notification-link" id="bell-btn" data-do="bell" aria-expanded="false" aria-controls="bell-panel" aria-label="${E(bellLabel(unread))}" title="알림" data-testid="bell">${icon("bell")}${unread ? `<span class="notification-count" data-testid="unread-count">${unread > 99 ? "99+" : unread}</span>` : ""}</button><div class="bell-panel" id="bell-panel" role="region" aria-labelledby="bell-title" hidden data-testid="bell-panel"></div></div><a class="header-name" href="/me.html" title="내 정보">${E(displayName())}님</a><span class="header-sep" aria-hidden="true">·</span><button type="button" class="header-logout" data-do="logout" data-testid="header-logout">로그아웃</button></div>`
         : page === "login"
           ? ""
@@ -1718,7 +1744,7 @@
       : `<a class="${cls}" href="${E(loginUrl("/verify.html"))}">로그인하고 인증하기</a>`;
   }
   // 닉네임이 없으면 이메일 아이디 대신 '회원'으로 부른다(익명 커뮤니티에서 이메일이 보이지 않게).
-  const displayName = () => viewer?.nickname || "회원";
+  const displayName = () => viewer?.nickname || (booting ? rememberedName() : "") || "회원";
   // 글·댓글에 실제로 보이는 이름(서버 bl_author 와 같은 규칙): 인증 회원은 '회사 · 닉***', 그 밖에는 '소속 미확인 · 닉***', 닉네임이 없으면 '회***'
   const publicDisplay = (p = {}) => {
     const nick = Array.from(String(p.nickname || "").trim() || "회원")[0] + "***";
@@ -1748,6 +1774,10 @@
     session = null;
     viewer = null;
     mine = null;
+    booting = false;
+    try {
+      localStorage.removeItem("bl_name");
+    } catch {}
     clearAllDrafts();
   }
   async function logout(message = "로그아웃했어요.") {
@@ -1774,7 +1804,7 @@
   async function refresh() {
     const stamp = ++renderId;
     current = null;
-    $("#content").innerHTML = '<div class="loading" role="status">화면을 불러오는 중입니다.</div>';
+    $("#content").innerHTML = skeleton;
     try {
       const r = await sb.auth.getSession();
       session = r.data.session;
@@ -1824,6 +1854,8 @@
         html = await (renderers[page] || renderers.missing)();
       }
       if (stamp !== renderId) return;
+      booting = false;
+      if (session) rememberName();
       layout();
       $("#content").innerHTML = html;
       fillAside(stamp);
@@ -1840,6 +1872,7 @@
       if (page === "post") jumpToHash();
     } catch (err) {
       if (stamp !== renderId) return;
+      booting = false;
       layout();
       $("#content").innerHTML =
         `<section class="section"><h1>${/fetch|network|Failed|Load failed/i.test(String(err?.message || "")) ? "인터넷 연결을 확인해 주세요" : "요청을 처리하지 못했어요"}</h1><p class="error" role="alert">${E(safeError(err))}</p>${btn("다시 시도", "refresh", "", true)} <a class="btn" href="/index.html">홈으로</a></section>`;

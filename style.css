@@ -4497,3 +4497,41 @@ h2 {
   background: var(--soft);
   cursor: default;
 }
+
+/* [6] 불러오는 동안: 글자 한 줄 대신 목록 모양의 회색 줄 */
+.skeleton {
+  padding: 20px 16px;
+  text-align: left;
+}
+.skeleton i {
+  display: block;
+  height: 14px;
+  margin-bottom: 22px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f1eff5 25%, #e7e4ee 37%, #f1eff5 63%);
+  background-size: 400% 100%;
+}
+.skeleton i:nth-of-type(even) {
+  width: 84%;
+}
+.skeleton i:nth-of-type(3n) {
+  width: 66%;
+}
+.skeleton .sk-title {
+  width: 42%;
+  height: 20px;
+  margin-bottom: 28px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton i {
+    animation: sk-move 1.4s ease infinite;
+  }
+}
+@keyframes sk-move {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
