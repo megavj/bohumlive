@@ -753,7 +753,7 @@
             owner ? "회사에 대한 경험을 남길 수 있어요." : "인증된 현재 소속 회사의 리뷰를 남길 수 있어요.",
           );
     else
-      body = `<section class="section"><h2>${owner ? "현재 권한" : "현재 인증 상태"}</h2><p class="notice ${isCertified() ? "success" : ""}">${E(statusLabel(p))}${!owner && p.review_reason ? `<br>${E(p.review_reason)}` : ""}</p>${owner ? '<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>' : ""}<div class="profile-line"><span>공개 표시</span><span data-testid="public-display">${E(publicDisplay(p))}</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked || "미등록")}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked || "미등록")}</span></div><div class="profile-line"><span>${owner ? "설계사 인증" : "인증 유효기간"}</span><span>${owner ? "인증 면제" : E(p.verified_until ? new Date(p.verified_until).toLocaleDateString("ko-KR") : "인증 전")}</span></div><p></p>${owner ? '<a class="btn btn-primary" href="/admin/">관리자 모드</a>' : p.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : `<a class="btn btn-primary" href="/verify.html" data-testid="verify-action">${E(verifyActionLabel(p))}</a><p class="hint">${isCertified() ? "소속을 변경하면 재인증 전까지 이름 옆 소속이 ‘소속 미확인’으로 표시됩니다." : p.status === "pending" ? "심사하는 동안에도 글·댓글은 그대로 쓸 수 있어요." : "인증하지 않아도 글·댓글은 쓸 수 있어요. 인증하면 ‘소속 미확인’ 대신 회사 이름이 표시돼요."}</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${!isActive() ? '<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>' : !owner && !p.company_name ? '<p class="hint" data-testid="nickname-later">닉네임은 설계사 인증을 신청할 때 함께 정해요. 그 전에는 글·댓글에 ‘소속 미확인 · 회***’로 보여요.</p>' : `<form data-form="profile">${field("nickname", "새 닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20"')}${formEnd("닉네임 저장")}</form>`}<div class="divider section-divider"></div><div class="form-actions">${btn("로그아웃", "logout")}${isAdmin() && !owner ? '<a class="btn" href="/admin/">관리자 모드</a>' : ""}${!owner ? btn("회원 탈퇴", "withdraw") : ""}</div><p class="hint" style="margin-top:16px">${owner ? "대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다." : "탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요."}</p></section>`;
+      body = `<section class="section"><h2>${owner ? "현재 권한" : "현재 인증 상태"}</h2><p class="notice ${isCertified() ? "success" : ""}">${E(statusLabel(p))}${!owner && p.review_reason ? `<br>${E(p.review_reason)}` : ""}</p>${owner ? '<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>' : ""}<div class="profile-line"><span>공개 표시</span><span data-testid="public-display">${E(publicDisplay(p))}</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked || "미등록")}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked || "미등록")}</span></div><div class="profile-line"><span>${owner ? "설계사 인증" : "인증 유효기간"}</span><span>${owner ? "인증 면제" : E(p.verified_until ? new Date(p.verified_until).toLocaleDateString("ko-KR") : "인증 전")}</span></div><p></p>${owner ? '<a class="btn btn-primary" href="/admin/">관리자 모드</a>' : p.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : `<a class="btn btn-primary" href="/verify.html" data-testid="verify-action">${E(verifyActionLabel(p))}</a><p class="hint">${isCertified() ? "소속을 변경하면 재인증 전까지 이름 옆 소속이 ‘소속 미확인’으로 표시됩니다." : p.status === "pending" ? "심사하는 동안에도 글·댓글은 그대로 쓸 수 있어요." : "인증하지 않아도 글·댓글은 쓸 수 있어요. 인증하면 ‘소속 미확인’ 대신 회사 이름이 표시돼요."}</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${!isActive() ? '<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>' : `<form data-form="profile">${field("nickname", "새 닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20"')}${formEnd("닉네임 저장")}</form>`}<div class="divider section-divider"></div><div class="form-actions">${btn("로그아웃", "logout")}${isAdmin() && !owner ? '<a class="btn" href="/admin/">관리자 모드</a>' : ""}${!owner ? btn("회원 탈퇴", "withdraw") : ""}</div><p class="hint" style="margin-top:16px">${owner ? "대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다." : "탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요."}</p></section>`;
     return `<section class="section"><h1>내 정보</h1><p class="muted">${E(statusLabel(p))}</p></section><nav class="tabs">${tabs.map(([id, label]) => `<a class="${tab === id ? "active" : ""}" href="${uri("me.html", { tab: id })}">${label}</a>`).join("")}</nav>${body}`;
   }
   // 알림에서 온 주소(#comments·#comment-ai·#comment-번호)면 글을 그린 뒤 그 댓글로 한 번만 이동하고 잠깐 표시한다.
@@ -1761,6 +1761,34 @@
     if (!isCertified()) return `소속 미확인 · ${nick}`;
     return p.company_name ? `${p.company_name} · ${nick}` : nick;
   };
+  // 닉네임 검사: 서버(bl_safe_text·2~20자)와 같은 기준. 문제가 없으면 빈 글자를 돌려준다.
+  const nicknameRule = "닉네임은 개인정보 없이 2~20자로 입력해 주세요.";
+  function nicknameProblem(value) {
+    const nick = String(value || "").trim(),
+      n = Array.from(nick).length;
+    const personal = [
+      /[0-9]{6}[\s-]*[1-8][0-9]{6}/,
+      /01[016789][\s-]*[0-9]{3,4}[\s-]*[0-9]{4}/,
+      /0[2-6][0-9]?[\s-]+[0-9]{3,4}[\s-]+[0-9]{4}/,
+      /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
+      /(주민등록번호|고객\s*(명단|연락처)|계좌번호)[\s:：]*[0-9]/i,
+    ];
+    return n < 2 || n > 20 || personal.some((re) => re.test(nick)) ? nicknameRule : "";
+  }
+  // 첫 로그인 안내: 닉네임이 아직 없는 회원에게만, 읽는 화면 맨 위에 작은 상자로 보여 준다(글 읽기를 막지 않음).
+  // '나중에'를 누르면 이 접속 동안은 다시 나오지 않는다. 로그인·인증·내 정보·약관 화면과 손님·정지 회원에게는 나오지 않는다.
+  const nickPromptPages = ["home", "channels", "channel", "search", "post", "write", "notifications", "company"];
+  function nickLater() {
+    try {
+      return sessionStorage.getItem("bl_nick_later") === "1";
+    } catch {
+      return false;
+    }
+  }
+  const wantsNickname = () => !!session && isActive() && !String(viewer?.nickname || "").trim() && nickPromptPages.includes(page) && !nickLater();
+  const nickPreview = (value) => `소속 미확인 · ${Array.from(String(value || "").trim() || "바다")[0]}***`;
+  const nickPromptHTML = () =>
+    `<section class="nick-prompt" data-nick-prompt data-testid="nick-prompt" aria-labelledby="nick-prompt-title"><h2 id="nick-prompt-title">닉네임을 정해 주세요</h2><p class="nick-prompt-text">글·댓글에는 첫 글자만 보여요: <b data-nick-preview>${E(nickPreview(""))}</b></p><form data-form="profile" data-first="1" class="nick-prompt-form"><label class="sr-only" for="nick-first">닉네임</label><input id="nick-first" name="nickname" type="text" required minlength="2" maxlength="20" autocomplete="off" placeholder="닉네임 2~20자" data-testid="nick-first-input"><button type="submit" class="btn btn-primary" data-testid="nick-first-save">저장</button><button type="button" class="btn" data-do="nick-later" data-testid="nick-later">나중에</button><p class="error" data-form-error role="alert"></p></form></section>`;
   // 내 정보의 인증 버튼 이름: 지금 상태에서 할 일을 그대로 적는다.
   const verifyActionLabel = (p = {}) =>
     isCertified()
@@ -1879,6 +1907,7 @@
       restoreDraft();
       updateWrite();
       updateDisplay();
+      if (wantsNickname()) $("#content").insertAdjacentHTML("afterbegin", nickPromptHTML());
       if (page === "post") jumpToHash();
     } catch (err) {
       if (stamp !== renderId) return;
@@ -2106,6 +2135,12 @@
         notify(cancel ? "댓글 채택을 취소했어요." : "이 댓글을 채택했어요.");
         return reloadComments(id);
       }
+      case "nick-later":
+        try {
+          sessionStorage.setItem("bl_nick_later", "1");
+        } catch {}
+        el.closest("[data-nick-prompt]")?.remove();
+        return;
       case "draft-clear": {
         clearDraft();
         const form = $("#post-form"),
@@ -2346,10 +2381,21 @@
         form.reset();
         notify("문의를 보냈어요. 답변은 알림으로 알려 드려요.");
         return;
-      case "profile":
-        await act("profile_update", { nickname: v.nickname.trim() });
-        notify("닉네임을 변경했어요.");
+      case "profile": {
+        const nick = v.nickname.trim(),
+          problem = nicknameProblem(nick);
+        if (problem) throw new Error(problem);
+        try {
+          await act("profile_update", { nickname: nick });
+        } catch (err) {
+          // 서버 규칙(030)이 아직 적용되지 않았으면 소속이 없는 회원은 닉네임만 저장할 수 없다 → 막다른 길이 되지 않게 안내한다.
+          if (/소속 회사명/.test(String(err?.message || "")) && !mine?.profile?.company_name)
+            throw new Error("지금은 닉네임만 따로 저장할 수 없어요. 잠시 뒤 다시 시도하거나, 설계사 인증을 신청할 때 함께 정해 주세요.");
+          throw err;
+        }
+        notify(form.dataset.first ? `닉네임을 정했어요. 글·댓글에 ‘${nickPreview(nick)}’(으)로 보여요.` : "닉네임을 변경했어요.");
         return refresh();
+      }
       case "post": {
         const payload = {
           channel_id: v.channel_id,
@@ -2555,6 +2601,10 @@
       saveDraftSoon();
     }
     if (event.target.closest('form[data-form="verification"]')) updateDisplay();
+    if (event.target.id === "nick-first") {
+      const shown = $("[data-nick-preview]");
+      if (shown) shown.textContent = nickPreview(event.target.value);
+    }
   });
   document.addEventListener("change", (event) => {
     if (event.target.name === "proof") {
