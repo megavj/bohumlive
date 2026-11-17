@@ -144,7 +144,7 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 
 ## 029 — 신고는 설계사 인증을 마친 회원만 (2026-11-17 이사님 결정)
 
-- **적용 상태(2026-11-17 13:30 기준): 화면은 배포, 운영 DB에는 아직 적용 전.** 관리 SQL 도구의 대시보드 로그인이 만료되어 `029_report_verified_only.sql`을 실행하지 못했다. 적용 순서·확인 방법은 `비서작업기록/팀쿡/20261117_보라신고인증/RESULT.md`. 적용하면 이 줄을 고친다. 그때까지 서버는 028 상태(로그인 회원 누구나 신고 접수)다.
+- **적용 상태: 2026-11-17 운영 DB 적용 완료(팀쿡).** 적용 출력 `{"new_gate":1,"old_gate":0}`, 적용 뒤 정의 재확인(새 조건 있음·예전 조건 없음, SECURITY DEFINER·search_path 유지, 45119→45142자), `verify-029.sql` 결과 미인증 회원 REFUSED·인증 회원 PASSED(전부 되돌림), `bl_reports` 건수 적용 전후 0→0. 적용 전 정의 사본 `비서작업기록/팀쿡/20261117_보라신고인증/db-before-029/bl_action_internal.sql`(md5 b8a6f89e2131328efc05e00c3e331a06).
 - `bl_action('report',{target,id,reason})` 접수 조건: `bl_verified()`(status='verified'이고 `verified_until`이 지나지 않음) **또는** 대표(`bl_is_owner()`) **또는** 관리자(`bl_is_admin()`). 그 밖의 로그인 회원(미인증·대기·보완·반려·만료)은 `'신고는 설계사 인증을 마친 회원만 할 수 있어요.'`로 거절한다. 028에서 `bl_can_write()`가 넓어지며 미인증 회원도 신고할 수 있게 된 것을 되돌린 것이다.
 - 그대로인 것: 미인증 회원의 읽기·글·댓글·좋아요(028), `bl_can_write()` 정의, AI 하루 한도, 신고 하루 10회·중복 접수 거절·본인 글 신고 불가·신고 제한 계정, 서로 다른 신고자 3명 이상이면 최대 30일 임시 가림(공지·운영팀 글 제외), 응답 `{ok,hidden}`, 이미 접수된 신고 자료. 이의신청(`appeal`)과 문의(권리침해 신고 포함)는 인증 여부와 무관하게 기존대로다.
 - 적용 방식: `029_report_verified_only.sql`은 `bl_action_internal(text,jsonb)`의 실제 정의를 읽어 신고 구간 안의 조건문 한 줄만 바꾼다(문맥이 다르면 중단, 다시 실행해도 변화 없음). 되돌리기는 `029_report_verified_only_rollback.sql`(같은 방식으로 그 한 줄만 원래대로).
