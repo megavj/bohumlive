@@ -4654,3 +4654,31 @@ h2 {
     inset: -13px;
   }
 }
+
+/* [9] 설계사 인증 신청서: 위쪽 안내 3줄, 상태 화면, 칸 아래 설명, 동의 문장 한 덩어리 */
+.verify-intro {
+  margin: 0 0 20px;
+  padding: 12px 14px 12px 30px;
+  border-radius: 8px;
+  background: #f8f7fb;
+  color: #4a4658;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.verify-intro li + li {
+  margin-top: 4px;
+}
+.verify-state {
+  margin-bottom: 8px;
+}
+.verify-state .form-actions {
+  margin-top: 12px;
+}
+.help-tip-below {
+  display: block;
+  margin-top: 6px;
+}
+.check-line > span {
+  flex: 1;
+  min-width: 0;
+}
