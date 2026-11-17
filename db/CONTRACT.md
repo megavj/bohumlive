@@ -17,7 +17,7 @@
 
 ## 쓰기
 - `profile_submit`: `{name,nickname,company_id?,company_name?,phone,registration_number?,proof_path}` -> `{ok:true,status:'pending'}`. company_name 직접입력 가능. proof 필수.
-- `profile_update`: `{nickname?,company_id?,company_name?}` -> `{ok:true,status}`. 소속 변경은 pending으로 하향. 신규 증빙은 profile_submit 사용.
+- `profile_update`: `{nickname?,company_id?,company_name?}` -> `{ok:true,status}`. 소속 변경은 pending으로 하향. 신규 증빙은 profile_submit 사용. → **030(2026-11-17)부터 등록된 소속이 없는 회원도 닉네임만 보내면 저장**(맨 아래 030 참조).
 - `withdraw`: `{}` -> `{ok:true}`. 즉시 권한 차단/개인정보 삭제, 콘텐츠 탈퇴 표시. UI signOut.
 - `post_save`: `{id?,channel_id,title,body,content_kind:'practice'|'career'|'experience'|'weekly',is_question:boolean,company_id?}` -> `{ok:true,id}`. weekly 관리자만.
 - `post_delete`: `{id}` -> `{ok:true}`
@@ -149,3 +149,11 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - 그대로인 것: 미인증 회원의 읽기·글·댓글·좋아요(028), `bl_can_write()` 정의, AI 하루 한도, 신고 하루 10회·중복 접수 거절·본인 글 신고 불가·신고 제한 계정, 서로 다른 신고자 3명 이상이면 최대 30일 임시 가림(공지·운영팀 글 제외), 응답 `{ok,hidden}`, 이미 접수된 신고 자료. 이의신청(`appeal`)과 문의(권리침해 신고 포함)는 인증 여부와 무관하게 기존대로다.
 - 적용 방식: `029_report_verified_only.sql`은 `bl_action_internal(text,jsonb)`의 실제 정의를 읽어 신고 구간 안의 조건문 한 줄만 바꾼다(문맥이 다르면 중단, 다시 실행해도 변화 없음). 되돌리기는 `029_report_verified_only_rollback.sql`(같은 방식으로 그 한 줄만 원래대로).
 - 화면: 인증 전 회원이 ‘신고’를 누르면 안내 창(‘신고는 설계사 인증을 마친 회원만 할 수 있어요.’ + ‘설계사 인증하기’)을 보여 준다. 판단 기준은 `viewer.status==='verified'`이고 `verified_until`이 남아 있는지(대표·관리자는 통과)이며, 최종 판정은 서버다.
+
+## 030 — 설계사 인증 전(소속이 없는) 회원도 닉네임만 저장 (2026-11-17 이사님 결정)
+
+- **적용 상태: 아직 적용 전(파일 준비·시험 완료, 운영 DB 실행만 남음).** 적용 전 실제 정의는 보관해 두었다: `비서작업기록/팀쿡/20261117_보라닉네임/db-before-030/bl_action_internal.sql`(45142자, md5 f5eb4e5311d0624b8292aeef12106ccd — 029 적용 뒤 정의와 같음). 적용 순서는 같은 폴더의 `RESULT.md`.
+- `bl_action('profile_update',{nickname})`: 요청에 `company_id`·`company_name`이 **둘 다 없고**, 회원에게 등록된 소속이 없으면(`company_id` 없음 + `company_name` 빈 값) '소속 회사명 2~80자' 조건을 건너뛰고 닉네임만 저장한다. 030 전에는 이 예외가 대표(`bl_is_owner()`)에게만 있어서, 인증 신청을 한 번도 하지 않은 회원은 `'소속 회사명을 2~80자로 입력해 주세요.'`로 거절됐다.
+- 그대로인 것: 닉네임 검사(2~20자, `bl_safe_text` — 전화번호·이메일·주민번호 꼴 금지, 실패 문구 `'닉네임은 개인정보 없이 2~20자로 입력해 주세요.'`), 요청에 `company_id`나 `company_name`이 들어 있으면 전과 같이 회사 검사·`pending` 하향, 이미 소속이 있는 회원의 처리, 인증 상태(소속이 그대로이므로 `status`는 바뀌지 않는다), 정지(`'이용 정지 상태입니다.'`)·탈퇴 회원 차단, `profile_submit`·`profile_precheck`, 응답 `{ok,status}`. 글·댓글의 이름은 인증 전에는 계속 `소속 미확인 · 닉***`(`bl_author`)이다.
+- 적용 방식(029와 같음): `030_nickname_without_company.sql`은 `bl_action_internal(text,jsonb)`의 실제 정의를 읽어 내 정보 저장 구간 안의 조건문 한 줄만 바꾼다(문맥이 다르면 중단, 다시 실행해도 변화 없음). 적용 뒤 출력 기대값 `{"new_gate":1,"old_gate":0}`, 정의 길이 45142→45194자. 되돌리기는 `030_nickname_without_company_rollback.sql`(같은 방식으로 그 한 줄만 원래대로, 저장된 닉네임은 그대로 남는다).
+- 화면: 닉네임이 없는 로그인 회원에게 읽는 화면 맨 위에 '닉네임을 정해 주세요' 상자(나중에 가능), 내 정보의 닉네임 칸은 소속이 없는 회원에게도 보인다. 화면은 서버와 같은 기준으로 먼저 검사하고, 030 적용 전 서버가 거절하면 '지금은 닉네임만 따로 저장할 수 없어요…'로 안내한다. 최종 판정은 서버다.
