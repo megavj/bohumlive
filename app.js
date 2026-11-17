@@ -17,6 +17,7 @@
     bookmark: "글을 저장하려면 먼저 로그인해 주세요.",
     follow: "채널을 팔로우하려면 먼저 로그인해 주세요.",
     report: "신고하려면 먼저 로그인해 주세요. 처리 결과는 알림으로 알려 드려요.",
+    read: "로그인하면 글 전체와 댓글을 볼 수 있어요.",
   };
   const loginUrl = (returnTo = here(), why = "") => uri("login.html", { returnTo, ...(why ? { why } : {}) });
   const date = (v) =>
@@ -340,10 +341,12 @@
   // ⋯ 메뉴: 링크 복사·신고·수정·삭제처럼 가끔 쓰는 기능을 접어 둔다.
   const moreMenu = (items, label = "더보기") =>
     `<details class="more-menu"><summary aria-label="${label}" title="${label}">${icon("more")}</summary><div class="more-list">${items.filter(Boolean).join("")}</div></details>`;
-  // 손님·인증 전 회원에게 보이는 짧은 잠금 안내 한 줄
-  function lockBar(text) {
-    const action =
-      viewer?.status === "suspended"
+  // 손님·이용 정지 회원에게 보이는 짧은 잠금 안내 한 줄.
+  // 손님은 로그인만 하면 읽고 쓸 수 있으므로(2026-11-12 결정) 인증 화면이 아니라 읽던 글로 돌아오게 한다.
+  function lockBar(text, label = "로그인하고 댓글 보기", hash = "#comments") {
+    const action = !session
+      ? `<a class="btn btn-primary btn-small" href="${E(loginUrl(here() + hash, "read"))}" data-testid="guest-lock-login">${E(label)}</a>`
+      : viewer?.status === "suspended"
         ? '<a class="btn btn-small" href="/help.html">이용 정지 안내</a>'
         : viewer?.status === "pending"
           ? '<a class="btn btn-small" href="/me.html">심사 중</a>'
@@ -401,7 +404,7 @@
       ? `<p class="post-company"><a href="${uri("company.html", { id: p.company_id })}" data-testid="post-company"><span class="muted">관련 회사</span> ${E(p.company_name)} ›</a></p>`
       : "";
     const actions = `<div class="post-actions"><button type="button" data-do="toggle" data-target="post" data-kind="like" data-id="${E(p.id)}" aria-pressed="${!!p.liked}" ${p.is_mine ? 'disabled title="내 글에는 좋아요를 누를 수 없어요"' : ""} data-testid="post-like">${icon("heart")} 좋아요 <span data-count="${Number(p.likes) || 0}">${num(p.likes)}</span></button><a class="post-comment-link" href="#comments">${icon("comment")} 댓글 ${num(p.comment_count)}</a><button type="button" data-do="share" class="share-button" aria-label="공유(글 링크 복사)" title="공유(글 링크 복사)">${icon("share")}</button></div>`;
-    return `<article class="post" data-testid="post">${header}${band}<div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? lockBar("뒷부분은 로그인한 회원만 볼 수 있어요.") : ""}${company}${actions}${commentsSection(d)}<section class="more-posts" data-more-posts data-channel="${E(p.channel_id)}" data-post="${E(p.id)}" data-name="${E(p.channel_name)}" data-testid="more-posts-list" hidden></section></article>`;
+    return `<article class="post" data-testid="post">${header}${band}<div class="post-body body-text" data-testid="post-body">${E(p.body)}</div>${p.is_truncated ? lockBar(session ? "뒷부분은 로그인한 회원만 볼 수 있어요." : Number(p.comment_count) > 0 ? `로그인하면 글 전체와 댓글 ${num(p.comment_count)}개를 볼 수 있어요.` : "로그인하면 글 전체를 볼 수 있어요.", "로그인하고 이어 읽기", "") : ""}${company}${actions}${commentsSection(d)}<section class="more-posts" data-more-posts data-channel="${E(p.channel_id)}" data-post="${E(p.id)}" data-name="${E(p.channel_name)}" data-testid="more-posts-list" hidden></section></article>`;
   }
   // 댓글 정렬: 추천순(좋아요 많은 순, 같으면 먼저 쓴 순) · 등록순 · 최신순. 고른 값은 이 기기에 기억한다.
   const commentSorts = [
@@ -503,7 +506,15 @@
       ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" rows="1" placeholder="좋은 댓글은 응원이 됩니다." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><div class="comment-form-actions"><button type="button" class="btn btn-small" data-do="comment-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`
       : canReadMember()
         ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요.</p>'
-        : lockBar(session ? `댓글은 회원만 볼 수 있어요. (지금: ${statusLabel()})` : "댓글은 로그인한 회원만 볼 수 있어요.");
+        : !session && p.is_truncated
+          ? "" // 손님에게는 본문 아래 잠금 안내 하나만 보여 준다(같은 버튼이 두 번 나오지 않게).
+          : lockBar(
+              session
+                ? `댓글은 회원만 볼 수 있어요. (지금: ${statusLabel()})`
+                : Number(p.comment_count) > 0
+                  ? `로그인하면 댓글 ${num(p.comment_count)}개를 볼 수 있어요.`
+                  : "로그인하면 댓글을 쓰고 볼 수 있어요.",
+            );
     const aiHint = canReadMember() && p.ai_upgrade === true && p.is_question && (aiFollowupAllowed(d) || Number(p.ai_reply_count) >= 5) && (d.comments || []).some((c) => c.is_ai)
       ? `<p class="ai-followup-hint" data-testid="ai-followup-hint">${Number(p.ai_reply_count) >= 5 ? "이 글의 AI 답변 5회를 모두 사용했어요. 동료들과 댓글로 이어가 주세요." : "회원 누구나 AI 답변의 ‘답글’로 이어서 물을 수 있어요. 첫 답변 포함 글당 최대 5회예요."}</p>`
       : "";
