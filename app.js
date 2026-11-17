@@ -682,7 +682,7 @@
             owner ? "회사에 대한 경험을 남길 수 있어요." : "인증된 현재 소속 회사의 리뷰를 남길 수 있어요.",
           );
     else
-      body = `<section class="section"><h2>${owner ? "현재 권한" : "현재 인증 상태"}</h2><p class="notice ${isCertified() ? "success" : ""}">${E(statusLabel(p))}${!owner && p.review_reason ? `<br>${E(p.review_reason)}` : ""}</p>${owner ? '<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>' : ""}<div class="profile-line"><span>공개 표시</span><span>${E(p.company_name || "소속 미등록")} · ${E((p.nickname || "닉").slice(0, 1))}***</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked || "미등록")}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked || "미등록")}</span></div><div class="profile-line"><span>${owner ? "설계사 인증" : "인증 유효기간"}</span><span>${owner ? "인증 면제" : E(p.verified_until ? new Date(p.verified_until).toLocaleDateString("ko-KR") : "인증 전")}</span></div><p></p>${owner ? '<a class="btn btn-primary" href="/admin/">관리자 모드</a>' : p.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : `<a class="btn btn-primary" href="/verify.html">${isVerified() ? "소속 변경·재인증" : "인증 신청·보완"}</a><p class="hint">소속을 변경하면 재인증 전까지 이름 옆 소속이 ‘소속 미확인’으로 표시됩니다.</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${isActive() ? `<form data-form="profile">${field("nickname", "새 닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20"')}${formEnd("닉네임 저장")}</form>` : '<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>'}<div class="divider section-divider"></div><div class="form-actions">${btn("로그아웃", "logout")}${isAdmin() && !owner ? '<a class="btn" href="/admin/">관리자 모드</a>' : ""}${!owner ? btn("회원 탈퇴", "withdraw") : ""}</div><p class="hint" style="margin-top:16px">${owner ? "대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다." : "탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요."}</p></section>`;
+      body = `<section class="section"><h2>${owner ? "현재 권한" : "현재 인증 상태"}</h2><p class="notice ${isCertified() ? "success" : ""}">${E(statusLabel(p))}${!owner && p.review_reason ? `<br>${E(p.review_reason)}` : ""}</p>${owner ? '<p class="hint">인증 면제 · 모든 운영 기능과 관리자 지정·회수 권한을 사용할 수 있습니다.</p>' : ""}<div class="profile-line"><span>공개 표시</span><span data-testid="public-display">${E(publicDisplay(p))}</span></div><div class="profile-line"><span>이름</span><span>${E(p.name_masked || "미등록")}</span></div><div class="profile-line"><span>연락처</span><span>${E(p.phone_masked || "미등록")}</span></div><div class="profile-line"><span>${owner ? "설계사 인증" : "인증 유효기간"}</span><span>${owner ? "인증 면제" : E(p.verified_until ? new Date(p.verified_until).toLocaleDateString("ko-KR") : "인증 전")}</span></div><p></p>${owner ? '<a class="btn btn-primary" href="/admin/">관리자 모드</a>' : p.status === "suspended" ? '<a class="btn" href="/help.html">이용 정지 안내</a>' : `<a class="btn btn-primary" href="/verify.html" data-testid="verify-action">${E(verifyActionLabel(p))}</a><p class="hint">${isCertified() ? "소속을 변경하면 재인증 전까지 이름 옆 소속이 ‘소속 미확인’으로 표시됩니다." : p.status === "pending" ? "심사하는 동안에도 글·댓글은 그대로 쓸 수 있어요." : "인증하지 않아도 글·댓글은 쓸 수 있어요. 인증하면 ‘소속 미확인’ 대신 회사 이름이 표시돼요."}</p>`}<h2 style="margin-top:32px">닉네임 변경</h2>${!isActive() ? '<p class="hint">이용 정지 상태에서는 닉네임을 변경할 수 없습니다.</p>' : !owner && !p.company_name ? '<p class="hint" data-testid="nickname-later">닉네임은 설계사 인증을 신청할 때 함께 정해요. 그 전에는 글·댓글에 ‘소속 미확인 · 회***’로 보여요.</p>' : `<form data-form="profile">${field("nickname", "새 닉네임", "text", p.nickname || "", 'required minlength="2" maxlength="20"')}${formEnd("닉네임 저장")}</form>`}<div class="divider section-divider"></div><div class="form-actions">${btn("로그아웃", "logout")}${isAdmin() && !owner ? '<a class="btn" href="/admin/">관리자 모드</a>' : ""}${!owner ? btn("회원 탈퇴", "withdraw") : ""}</div><p class="hint" style="margin-top:16px">${owner ? "대표 관리자는 정지하거나 이 화면에서 권한을 회수할 수 없습니다." : "탈퇴하면 즉시 회원 전용 내용에 접근할 수 없고 남은 글은 ‘탈퇴한 회원’으로 표시됩니다. 삭제할 글은 탈퇴 전에 정리해 주세요."}</p></section>`;
     return `<section class="section"><h1>내 정보</h1><p class="muted">${E(statusLabel(p))}</p></section><nav class="tabs">${tabs.map(([id, label]) => `<a class="${tab === id ? "active" : ""}" href="${uri("me.html", { tab: id })}">${label}</a>`).join("")}</nav>${body}`;
   }
   // 알림에서 온 주소(#comments·#comment-ai·#comment-번호)면 글을 그린 뒤 그 댓글로 한 번만 이동하고 잠깐 표시한다.
@@ -1682,7 +1682,27 @@
       ? `<a class="${cls}" href="/verify.html">설계사 인증하기</a>`
       : `<a class="${cls}" href="${E(loginUrl("/verify.html"))}">로그인하고 인증하기</a>`;
   }
-  const displayName = () => viewer?.nickname || session?.user?.email?.split("@")[0] || "회원";
+  // 닉네임이 없으면 이메일 아이디 대신 '회원'으로 부른다(익명 커뮤니티에서 이메일이 보이지 않게).
+  const displayName = () => viewer?.nickname || "회원";
+  // 글·댓글에 실제로 보이는 이름(서버 bl_author 와 같은 규칙): 인증 회원은 '회사 · 닉***', 그 밖에는 '소속 미확인 · 닉***', 닉네임이 없으면 '회***'
+  const publicDisplay = (p = {}) => {
+    const nick = Array.from(String(p.nickname || "").trim() || "회원")[0] + "***";
+    if (!isCertified()) return `소속 미확인 · ${nick}`;
+    return p.company_name ? `${p.company_name} · ${nick}` : nick;
+  };
+  // 내 정보의 인증 버튼 이름: 지금 상태에서 할 일을 그대로 적는다.
+  const verifyActionLabel = (p = {}) =>
+    isCertified()
+      ? "소속이 바뀌었어요(재인증)"
+      : p.status === "pending"
+        ? "신청 내용 고치기"
+        : p.status === "supplement"
+          ? "보완해서 다시 보내기"
+          : p.status === "rejected"
+            ? "다시 신청하기"
+            : p.status === "verified"
+              ? "다시 인증하기"
+              : "설계사 인증하기";
   // 통신이 실패해도 이 기기의 로그인 기록은 반드시 지운다.
   function clearLocalSession() {
     try {
