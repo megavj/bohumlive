@@ -4474,3 +4474,26 @@ h2 {
   padding: 8px 14px;
   font-size: 14px;
 }
+
+/* [4] 이메일 로그인: 메일을 보낸 뒤 화면에 남는 안내와 다시 보내기 */
+.login-sent {
+  margin-top: 16px;
+}
+.login-sent .notice b {
+  word-break: break-all;
+}
+.login-sent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.login-sent-actions .btn {
+  min-height: 44px;
+  font-size: 13px;
+}
+.login-sent-actions [aria-disabled="true"] {
+  color: #6b6878;
+  background: var(--soft);
+  cursor: default;
+}

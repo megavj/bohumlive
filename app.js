@@ -635,7 +635,40 @@
     }
     if (session)
       return `<section class="auth-box"><h1>로그인되어 있어요</h1><p>${E(statusLabel())}</p><a class="btn btn-primary" href="/me.html">내 정보로 이동</a><p></p>${btn("로그아웃", "logout")}</section>`;
-    return `<section class="auth-box"><a class="back-link" href="/index.html">← 보험라이브 홈</a><h1>로그인</h1><p class="small muted login-first">처음이면 로그인할 때 자동으로 가입돼요. 따로 가입할 필요가 없어요.</p>${loginReasons[params.get("why")] ? `<p class="notice" data-testid="login-reason">${E(loginReasons[params.get("why")])}</p>` : ""}${/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|Telegram|; wv\)/i.test(navigator.userAgent) ? '<p class="hint" style="color:#b4235a;margin:10px 0">카카오톡·텔레그램 등 앱 안에서는 Google 로그인이 막힐 수 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(크롬·사파리)를 눌러 주세요. 이메일 로그인은 여기서도 됩니다.</p>' : ""}${btn("Google로 계속하기", "google", `data-testid="google-login" ${window.BL_CONFIG?.googleReady === false ? 'disabled aria-disabled="true"' : ""}`, true)}<p class="hint" style="margin-top:10px">${window.BL_CONFIG?.googleReady === false ? "Google 로그인 연결 준비 중입니다. 아래 이메일로 계속해 주세요." : "Google 계정이 있으면 가장 빠르게 로그인할 수 있어요."}</p><div class="separator">또는 이메일로 로그인</div><form data-form="email" id="email-form">${field("email", "이메일 주소", "email", "", 'required autocomplete="email" placeholder="name@example.com" data-testid="login-email"')}${formEnd("로그인 메일 받기")}</form><div id="otp-area" hidden><form data-form="otp"><h2 style="margin-top:24px">인증번호로 확인</h2><p class="small muted">메일에 인증번호가 있다면 입력해 주세요. 로그인 링크로도 접속할 수 있습니다.</p>${field("token", "이메일 인증번호", "text", "", 'required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"')}${formEnd("인증번호 확인")}</form></div><p class="hint" style="margin-top:20px">로그인 메일이 오지 않으면 스팸함을 확인하고, 몇 분 뒤 다시 요청해 주세요.</p><p class="small muted">이용 전 <a class="text-link" href="/terms.html">이용약관</a>과 <a class="text-link" href="/privacy.html">개인정보처리방침</a>을 확인해 주세요. 로그인하면 바로 글·댓글을 쓸 수 있어요. 설계사 인증은 원할 때 하면 됩니다.</p></section>`;
+    return `<section class="auth-box"><a class="back-link" href="/index.html">← 보험라이브 홈</a><h1>로그인</h1><p class="small muted login-first">처음이면 로그인할 때 자동으로 가입돼요. 따로 가입할 필요가 없어요.</p>${loginReasons[params.get("why")] ? `<p class="notice" data-testid="login-reason">${E(loginReasons[params.get("why")])}</p>` : ""}${/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|Telegram|; wv\)/i.test(navigator.userAgent) ? '<p class="hint" style="color:#b4235a;margin:10px 0">카카오톡·텔레그램 등 앱 안에서는 Google 로그인이 막힐 수 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(크롬·사파리)를 눌러 주세요. 이메일 로그인은 여기서도 됩니다.</p>' : ""}${btn("Google로 계속하기", "google", `data-testid="google-login" ${window.BL_CONFIG?.googleReady === false ? 'disabled aria-disabled="true"' : ""}`, true)}<p class="hint" style="margin-top:10px">${window.BL_CONFIG?.googleReady === false ? "Google 로그인 연결 준비 중입니다. 아래 이메일로 계속해 주세요." : "Google 계정이 있으면 가장 빠르게 로그인할 수 있어요."}</p><div class="separator">또는 이메일로 로그인</div><form data-form="email" id="email-form">${field("email", "이메일 주소", "email", "", 'required autocomplete="email" placeholder="name@example.com" data-testid="login-email"')}${formEnd("로그인 메일 받기")}</form><div id="otp-area" class="login-sent" hidden><p class="notice success" id="login-sent" data-testid="login-sent" role="status"></p><form data-form="otp"><p class="small muted">메일 속 ‘로그인’ 버튼을 누르면 바로 로그인돼요. 메일에 인증번호(숫자)가 있으면 아래에 입력해도 됩니다.</p>${field("token", "이메일 인증번호", "text", "", 'required inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"')}${formEnd("인증번호 확인")}</form><div class="login-sent-actions"><button type="button" class="btn btn-small" data-do="email-resend" data-testid="login-resend" aria-disabled="true">다시 보내기</button><button type="button" class="btn btn-small" data-do="email-change" data-testid="login-change-email">이메일 바꾸기</button></div></div><p class="hint" style="margin-top:20px">로그인 메일이 오지 않으면 스팸함을 확인하고, 몇 분 뒤 다시 요청해 주세요.</p><p class="small muted">이용 전 <a class="text-link" href="/terms.html">이용약관</a>과 <a class="text-link" href="/privacy.html">개인정보처리방침</a>을 확인해 주세요. 로그인하면 바로 글·댓글을 쓸 수 있어요. 설계사 인증은 원할 때 하면 됩니다.</p></section>`;
+  }
+  // 이메일 로그인: 메일을 보낸 뒤에는 '어디로 보냈는지'가 화면에 남고, 60초 뒤 다시 보낼 수 있다.
+  let resendTimer;
+  async function sendLoginMail(email) {
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: location.origin + uri("auth.html", { returnTo: rememberReturn() }),
+        shouldCreateUser: true,
+      },
+    });
+    if (error) throw error;
+  }
+  function showEmailSent(email, again = false) {
+    const area = $("#otp-area"),
+      form = $("#email-form"),
+      again_btn = $('[data-do="email-resend"]');
+    if (!area || !form || !again_btn) return;
+    form.hidden = true;
+    area.hidden = false;
+    $("#login-sent").innerHTML = `<b>${E(email)}</b>(으)로 로그인 메일을 ${again ? "다시 " : ""}보냈어요. 1~2분 안에 오지 않으면 스팸함을 확인해 주세요.`;
+    let left = 60;
+    const paint = () => {
+      again_btn.setAttribute("aria-disabled", String(left > 0));
+      again_btn.textContent = left > 0 ? `다시 보내기 (${left}초)` : "다시 보내기";
+    };
+    clearInterval(resendTimer);
+    paint();
+    resendTimer = setInterval(() => {
+      left -= 1;
+      if (left <= 0 || !again_btn.isConnected) clearInterval(resendTimer);
+      if (again_btn.isConnected) paint();
+    }, 1000);
   }
   async function verify() {
     const denied = authorization("login");
@@ -1873,6 +1906,21 @@
           });
       case "logout":
         return logout();
+      case "email-resend": {
+        if (el.getAttribute("aria-disabled") === "true") return;
+        const email = $("#email-form").elements.email.value.trim();
+        await sendLoginMail(email);
+        showEmailSent(email, true);
+        return;
+      }
+      case "email-change": {
+        clearInterval(resendTimer);
+        $("#otp-area").hidden = true;
+        const form = $("#email-form");
+        form.hidden = false;
+        form.elements.email.focus();
+        return;
+      }
       case "toggle": {
         // 누른 자리에서 색과 숫자만 바로 바꾼다(화면 전체를 다시 그리지 않음). 서버가 거절하면 원래대로 되돌린다.
         const kind = el.dataset.kind,
@@ -2182,21 +2230,16 @@
     }
     switch (type) {
       case "email": {
-        const { error } = await sb.auth.signInWithOtp({
-          email: v.email.trim(),
-          options: {
-            emailRedirectTo: location.origin + uri("auth.html", { returnTo: rememberReturn() }),
-            shouldCreateUser: true,
-          },
-        });
-        if (error) throw error;
-        $("#otp-area").hidden = false;
-        notify("로그인 메일을 요청했어요. 받은편지함과 스팸함을 확인해 주세요.");
+        await sendLoginMail(v.email.trim());
+        showEmailSent(v.email.trim());
         return;
       }
       case "otp": {
         const email = $("#email-form").elements.email.value.trim();
         const { error } = await sb.auth.verifyOtp({ email, token: v.token.trim(), type: "email" });
+        // 틀렸거나 시간이 지난 번호는 '로그인 만료'가 아니라 번호 문제로 알려 준다.
+        if (error && /expired|invalid|otp|token/i.test(`${error.message || ""} ${error.code || ""}`))
+          throw new Error("인증번호가 맞지 않거나 시간이 지났어요. 메일의 최신 번호를 다시 입력하거나 ‘다시 보내기’를 눌러 주세요.");
         if (error) throw error;
         location.href = afterLoginTarget();
         return;
