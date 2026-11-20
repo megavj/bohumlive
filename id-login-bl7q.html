@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="googlebot" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>보험라이브 – 아이디 로그인</title>
+<link rel="stylesheet" href="/style.css?v=20261117d">
+<style>
+.idl{max-width:360px;margin:56px auto;padding:28px 24px;border:1px solid #e5e7eb;border-radius:16px;background:#fff;font-family:inherit}
+.idl h1{font-size:20px;margin:0 0 18px}.idl label{display:block;font-size:13px;color:#555;margin:12px 0 6px}
+.idl input{width:100%;box-sizing:border-box;height:44px;padding:0 12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
+.idl button{width:100%;height:46px;margin-top:18px;border:0;border-radius:10px;background:#6d28d9;color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+.idl button:disabled{opacity:.6}.idl .msg{min-height:20px;margin-top:12px;font-size:14px;color:#b91c1c}.idl .now{font-size:14px;color:#333}
+</style></head>
+<body>
+<!-- 2026-11-20 이사님 임시 아이디(asdf0001~asdf0030) 전용. 어디에도 링크하지 않음. 원복: 이 파일 삭제 -->
+<main class="idl">
+  <h1>아이디 로그인</h1>
+  <p class="now" id="now" hidden></p>
+  <form id="f" autocomplete="on">
+    <label for="uid">아이디</label><input id="uid" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+    <label for="pw">암호</label><input id="pw" name="password" type="password" autocomplete="current-password" required>
+    <button id="go" type="submit">로그인</button>
+    <p class="msg" id="msg" role="alert"></p>
+  </form>
+</main>
+<script src="/vendor/supabase.min.js"></script>
+<script src="/config.js"></script>
+<script>
+(function(){
+  var sb = window.supabase.createClient(window.BL_CONFIG.url, window.BL_CONFIG.anonKey, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  var $ = function(i){return document.getElementById(i)};
+  sb.auth.getSession().then(function(r){
+    var s = r.data && r.data.session;
+    if (s && /@bohumlive\.invalid$/.test(s.user.email||'')) { $('now').hidden=false; $('now').textContent='지금 '+s.user.email.split('@')[0]+'(으)로 로그인되어 있어요. 다른 아이디로 바꾸려면 아래에 입력하세요.'; }
+  });
+  $('f').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var id = $('uid').value.trim().toLowerCase(), pw = $('pw').value;
+    if (!/^[a-z0-9]{4,20}$/.test(id)) { $('msg').textContent='아이디를 확인해 주세요.'; return; }
+    $('go').disabled = true; $('msg').textContent='';
+    try {
+      await sb.auth.signOut({scope:'local'});
+      var r = await sb.auth.signInWithPassword({email: id+'@bohumlive.invalid', password: pw});
+      if (r.error) throw r.error;
+      location.replace('/index.html');
+    } catch (err) {
+      $('msg').textContent = '아이디 또는 암호가 맞지 않아요.';
+      $('go').disabled = false;
+    }
+  });
+})();
+</script>
+</body></html>
