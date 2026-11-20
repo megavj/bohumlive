@@ -965,6 +965,7 @@
   // ---- 관리자 화면 (2026-11-09 재구성: 탭별 자료, 목록 → 상세, 한국어 상태, 더 보기) ----
   const adminSections = [
     ["dashboard", "대시보드"],
+    ["stats", "통계"],
     ["verifications", "인증 심사"],
     ["members", "회원"],
     ["posts", "글"],
@@ -1348,6 +1349,25 @@
   };
 
   const adminRender = {
+    stats(d) {
+      const per = d.period || "day";
+      const rows = d.rows || [];
+      const tot = d.totals || {};
+      const tl = d.temp_label;
+      const N = (n) => (Number(n) || 0).toLocaleString("ko-KR");
+      const sub = (n) => (tl ? `<small class="stat-sub">${E(tl)} ${N(n)}</small>` : "");
+      const label = (x) => {
+        const s0 = new Date(x.start + "T00:00:00");
+        if (per === "month") return `${s0.getFullYear()}년 ${s0.getMonth() + 1}월`;
+        if (per === "week") { const e0 = new Date(s0); e0.setDate(e0.getDate() + 6); return `${s0.getMonth() + 1}/${s0.getDate()}~${e0.getMonth() + 1}/${e0.getDate()}`; }
+        return `${s0.getMonth() + 1}/${s0.getDate()} (${"일월화수목금토"[s0.getDay()]})`;
+      };
+      const tabs = [["day", "일별"], ["week", "주별"], ["month", "월별"]].map(([k, l]) => `<a class="chip ${per === k ? "active" : ""}" href="${uri("admin/", { section: "stats", period: k })}">${l}</a>`).join("");
+      const cur = rows[0] || {};
+      const curName = { day: "오늘", week: "이번 주", month: "이번 달" }[per];
+      const cards = [["members", "가입", "members_temp"], ["posts", "글", "posts_temp"], ["comments", "댓글", "comments_temp"], ["ai_comments", "AI 답변", null]];
+      return `<div class="chips stat-tabs" data-testid="stats-tabs">${tabs}</div><h3>${curName}</h3><div class="status-list">${cards.map(([k, l, t]) => `<div><strong>${N(cur[k])}</strong><small>${l}</small>${t ? sub(cur[t]) : ""}</div>`).join("")}</div><div class="stat-table-wrap"><table class="stat-table" data-testid="stats-table"><thead><tr><th>기간</th><th>가입</th><th>글</th><th>댓글</th><th>AI 답변</th></tr></thead><tbody>${rows.map((x) => `<tr><td>${E(label(x))}</td><td>${N(x.members)}${tl ? `<small> (${N(x.members_temp)})</small>` : ""}</td><td>${N(x.posts)}${tl ? `<small> (${N(x.posts_temp)})</small>` : ""}</td><td>${N(x.comments)}${tl ? `<small> (${N(x.comments_temp)})</small>` : ""}</td><td>${N(x.ai_comments)}</td></tr>`).join("")}</tbody></table></div><p class="notice small">누적: 회원 ${N(tot.members)}명(인증 ${N(tot.verified)}) · 글 ${N(tot.posts)} · 댓글 ${N(tot.comments)} · AI 답변 ${N(tot.ai_comments)}${tl ? ` · 괄호 안은 그중 ${E(tl)}(회원 ${N(tot.members_temp)} · 글 ${N(tot.posts_temp)} · 댓글 ${N(tot.comments_temp)})` : ""}. 집계 기준: 시험 계정·임시 견본·삭제된 글은 빼고 셉니다. 댓글 수에 AI 답변은 넣지 않아요.</p>`;
+    },
     dashboard(d) {
       const k = d.dashboard || {},
         t = d.todo || {};
@@ -1363,7 +1383,7 @@
       const trend = d.trend || [];
       const peak = Math.max(1, ...trend.flatMap((x) => [Number(x.members) || 0, Number(x.posts) || 0, Number(x.comments) || 0]));
       const bar = (n, cls) => `<i class="${cls}" style="height:${Math.round(((Number(n) || 0) / peak) * 100)}%" title="${Number(n) || 0}"></i>`;
-      return `<section class="admin-todo ${todoTotal ? "has-todo" : ""}" data-testid="admin-todo"><h3>처리할 일 ${todoTotal}건</h3>${todoTotal ? `<div class="todo-links"><a href="/admin/?section=verifications&amp;status=pending">인증 심사 대기 ${Number(t.verifications) || 0}건${t.verifications_hold ? ` (자동 판정 보류 ${Number(t.verifications_hold)}건)` : ""}</a><a href="/admin/?section=reports">미처리 신고 ${Number(t.reports) || 0}건</a><a href="/admin/?section=ai">AI 답변 검토 ${Number(t.ai_review) || 0}건</a><a href="/admin/?section=inquiries">답변 전 문의 ${Number(t.inquiries) || 0}건</a></div>` : '<p class="muted small">지금 처리할 일이 없어요.</p>'}</section><div class="status-list">${labels.map(([key, label]) => `<div><strong>${Number(k[key]) || 0}</strong><small>${label}</small></div>`).join("")}</div><p class="notice small" data-testid="dashboard-count-basis">집계 기준: 시험 계정·임시 견본은 빼고 셉니다. ${Number(k.expiring) ? `<a href="/admin/?section=members&amp;status=expiring">인증 만료 예정자 보기 →</a>` : ""}</p><section class="trend" aria-label="최근 14일 추이"><h3>최근 14일 가입·글·댓글</h3><div class="trend-legend"><span class="tm">가입</span><span class="tp">글</span><span class="tc">댓글</span></div><div class="trend-bars">${trend.map((x) => `<div class="trend-day" title="${E(x.day)} 가입 ${Number(x.members) || 0} · 글 ${Number(x.posts) || 0} · 댓글 ${Number(x.comments) || 0}"><div class="trend-stack">${bar(x.members, "tm")}${bar(x.posts, "tp")}${bar(x.comments, "tc")}</div><small>${E(String(x.day).slice(3))}</small></div>`).join("")}</div></section>`;
+      return `<section class="admin-todo ${todoTotal ? "has-todo" : ""}" data-testid="admin-todo"><h3>처리할 일 ${todoTotal}건</h3>${todoTotal ? `<div class="todo-links"><a href="/admin/?section=verifications&amp;status=pending">인증 심사 대기 ${Number(t.verifications) || 0}건${t.verifications_hold ? ` (자동 판정 보류 ${Number(t.verifications_hold)}건)` : ""}</a><a href="/admin/?section=reports">미처리 신고 ${Number(t.reports) || 0}건</a><a href="/admin/?section=ai">AI 답변 검토 ${Number(t.ai_review) || 0}건</a><a href="/admin/?section=inquiries">답변 전 문의 ${Number(t.inquiries) || 0}건</a></div>` : '<p class="muted small">지금 처리할 일이 없어요.</p>'}</section><div class="status-list">${labels.map(([key, label]) => `<div><strong>${Number(k[key]) || 0}</strong><small>${label}</small></div>`).join("")}</div><p class="notice small" data-testid="dashboard-count-basis">집계 기준: 시험 계정·임시 견본은 빼고 셉니다. ${Number(k.expiring) ? `<a href="/admin/?section=members&amp;status=expiring">인증 만료 예정자 보기 →</a>` : ""}</p><section class="trend" aria-label="최근 14일 추이"><h3>최근 14일 가입·글·댓글 <a class="small" href="/admin/?section=stats">일별·주별·월별 통계 →</a></h3><div class="trend-legend"><span class="tm">가입</span><span class="tp">글</span><span class="tc">댓글</span></div><div class="trend-bars">${trend.map((x) => `<div class="trend-day" title="${E(x.day)} 가입 ${Number(x.members) || 0} · 글 ${Number(x.posts) || 0} · 댓글 ${Number(x.comments) || 0}"><div class="trend-stack">${bar(x.members, "tm")}${bar(x.posts, "tp")}${bar(x.comments, "tc")}</div><small>${E(String(x.day).slice(3))}</small></div>`).join("")}</div></section>`;
     },
     verifications(d) {
       const c = d.counts || {};
@@ -1459,7 +1479,13 @@
     if (params.get("id")) args.id = params.get("id");
     if (params.get("channel_id")) args.channel_id = params.get("channel_id");
     if (sec === "audit" && params.get("reads") !== "show") args.hide_reads = "true";
-    const d = await read("admin", args);
+    let d;
+    if (sec === "stats") {
+      const per = ["day", "week", "month"].includes(params.get("period")) ? params.get("period") : "day";
+      const { data, error } = await sb.rpc("bl_admin_stats", { p_period: per });
+      if (error) throw error;
+      d = data || {};
+    } else d = await read("admin", args);
     current = { admin: d, args, offset: (d.items || []).length };
     if (d.channels) channels = d.channels;
     if (d.companies) companies = d.companies;
