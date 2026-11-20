@@ -1,2 +1,14 @@
 User-agent: *
-Disallow: /
+Allow: /
+Disallow: /admin/
+Disallow: /admin.html
+Disallow: /auth.html
+Disallow: /login.html
+Disallow: /join.html
+Disallow: /me.html
+Disallow: /notifications.html
+Disallow: /search.html
+Disallow: /verify.html
+Disallow: /write.html
+
+Sitemap: https://bohumlive.com/sitemap.xml
