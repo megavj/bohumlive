@@ -4751,3 +4751,16 @@ h2 {
     margin: 0 0 20px;
   }
 }
+
+/* 2026-11-20 비회원 댓글 미리보기 */
+.comment-guest-list .comment-meta > button,
+.comment-guest-list .comment-tools { display: none; }
+.comment-preview .body-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 35%, rgba(0, 0, 0, 0.18));
+  mask-image: linear-gradient(to bottom, #000 35%, rgba(0, 0, 0, 0.18));
+}
+.comment-public-hint { margin-right: auto; font-size: 12px; color: var(--muted); align-self: center; }
