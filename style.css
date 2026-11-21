@@ -4773,3 +4773,15 @@ h2 {
 .stat-table th, .stat-table td { padding: 8px 10px; border-bottom: 1px solid rgba(127,127,127,.18); text-align: right; white-space: nowrap; }
 .stat-table th:first-child, .stat-table td:first-child { text-align: left; }
 .stat-table td small { opacity: .6; }
+
+/* 2026-11-21 관리자 메뉴가 15개로 늘어 오른쪽이 잘림 → 줄바꿈으로 모두 보이게(PC·휴대폰 공통) */
+.admin-tabs {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  padding-bottom: 0;
+  row-gap: 8px;
+}
+@media (max-width: 760px) {
+  .admin-tabs { gap: 6px; }
+  .admin-tabs .chip { padding: 5px 10px; min-height: 30px; }
+}
