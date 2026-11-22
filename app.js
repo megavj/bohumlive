@@ -606,7 +606,7 @@
       : "";
     return `<section class="write" data-testid="write"><form data-form="post" id="post-form" class="write-form"><input type="hidden" name="id" value="${E(p.id || "")}"><h1 class="write-heading">${p.id ? "글 수정" : "글쓰기"}</h1><p class="draft-line" data-draft-line hidden><span data-draft-text></span><button type="button" data-do="draft-clear" data-testid="draft-clear">지우고 새로 쓰기</button></p><select name="channel_id" class="write-channel" aria-label="채널" required data-testid="post-channel">${[["", "채널을 선택하세요"], ...channels.filter((c) => c.slug !== "notice" || isAdmin()).map((c) => [c.id, c.name + (c.anonymous ? " (완전 익명)" : "")])]
       .map((o) => `<option value="${E(o[0])}" ${String(o[0]) === String(p.channel_id || params.get("channel") || "") ? "selected" : ""}>${E(o[1])}</option>`)
-      .join("")}</select><input name="title" class="write-title" type="text" aria-label="제목" placeholder="제목" value="${E(p.title || "")}" required minlength="2" maxlength="150" autocomplete="off" data-testid="post-title"><textarea name="body" class="write-body" aria-label="본문" placeholder="동료와 나누고 싶은 경험이나 궁금한 점을 적어 주세요.&#10;&#10;고객의 이름·연락처·계약번호처럼 누군가를 알아볼 수 있는 내용은 쓰지 마세요. 회원 글은 개인 의견입니다." required minlength="5" maxlength="10000" data-testid="post-body-input">${E(p.body || "")}</textarea><p class="write-range" id="write-range" data-testid="write-range" hidden></p><div class="write-options"><label class="switch"><input type="checkbox" name="is_question" data-testid="post-question" ${p.is_question ? "checked" : ""}><span class="switch-track" aria-hidden="true"></span><span class="switch-text">보라(AI) 답변 허용하기<small>켜면 AI 참고 답변이 함께 달릴 수 있어요</small></span></label><details class="write-more" data-testid="write-more" ${p.company_id ? "open" : ""}><summary>더보기</summary><div class="write-more-body">${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}<p class="hint" id="anon-note" hidden>완전 익명 채널에서는 작성자를 짐작할 수 없도록 관련 회사를 고를 수 없어요.</p></div></details>${adminBox}</div><p class="error field-error" data-form-error role="alert"></p><div class="write-actions"><span class="draft-state" data-draft-state aria-live="polite"></span><button type="submit" class="btn btn-primary" data-testid="submit">${p.id ? "수정 저장" : "등록"}</button></div></form></section>`;
+      .join("")}</select><input name="title" class="write-title" type="text" aria-label="제목" placeholder="제목" value="${E(p.title || "")}" required minlength="2" maxlength="150" autocomplete="off" data-testid="post-title"><textarea name="body" class="write-body" aria-label="본문" placeholder="동료와 나누고 싶은 경험이나 궁금한 점을 적어 주세요.&#10;&#10;고객의 이름·연락처·계약번호처럼 누군가를 알아볼 수 있는 내용은 쓰지 마세요. 회원 글은 개인 의견입니다." required minlength="5" maxlength="10000" data-testid="post-body-input">${E(p.body || "")}</textarea><p class="write-range" id="write-range" data-testid="write-range" hidden></p><div class="write-options"><label class="switch"><input type="checkbox" name="is_question" data-testid="post-question" ${p.is_question ? "checked" : ""}><span class="switch-track" aria-hidden="true"></span><span class="switch-text">보라(AI) 답변 허용하기<small>켜거나 글에 @보라 를 쓰면 보라가 한 번 답해요</small></span></label><details class="write-more" data-testid="write-more" ${p.company_id ? "open" : ""}><summary>더보기</summary><div class="write-more-body">${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}<p class="hint" id="anon-note" hidden>완전 익명 채널에서는 작성자를 짐작할 수 없도록 관련 회사를 고를 수 없어요.</p></div></details>${adminBox}</div><p class="error field-error" data-form-error role="alert"></p><div class="write-actions"><span class="draft-state" data-draft-state aria-live="polite"></span><button type="submit" class="btn btn-primary" data-testid="submit">${p.id ? "수정 저장" : "등록"}</button></div></form></section>`;
   }
   // ---- 임시저장: 쓰다가 나가도 이 기기에 남는다(로그아웃하면 지움, 다른 계정에는 보이지 않음) ----
   const draftKey = () => `bl_draft:${session?.user?.id || ""}:${current?.post?.id || "new"}`;
@@ -1610,7 +1610,7 @@
 <h2>1. 이용 순서</h2>
 <ol><li>Google 또는 이메일로 로그인합니다. 로그인하면 바로 글·댓글·좋아요·저장·팔로우를 이용합니다.</li><li>설계사 인증은 선택입니다. 인증하려면 이름·닉네임·소속·연락처·설계사 고유번호와 증빙 사진 1장을 제출합니다. 사진의 불필요한 개인정보는 가려 주세요.</li><li>인증이 승인되면 이름 옆 ‘소속 미확인’ 대신 회사 이름이 표시되고 회사 리뷰 작성과 게시물 신고를 할 수 있습니다. 결과는 내 정보·알림에서 확인합니다.</li></ol>
 <p>‘보라(AI) 답변 허용하기’를 켜면 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고한 AI 댓글이 출처 표시·사전 검수 없이 공개됩니다. 공식 자료를 확인하고 고객정보는 적지 마세요.</p>
-<p>회원 누구나 보라 답변의 ‘답글’로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 어느 글이든 댓글에 ‘@보라 질문’처럼 쓰면 횟수 제한 없이 보라가 답글로 답합니다. 글쓴이는 동료 댓글 1개를 채택하고 변경·취소할 수 있습니다.</p>
+<p>회원 누구나 보라 답변의 ‘답글’로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 어느 글이든 댓글에 ‘@보라 질문’처럼 쓰면 횟수 제한 없이 보라가 답글로 답합니다. 글 제목·본문에 ‘@보라’를 쓰면 ‘보라(AI) 답변 허용하기’를 켠 것과 같으며, 둘 다 해도 보라는 한 번만 답합니다. 글쓴이는 동료 댓글 1개를 채택하고 변경·취소할 수 있습니다.</p>
 <h2>2. 권리침해 신고 방법</h2>
 <p>설계사 인증을 마친 회원은 게시물의 ‘신고’를 이용합니다. 피해자 본인이나 적법한 대리인은 로그인 후 아래 문의에서 ‘권리침해 신고’를 선택해 주세요. 설계사 미인증·이용 정지 회원도 문의하며, 신고 버튼의 횟수 제한과 별개로 접수합니다.</p>
 <ul class="policy-list"><li>대상 글·댓글·리뷰의 주소와 문제 부분</li><li>침해된 권리·구체적 사실과 본인 또는 대리인 여부</li><li>최소한의 소명 자료와 원하는 조치(삭제·접근 차단·반박 내용 게재)</li></ul>
@@ -2637,6 +2637,12 @@
   });
   document.addEventListener("input", (event) => {
     const fmt = event.target.dataset?.format;
+    // 2026-11-22 글 제목·본문에 @보라 → '보라(AI) 답변 허용하기'를 켜서 보여 줌(서버도 같은 규칙, 답변은 1번만)
+    if (event.target.matches?.('[data-testid="post-body-input"], form [name="title"]')) {
+      const f = event.target.form, sw = f?.querySelector('input[name="is_question"]');
+      const txt = (f?.querySelector('[name="title"]')?.value || "") + " " + (f?.querySelector('[data-testid="post-body-input"]')?.value || "");
+      if (sw && !sw.checked && /(^|[^0-9A-Za-z가-힣_])@보라(야|님|씨)?($|[^0-9A-Za-z가-힣_])/.test(txt)) { sw.checked = true; notify("@보라를 넣어서 ‘보라(AI) 답변 허용하기’를 켰어요. 보라는 한 번만 답해요."); }
+    }
     if (fmt === "phone") {
       event.target.value = formatPhone(event.target.value);
       const n = event.target.value.replace(/\D/g, "").length;
