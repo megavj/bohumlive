@@ -157,3 +157,9 @@ bucket `bl-proofs` private. 로그인 후 `bl_read('me')`로 lazy profile 생성
 - 그대로인 것: 닉네임 검사(2~20자, `bl_safe_text` — 전화번호·이메일·주민번호 꼴 금지, 실패 문구 `'닉네임은 개인정보 없이 2~20자로 입력해 주세요.'`), 요청에 `company_id`나 `company_name`이 들어 있으면 전과 같이 회사 검사·`pending` 하향, 이미 소속이 있는 회원의 처리, 인증 상태(소속이 그대로이므로 `status`는 바뀌지 않는다), 정지(`'이용 정지 상태입니다.'`)·탈퇴 회원 차단, `profile_submit`·`profile_precheck`, 응답 `{ok,status}`. 글·댓글의 이름은 인증 전에는 계속 `소속 미확인 · 닉***`(`bl_author`)이다.
 - 적용 방식(029와 같음): `030_nickname_without_company.sql`은 `bl_action_internal(text,jsonb)`의 실제 정의를 읽어 내 정보 저장 구간 안의 조건문 한 줄만 바꾼다(문맥이 다르면 중단, 다시 실행해도 변화 없음). 적용 뒤 출력 기대값 `{"new_gate":1,"old_gate":0}`, 정의 길이 45142→45194자. 되돌리기는 `030_nickname_without_company_rollback.sql`(같은 방식으로 그 한 줄만 원래대로, 저장된 닉네임은 그대로 남는다).
 - 화면: 닉네임이 없는 로그인 회원에게 읽는 화면 맨 위에 '닉네임을 정해 주세요' 상자(나중에 가능), 내 정보의 닉네임 칸은 소속이 없는 회원에게도 보인다. 화면은 서버와 같은 기준으로 먼저 검사하고, 030 적용 전 서버가 거절하면 '지금은 닉네임만 따로 저장할 수 없어요…'로 안내한다. 최종 판정은 서버다.
+
+## 032 보라 표시명·@보라 호출 (2026-11-22 적용)
+- AI 댓글 표시명 `보라`(화면에 AI 배지·참고용 답변 표시 유지). `bl_comment_json`에 `ai_mention` 추가.
+- 회원 댓글(INSERT만)에 `@보라`(야·님·씨 허용) + 내용 2글자 이상 → `bl_ai_mention_enqueue` → `bl_ai_jobs.is_mention=true`. 모든 글(질문 여부·채널 무관), 하루·글당 제한 없음. 보라 @호출 답변에 단 답글도 호출로 처리.
+- @호출 답변(`bl_comments.ai_mention=true`)은 글당 5회(이어 묻기) 집계에서 제외. 수정으로 넣은 @보라는 호출 안 함.
+- 원복: `db/032_bora_mention_rollback.sql`.
