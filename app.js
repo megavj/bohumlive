@@ -192,7 +192,7 @@
     $("#header").innerHTML =
       `<header class="site-header"><div class="header-inner"><div class="topbar"><a class="wordmark" href="/index.html" aria-label="보험라이브 홈"><picture><source media="(prefers-reduced-motion: reduce)" srcset="/assets/logo-live-3d-still.png?v=20261120a"><source media="(max-width: 799px)" type="image/webp" srcset="/assets/logo-live-3d-m.webp?v=20261120a"><source media="(max-width: 799px)" srcset="/assets/logo-live-3d-m.gif?v=20261120a"><source type="image/webp" srcset="/assets/logo-live-3d.webp?v=20261120a"><img class="wm-logo" src="/assets/logo-live-3d.gif?v=20261120a" alt="보험라이브" width="320" height="96" decoding="async" fetchpriority="high"></picture></a><nav class="primary-nav" aria-label="주 메뉴"><a class="${active === "home" ? "active" : ""}" href="/index.html">홈</a><a class="${active === "channels" ? "active" : ""}" href="/channels.html">채널</a>${/* 2026-11-12 이사님: 상단 '보험사 리뷰' 숨김(추후 개편). 되돌리려면 이 줄의 a 태그 복원 */""}${isAdmin() ? `<a class="${page === "admin" ? "active" : ""}" href="/admin/" data-testid="admin-nav">관리자</a>` : ""}</nav><form class="header-search" action="/search.html" role="search"><input aria-label="검색어" name="q" placeholder="궁금한 내용 검색" value="${page === "search" ? E(params.get("q") || "") : ""}" maxlength="100"><button aria-label="검색">${icon("search")}</button></form><div class="header-tools">${tools}</div></div>${isOwner() ? '<p class="status-banner" data-testid="owner-permissions">대표 관리자 · 모든 권한 · 인증 면제</p>' : ""}</div></header>`;
     $("#footer").innerHTML =
-      `<footer class="site-footer"><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html"><b>개인정보처리방침</b></a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">운영 안내·권리침해 신고</a></nav><p class="footer-note">보험라이브는 무료 커뮤니티입니다. AI 답변은 참고용이며 보험 모집·가입 권유·광고와 개인정보 게시는 금지합니다.</p><p class="footer-note footer-copy">© ${new Date().getFullYear()} 보험라이브</p></footer>`;
+      `<footer class="site-footer"><nav class="footer-links" aria-label="서비스 정책"><a href="/terms.html">이용약관</a><a href="/privacy.html"><b>개인정보처리방침</b></a><a href="/rules.html">커뮤니티 운영정책</a><a href="/help.html">운영 안내·권리침해 신고</a></nav><p class="footer-note">보험라이브는 무료 커뮤니티입니다. 보라 답변은 참고용이며 보험 모집·가입 권유·광고와 개인정보 게시는 금지합니다.</p><p class="footer-note footer-copy">© ${new Date().getFullYear()} 보험라이브</p></footer>`;
     // 오른쪽 칸: 안내 상자·글쓰기 버튼을 두지 않는다. 목록·글 화면(PC)에서만 '인기 글' 제목 목록을 채운다.
     // 둘러보는 화면(홈·채널 탐색·보험사 목록)은 넓게, 읽는 화면(목록·글·검색·보험사 상세)은 본문 + 오른쪽 인기 글, 입력 화면은 가운데 한 칸
     const mode =
@@ -465,7 +465,7 @@
       .sort((a, b) =>
         sort === "latest" ? t(b) - t(a) : sort === "best" ? (Number(b.likes) || 0) - (Number(a.likes) || 0) || t(a) - t(b) : t(a) - t(b),
       );
-    // AI 답변 → 질문 → AI 답변 흐름을 부모 바로 아래에 묶는다. 깊어져도 들여쓰기는 한 단계만 쓴다.
+    // 보라 답변 → 질문 → 보라 답변 흐름을 부모 바로 아래에 묶는다. 깊어져도 들여쓰기는 한 단계만 쓴다.
     const ordered = [], seen = new Set();
     const visit = (c) => {
       if (seen.has(c.id)) return;
@@ -483,6 +483,7 @@
   const commentAccepted = (c, d) => !c.is_ai && commentPublished(c) && (c.is_accepted === true || d?.post?.accepted_comment_id === c.id);
   function canReplyComment(c, d) {
     if (!isVerified() || !commentPublished(c)) return false;
+    if (c.is_ai && c.ai_mention === true) return true; // @보라 호출 답변: 답글 = 보라에게 이어 묻기(횟수 제한 없음)
     if (c.is_ai && d?.post?.ai_upgrade === true) return aiFollowupAllowed(d);
     return !c.parent_id;
   }
@@ -500,12 +501,15 @@
     // 서버가 준 URL은 쓰지 않는다. 검증한 UUID로 같은 사이트 글 주소만 만든다.
     return related.length ? `<aside class="ai-related-posts" aria-label="함께 보면 좋은 동료 글" data-testid="ai-related-posts"><span>함께 보면 좋은 동료 글</span><ul>${related.map((p) => `<li><a href="${E(uri("post.html", { id: p.id }))}">${E(p.title.trim().slice(0, 150))}</a></li>`).join("")}</ul></aside>` : "";
   }
+  // 2026-11-22 댓글의 @보라 호출 표시를 강조(이스케이프 뒤 고정 문자열만 감쌈)
+  const mentionHTML = (s) => E(s).replace(/@보라(야|님|씨)?/g, (m) => `<span class="mention-bora">${m}</span>`);
+  const BORA_BTN = '<button type="button" class="btn btn-small mention-bora-btn" data-do="mention-bora" title="@보라 를 붙이면 보라가 답글로 답해요">@보라</button>';
   // 댓글 한 개: 회사·닉네임 → 내용 → 작성일·좋아요·답글·⋯(신고·수정·삭제)
   function commentHTML(c, d) {
     const accepted = commentAccepted(c, d);
     const parent = (d?.comments || []).find((x) => x.id === c.parent_id);
     const context = parent && (c.is_ai || parent.is_ai)
-      ? `<a class="comment-reply-context" href="#comment-${E(parent.id)}">${c.is_ai ? "질문에 대한 AI 답변" : "AI 답변에 이어 묻기"}</a>`
+      ? `<a class="comment-reply-context" href="#comment-${E(parent.id)}">${c.is_ai ? "보라 답변" : "보라에게 이어 묻기"}</a>`
       : "";
     const accept = canAcceptComment(c, d)
       ? `<button type="button" class="comment-accept" data-do="comment-accept" data-id="${E(c.id)}" aria-pressed="${accepted}" data-testid="comment-accept">${accepted ? "채택 취소" : "채택"}</button>`
@@ -518,7 +522,7 @@
       ],
       "댓글 메뉴 더보기",
     );
-    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""} ${c.is_ai ? "comment-ai-item" : ""} ${c.is_preview ? "comment-preview" : ""} ${accepted ? "comment-accepted" : ""}" id="comment-${E(c.id)}" data-testid="comment-item">${context}<div class="comment-author">${c.is_ai ? '<span class="ai-badge">AI</span> ' : ""}${E(c.is_ai ? "AI 답변은 참고만 하세요" : c.author_display)}${c.is_mine ? ' <span class="author-badge">내 댓글</span>' : ""}${accepted ? ' <span class="accepted-badge" data-testid="comment-accepted">글쓴이 채택</span>' : ""}</div><p class="body-text">${E(c.body)}${c.is_preview && c.is_truncated ? "…" : ""}</p>${relatedPostsHTML(c, d)}<div class="comment-meta">${timeTag(c.created_at, "comment-time")}<button type="button" data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" aria-label="좋아요" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : 'title="좋아요"'}>${icon("heart")}<span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${canReplyComment(c, d) ? `<button type="button" data-do="reply" data-id="${E(c.id)}">${icon("comment")}답글</button>` : ""}${accept}<span class="comment-tools">${menu}</span></div><div data-reply-slot="${E(c.id)}"></div></article>`;
+    return `<article class="comment-item ${c.parent_id ? "comment-reply" : ""} ${c.is_ai ? "comment-ai-item" : ""} ${c.is_preview ? "comment-preview" : ""} ${accepted ? "comment-accepted" : ""}" id="comment-${E(c.id)}" data-testid="comment-item">${context}<div class="comment-author">${E(c.is_ai ? "보라" : c.author_display)}${c.is_ai ? ' <span class="ai-badge">AI</span> <span class="ai-note">참고용 답변</span>' : ""}${c.is_mine ? ' <span class="author-badge">내 댓글</span>' : ""}${accepted ? ' <span class="accepted-badge" data-testid="comment-accepted">글쓴이 채택</span>' : ""}</div><p class="body-text">${mentionHTML(c.body)}${c.is_preview && c.is_truncated ? "…" : ""}</p>${relatedPostsHTML(c, d)}<div class="comment-meta">${timeTag(c.created_at, "comment-time")}<button type="button" data-do="toggle" data-target="comment" data-kind="like" data-id="${E(c.id)}" aria-pressed="${!!c.liked}" aria-label="좋아요" ${c.is_mine ? 'disabled title="내 댓글에는 좋아요를 누를 수 없어요"' : 'title="좋아요"'}>${icon("heart")}<span data-count="${Number(c.likes) || 0}">${num(c.likes)}</span></button>${canReplyComment(c, d) ? `<button type="button" data-do="reply" data-id="${E(c.id)}">${icon("comment")}답글</button>` : ""}${accept}<span class="comment-tools">${menu}</span></div><div data-reply-slot="${E(c.id)}"></div></article>`;
   }
   const commentListHTML = (d) => {
     const all = (d.comments || []).slice();
@@ -547,9 +551,9 @@
         )}`
       : "";
     const form = isVerified()
-      ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" rows="1" placeholder="좋은 댓글은 응원이 됩니다." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><div class="comment-form-actions">${p.anonymous ? "" : '<span class="comment-public-hint">비회원에게는 첫 댓글 앞부분만 보여요</span>'}<button type="button" class="btn btn-small" data-do="comment-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`
+      ? `<form data-form="comment" class="comment-form"><input type="hidden" name="post_id" value="${E(p.id)}"><label class="sr-only" for="comment-body">댓글</label><textarea id="comment-body" name="body" rows="1" placeholder="좋은 댓글은 응원이 됩니다. @보라 를 붙이면 보라가 답해요." required maxlength="3000" data-testid="comment-body"></textarea><p class="error" data-form-error role="alert"></p><div class="comment-form-actions">${p.anonymous ? "" : '<span class="comment-public-hint">비회원에게는 첫 댓글 앞부분만 보여요</span>'}${BORA_BTN}<button type="button" class="btn btn-small" data-do="comment-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`
       : canReadMember()
-        ? '<p class="notice">관리자 운영 권한으로 댓글과 AI 답변을 읽을 수 있어요.</p>'
+        ? '<p class="notice">관리자 운영 권한으로 댓글과 보라 답변을 읽을 수 있어요.</p>'
         : preview || (!session && p.is_truncated)
           ? "" // 손님에게는 본문 아래 잠금 안내 하나만 보여 준다(같은 버튼이 두 번 나오지 않게).
           : lockBar(
@@ -560,7 +564,7 @@
                   : "로그인하면 댓글을 쓰고 볼 수 있어요.",
             );
     const aiHint = canReadMember() && p.ai_upgrade === true && p.is_question && (aiFollowupAllowed(d) || Number(p.ai_reply_count) >= 5) && (d.comments || []).some((c) => c.is_ai)
-      ? `<p class="ai-followup-hint" data-testid="ai-followup-hint">${Number(p.ai_reply_count) >= 5 ? "이 글의 AI 답변 5회를 모두 사용했어요. 동료들과 댓글로 이어가 주세요." : "회원 누구나 AI 답변의 ‘답글’로 이어서 물을 수 있어요. 첫 답변 포함 글당 최대 5회예요."}</p>`
+      ? `<p class="ai-followup-hint" data-testid="ai-followup-hint">${Number(p.ai_reply_count) >= 5 ? "이 글의 보라 이어 묻기 5회를 모두 사용했어요. 더 물어보려면 댓글에 @보라 를 붙여 주세요." : "회원 누구나 보라 답변의 ‘답글’로 이어서 물을 수 있어요(글당 5회). 댓글에 @보라 를 붙여도 보라가 답해요."}</p>`
       : "";
     return `<section class="comments" id="comments"><div class="comments-top"><h2>댓글 <span data-comment-count>${Number(p.comment_count) || 0}</span></h2>${sorter}${form}${aiHint}</div>${canReadMember() ? `<div data-comment-list>${commentListHTML(d)}</div>` : previewHTML}</section>`;
   }
@@ -602,7 +606,7 @@
       : "";
     return `<section class="write" data-testid="write"><form data-form="post" id="post-form" class="write-form"><input type="hidden" name="id" value="${E(p.id || "")}"><h1 class="write-heading">${p.id ? "글 수정" : "글쓰기"}</h1><p class="draft-line" data-draft-line hidden><span data-draft-text></span><button type="button" data-do="draft-clear" data-testid="draft-clear">지우고 새로 쓰기</button></p><select name="channel_id" class="write-channel" aria-label="채널" required data-testid="post-channel">${[["", "채널을 선택하세요"], ...channels.filter((c) => c.slug !== "notice" || isAdmin()).map((c) => [c.id, c.name + (c.anonymous ? " (완전 익명)" : "")])]
       .map((o) => `<option value="${E(o[0])}" ${String(o[0]) === String(p.channel_id || params.get("channel") || "") ? "selected" : ""}>${E(o[1])}</option>`)
-      .join("")}</select><input name="title" class="write-title" type="text" aria-label="제목" placeholder="제목" value="${E(p.title || "")}" required minlength="2" maxlength="150" autocomplete="off" data-testid="post-title"><textarea name="body" class="write-body" aria-label="본문" placeholder="동료와 나누고 싶은 경험이나 궁금한 점을 적어 주세요.&#10;&#10;고객의 이름·연락처·계약번호처럼 누군가를 알아볼 수 있는 내용은 쓰지 마세요. 회원 글은 개인 의견입니다." required minlength="5" maxlength="10000" data-testid="post-body-input">${E(p.body || "")}</textarea><p class="write-range" id="write-range" data-testid="write-range" hidden></p><div class="write-options"><label class="switch"><input type="checkbox" name="is_question" data-testid="post-question" ${p.is_question ? "checked" : ""}><span class="switch-track" aria-hidden="true"></span><span class="switch-text">AI답변 허용하기<small>켜면 AI 참고 답변이 함께 달릴 수 있어요</small></span></label><details class="write-more" data-testid="write-more" ${p.company_id ? "open" : ""}><summary>더보기</summary><div class="write-more-body">${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}<p class="hint" id="anon-note" hidden>완전 익명 채널에서는 작성자를 짐작할 수 없도록 관련 회사를 고를 수 없어요.</p></div></details>${adminBox}</div><p class="error field-error" data-form-error role="alert"></p><div class="write-actions"><span class="draft-state" data-draft-state aria-live="polite"></span><button type="submit" class="btn btn-primary" data-testid="submit">${p.id ? "수정 저장" : "등록"}</button></div></form></section>`;
+      .join("")}</select><input name="title" class="write-title" type="text" aria-label="제목" placeholder="제목" value="${E(p.title || "")}" required minlength="2" maxlength="150" autocomplete="off" data-testid="post-title"><textarea name="body" class="write-body" aria-label="본문" placeholder="동료와 나누고 싶은 경험이나 궁금한 점을 적어 주세요.&#10;&#10;고객의 이름·연락처·계약번호처럼 누군가를 알아볼 수 있는 내용은 쓰지 마세요. 회원 글은 개인 의견입니다." required minlength="5" maxlength="10000" data-testid="post-body-input">${E(p.body || "")}</textarea><p class="write-range" id="write-range" data-testid="write-range" hidden></p><div class="write-options"><label class="switch"><input type="checkbox" name="is_question" data-testid="post-question" ${p.is_question ? "checked" : ""}><span class="switch-track" aria-hidden="true"></span><span class="switch-text">보라(AI) 답변 허용하기<small>켜면 AI 참고 답변이 함께 달릴 수 있어요</small></span></label><details class="write-more" data-testid="write-more" ${p.company_id ? "open" : ""}><summary>더보기</summary><div class="write-more-body">${select("company_id", "관련 회사 (선택)", [["", "선택하지 않음"], ...companies.map((c) => [c.id, c.name])], p.company_id || "")}<p class="hint" id="anon-note" hidden>완전 익명 채널에서는 작성자를 짐작할 수 없도록 관련 회사를 고를 수 없어요.</p></div></details>${adminBox}</div><p class="error field-error" data-form-error role="alert"></p><div class="write-actions"><span class="draft-state" data-draft-state aria-live="polite"></span><button type="submit" class="btn btn-primary" data-testid="submit">${p.id ? "수정 저장" : "등록"}</button></div></form></section>`;
   }
   // ---- 임시저장: 쓰다가 나가도 이 기기에 남는다(로그아웃하면 지움, 다른 계정에는 보이지 않음) ----
   const draftKey = () => `bl_draft:${session?.user?.id || ""}:${current?.post?.id || "new"}`;
@@ -975,7 +979,7 @@
     ["inquiries", "문의"],
     ["channels", "채널"],
     ["companies", "보험사·GA"],
-    ["ai", "AI 답변"],
+    ["ai", "보라 답변"],
     ["settings", "금칙어"],
     ["audit", "감사 기록"],
     ["admins", "관리자"],
@@ -1008,7 +1012,7 @@
     member: "회원",
     channel: "채널",
     company: "회사",
-    ai: "AI 답변",
+    ai: "보라 답변",
     settings: "설정",
     proof: "증빙",
     notification: "알림",
@@ -1041,13 +1045,13 @@
     admin_company_delete: "회사 삭제",
     admin_company_merge: "회사 병합",
     admin_ai_settings: "AI 설정",
-    admin_ai_publish: "AI 답변 공개",
-    admin_ai_reject: "AI 답변 반려",
-    admin_ai_edit: "AI 답변 고치기",
-    admin_ai_retry: "AI 답변 다시 시도",
-    admin_ai_regenerate: "AI 답변 다시 만들기",
+    admin_ai_publish: "보라 답변 공개",
+    admin_ai_reject: "보라 답변 반려",
+    admin_ai_edit: "보라 답변 고치기",
+    admin_ai_retry: "보라 답변 다시 시도",
+    admin_ai_regenerate: "보라 답변 다시 만들기",
     admin_banned_words: "금칙어 저장",
-    ai_generated_review: "AI 답변 생성(검토 대기)",
+    ai_generated_review: "보라 답변 생성(검토 대기)",
     report: "신고 접수",
     report_temporary_hide: "신고로 임시 가림",
     temporary_expired_restore: "임시 가림 기간 만료 복구",
@@ -1137,12 +1141,12 @@
       company_save: `${who} 회사를 저장할까요?`,
       channel_delete: `${who} 채널을 삭제할까요? 되돌릴 수 없어요.`,
       company_delete: `${who} 회사를 삭제할까요? 되돌릴 수 없어요.`,
-      ai_settings: "AI 답변 설정을 저장할까요?",
-      ai_publish: "이 AI 답변을 다시 공개할까요?",
-      ai_reject: "이 AI 답변을 숨길까요? 글에서 바로 사라져요.",
-      ai_edit: "AI 답변 고친 내용을 저장할까요?",
-      ai_retry: "이 질문의 AI 답변을 다시 시도할까요?",
-      ai_regenerate: "AI 답변을 다시 만들까요? 지금 답변은 새 답변이 나올 때까지 숨겨집니다.",
+      ai_settings: "보라 답변 설정을 저장할까요?",
+      ai_publish: "이 보라 답변을 다시 공개할까요?",
+      ai_reject: "이 보라 답변을 숨길까요? 글에서 바로 사라져요.",
+      ai_edit: "보라 답변 고친 내용을 저장할까요?",
+      ai_retry: "이 질문의 보라 답변을 다시 시도할까요?",
+      ai_regenerate: "보라 답변을 다시 만들까요? 지금 답변은 새 답변이 나올 때까지 숨겨집니다.",
       reveal_author: "익명 작성자를 확인할까요? 확인한 사실과 사유가 감사 기록에 남습니다.",
       banned_words: "금칙어 목록을 저장할까요?",
       inquiry_answer: "이 답변을 보낼까요? 문의한 회원에게 알림으로 전달됩니다.",
@@ -1339,7 +1343,7 @@
     ai: (j) =>
       `<details class="admin-row" data-testid="ai-item"><summary><span class="row-main"><strong>${E(j.post_title || "질문 글")}</strong> ${badge(aiStatusNames[j.status] || j.status, j.status === "failed" ? "danger" : j.status === "review" ? "warn" : "muted")}${j.answer_status ? badge(`답변 ${aiAnswerNames[j.answer_status] || j.answer_status}`, "") : ""}</span><span class="row-sub">${E(date(j.created_at))}${j.attempts ? ` · 시도 ${Number(j.attempts)}회` : ""}${j.error_code ? ` · ${E(aiErrorNames[j.error_code] || "처리 중 문제가 있었어요")}` : ""}</span></summary><div class="row-detail"><p><a class="text-link" href="${uri("post.html", { id: j.post_id })}" target="_blank" rel="noopener">질문 글 보기 →</a></p>${
         j.answer
-          ? `${adminForm("ai_edit", j.id, area("body", "AI 답변 (고쳐서 저장할 수 있어요)", j.answer, 'required minlength="20" maxlength="15000"'), "고친 내용 저장")}<div class="form-actions">${j.answer_status === "published" ? adminForm("ai_reject", j.id, "", "답변 숨기기") : adminForm("ai_publish", j.id, "", "다시 공개")}${adminForm("ai_regenerate", j.id, "", "다시 만들기")}</div>`
+          ? `${adminForm("ai_edit", j.id, area("body", "보라 답변 (고쳐서 저장할 수 있어요)", j.answer, 'required minlength="20" maxlength="15000"'), "고친 내용 저장")}<div class="form-actions">${j.answer_status === "published" ? adminForm("ai_reject", j.id, "", "답변 숨기기") : adminForm("ai_publish", j.id, "", "다시 공개")}${adminForm("ai_regenerate", j.id, "", "다시 만들기")}</div>`
           : '<p class="muted small">아직 만들어진 답변이 없어요.</p>'
       }${["failed", "skipped"].includes(j.status) ? adminForm("ai_retry", j.id, "", "다시 시도") : ""}</div></details>`,
     inquiries: (q) =>
@@ -1365,8 +1369,8 @@
       const tabs = [["day", "일별"], ["week", "주별"], ["month", "월별"]].map(([k, l]) => `<a class="chip ${per === k ? "active" : ""}" href="${uri("admin/", { section: "stats", period: k })}">${l}</a>`).join("");
       const cur = rows[0] || {};
       const curName = { day: "오늘", week: "이번 주", month: "이번 달" }[per];
-      const cards = [["members", "가입", "members_temp"], ["posts", "글", "posts_temp"], ["comments", "댓글", "comments_temp"], ["ai_comments", "AI 답변", null]];
-      return `<div class="chips stat-tabs" data-testid="stats-tabs">${tabs}</div><h3>${curName}</h3><div class="status-list">${cards.map(([k, l, t]) => `<div><strong>${N(cur[k])}</strong><small>${l}</small>${t ? sub(cur[t]) : ""}</div>`).join("")}</div><div class="stat-table-wrap"><table class="stat-table" data-testid="stats-table"><thead><tr><th>기간</th><th>가입</th><th>글</th><th>댓글</th><th>AI 답변</th></tr></thead><tbody>${rows.map((x) => `<tr><td>${E(label(x))}</td><td>${N(x.members)}${tl ? `<small> (${N(x.members_temp)})</small>` : ""}</td><td>${N(x.posts)}${tl ? `<small> (${N(x.posts_temp)})</small>` : ""}</td><td>${N(x.comments)}${tl ? `<small> (${N(x.comments_temp)})</small>` : ""}</td><td>${N(x.ai_comments)}</td></tr>`).join("")}</tbody></table></div><p class="notice small">누적: 회원 ${N(tot.members)}명(인증 ${N(tot.verified)}) · 글 ${N(tot.posts)} · 댓글 ${N(tot.comments)} · AI 답변 ${N(tot.ai_comments)}${tl ? ` · 괄호 안은 그중 ${E(tl)}(회원 ${N(tot.members_temp)} · 글 ${N(tot.posts_temp)} · 댓글 ${N(tot.comments_temp)})` : ""}. 집계 기준: 시험 계정·임시 견본·삭제된 글은 빼고 셉니다. 댓글 수에 AI 답변은 넣지 않아요.</p>`;
+      const cards = [["members", "가입", "members_temp"], ["posts", "글", "posts_temp"], ["comments", "댓글", "comments_temp"], ["ai_comments", "보라 답변", null]];
+      return `<div class="chips stat-tabs" data-testid="stats-tabs">${tabs}</div><h3>${curName}</h3><div class="status-list">${cards.map(([k, l, t]) => `<div><strong>${N(cur[k])}</strong><small>${l}</small>${t ? sub(cur[t]) : ""}</div>`).join("")}</div><div class="stat-table-wrap"><table class="stat-table" data-testid="stats-table"><thead><tr><th>기간</th><th>가입</th><th>글</th><th>댓글</th><th>보라 답변</th></tr></thead><tbody>${rows.map((x) => `<tr><td>${E(label(x))}</td><td>${N(x.members)}${tl ? `<small> (${N(x.members_temp)})</small>` : ""}</td><td>${N(x.posts)}${tl ? `<small> (${N(x.posts_temp)})</small>` : ""}</td><td>${N(x.comments)}${tl ? `<small> (${N(x.comments_temp)})</small>` : ""}</td><td>${N(x.ai_comments)}</td></tr>`).join("")}</tbody></table></div><p class="notice small">누적: 회원 ${N(tot.members)}명(인증 ${N(tot.verified)}) · 글 ${N(tot.posts)} · 댓글 ${N(tot.comments)} · 보라 답변 ${N(tot.ai_comments)}${tl ? ` · 괄호 안은 그중 ${E(tl)}(회원 ${N(tot.members_temp)} · 글 ${N(tot.posts_temp)} · 댓글 ${N(tot.comments_temp)})` : ""}. 집계 기준: 시험 계정·임시 견본·삭제된 글은 빼고 셉니다. 댓글 수에 보라 답변은 넣지 않아요.</p>`;
     },
     dashboard(d) {
       const k = d.dashboard || {},
@@ -1383,7 +1387,7 @@
       const trend = d.trend || [];
       const peak = Math.max(1, ...trend.flatMap((x) => [Number(x.members) || 0, Number(x.posts) || 0, Number(x.comments) || 0]));
       const bar = (n, cls) => `<i class="${cls}" style="height:${Math.round(((Number(n) || 0) / peak) * 100)}%" title="${Number(n) || 0}"></i>`;
-      return `<section class="admin-todo ${todoTotal ? "has-todo" : ""}" data-testid="admin-todo"><h3>처리할 일 ${todoTotal}건</h3>${todoTotal ? `<div class="todo-links"><a href="/admin/?section=verifications&amp;status=pending">인증 심사 대기 ${Number(t.verifications) || 0}건${t.verifications_hold ? ` (자동 판정 보류 ${Number(t.verifications_hold)}건)` : ""}</a><a href="/admin/?section=reports">미처리 신고 ${Number(t.reports) || 0}건</a><a href="/admin/?section=ai">AI 답변 검토 ${Number(t.ai_review) || 0}건</a><a href="/admin/?section=inquiries">답변 전 문의 ${Number(t.inquiries) || 0}건</a></div>` : '<p class="muted small">지금 처리할 일이 없어요.</p>'}</section><div class="status-list">${labels.map(([key, label]) => `<div><strong>${Number(k[key]) || 0}</strong><small>${label}</small></div>`).join("")}</div><p class="notice small" data-testid="dashboard-count-basis">집계 기준: 시험 계정·임시 견본은 빼고 셉니다. ${Number(k.expiring) ? `<a href="/admin/?section=members&amp;status=expiring">인증 만료 예정자 보기 →</a>` : ""}</p><section class="trend" aria-label="최근 14일 추이"><h3>최근 14일 가입·글·댓글 <a class="small" href="/admin/?section=stats">일별·주별·월별 통계 →</a></h3><div class="trend-legend"><span class="tm">가입</span><span class="tp">글</span><span class="tc">댓글</span></div><div class="trend-bars">${trend.map((x) => `<div class="trend-day" title="${E(x.day)} 가입 ${Number(x.members) || 0} · 글 ${Number(x.posts) || 0} · 댓글 ${Number(x.comments) || 0}"><div class="trend-stack">${bar(x.members, "tm")}${bar(x.posts, "tp")}${bar(x.comments, "tc")}</div><small>${E(String(x.day).slice(3))}</small></div>`).join("")}</div></section>`;
+      return `<section class="admin-todo ${todoTotal ? "has-todo" : ""}" data-testid="admin-todo"><h3>처리할 일 ${todoTotal}건</h3>${todoTotal ? `<div class="todo-links"><a href="/admin/?section=verifications&amp;status=pending">인증 심사 대기 ${Number(t.verifications) || 0}건${t.verifications_hold ? ` (자동 판정 보류 ${Number(t.verifications_hold)}건)` : ""}</a><a href="/admin/?section=reports">미처리 신고 ${Number(t.reports) || 0}건</a><a href="/admin/?section=ai">보라 답변 검토 ${Number(t.ai_review) || 0}건</a><a href="/admin/?section=inquiries">답변 전 문의 ${Number(t.inquiries) || 0}건</a></div>` : '<p class="muted small">지금 처리할 일이 없어요.</p>'}</section><div class="status-list">${labels.map(([key, label]) => `<div><strong>${Number(k[key]) || 0}</strong><small>${label}</small></div>`).join("")}</div><p class="notice small" data-testid="dashboard-count-basis">집계 기준: 시험 계정·임시 견본은 빼고 셉니다. ${Number(k.expiring) ? `<a href="/admin/?section=members&amp;status=expiring">인증 만료 예정자 보기 →</a>` : ""}</p><section class="trend" aria-label="최근 14일 추이"><h3>최근 14일 가입·글·댓글 <a class="small" href="/admin/?section=stats">일별·주별·월별 통계 →</a></h3><div class="trend-legend"><span class="tm">가입</span><span class="tp">글</span><span class="tc">댓글</span></div><div class="trend-bars">${trend.map((x) => `<div class="trend-day" title="${E(x.day)} 가입 ${Number(x.members) || 0} · 글 ${Number(x.posts) || 0} · 댓글 ${Number(x.comments) || 0}"><div class="trend-stack">${bar(x.members, "tm")}${bar(x.posts, "tp")}${bar(x.comments, "tc")}</div><small>${E(String(x.day).slice(3))}</small></div>`).join("")}</div></section>`;
     },
     verifications(d) {
       const c = d.counts || {};
@@ -1446,7 +1450,7 @@
     },
     ai(d) {
       const s = d.settings || {};
-      return `<article class="admin-card"><h3>AI 참고 답변 설정</h3><p class="muted small">‘AI답변 허용하기’를 켠 글에 보험 자료와 웹을 참고해 답변하며 출처는 표시하지 않아요. 공개된 일반 채널의 동료 글·댓글도 개인정보를 제거해 참고합니다. 답변은 사전 검수 없이 댓글로 공개되며, 의미 없는 글은 답변을 생략해요. 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회예요. 글쓴이가 채택한 동료 댓글은 우선 참고합니다.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}><span>AI 답변 만들기 사용</span></label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
+      return `<article class="admin-card"><h3>보라(AI) 답변 설정</h3><p class="muted small">‘보라(AI) 답변 허용하기’를 켠 글에 보험 자료와 웹을 참고해 답변하며 출처는 표시하지 않아요. 공개된 일반 채널의 동료 글·댓글도 개인정보를 제거해 참고합니다. 답변은 사전 검수 없이 댓글로 공개되며, 의미 없는 글은 답변을 생략해요. 회원 누구나 보라 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회예요. 글쓴이가 채택한 동료 댓글은 우선 참고합니다.</p>${adminForm("ai_settings", "", `<label class="check-line"><input type="checkbox" name="enabled" ${s.ai_enabled ? "checked" : ""}><span>보라 답변 만들기 사용</span></label>`, "AI 설정 저장")}<p class="hint">이미 공개된 답변은 아래 생성 기록에서 고치거나 숨길 수 있어요.</p></article><h3>생성 기록</h3><div class="admin-list" data-admin-list="ai">${(d.items || []).map(adminRows.ai).join("") || empty("생성 기록이 없어요.", "AI가 켜진 상태에서 질문 글이 올라오면 이곳에 표시돼요.")}</div>${adminMore("ai", d.items)}`;
     },
     settings(d) {
       const words = d.settings?.banned_words || [];
@@ -1495,10 +1499,10 @@
   }
   const policyDocs = {
     terms: `<h1>이용약관</h1>
-<p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 11일 · 보험라이브</p>
+<p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 22일 · 보험라이브</p>
 <p class="document-meta">변경 요지: 필수 이용 조건과 회원 권리 중심으로 간결하게 정리했습니다.</p>
 <h2>1. 서비스와 가입</h2>
-<p>보험라이브는 성인 보험설계사를 위한 무료 커뮤니티이며 결제 기능은 없습니다. Google 또는 이메일로 로그인한 회원은 회원 전용 글·댓글·AI 답변을 읽고 글·댓글을 작성합니다. 설계사 인증을 마치지 않은 회원은 이름 옆 소속이 ‘소속 미확인’으로 표시되며, 회사 리뷰는 현재 소속이 인증된 회원만 작성합니다. 게시물 신고는 설계사 인증을 마친 회원만 할 수 있습니다.</p>
+<p>보험라이브는 성인 보험설계사를 위한 무료 커뮤니티이며 결제 기능은 없습니다. Google 또는 이메일로 로그인한 회원은 회원 전용 글·댓글·보라 답변을 읽고 글·댓글을 작성합니다. 설계사 인증을 마치지 않은 회원은 이름 옆 소속이 ‘소속 미확인’으로 표시되며, 회사 리뷰는 현재 소속이 인증된 회원만 작성합니다. 게시물 신고는 설계사 인증을 마친 회원만 할 수 있습니다.</p>
 <h2>2. 회원의 의무</h2>
 <p>가입 정보와 증빙은 본인의 현재 정보로 제출하고, 소속이 바뀌면 재인증을 신청해 주세요. 개인정보·고객자료 게시, 타인의 권리 침해, 불법정보, 광고·모집, 사칭·계정 거래, 도배·조작·악의적 신고는 금지합니다.</p>
 <h2>3. 공개 범위와 익명 표시</h2>
@@ -1507,8 +1511,8 @@
 <p>글·댓글·리뷰의 저작권은 작성자 등 권리자에게 남습니다. 운영팀은 서비스 운영과 신고 처리에 필요한 범위에서 게시물을 무료·비독점적으로 저장·복제·표시·전송하며, 서비스 밖 광고·판매에는 이용하지 않습니다. 타인의 저작물은 허락을 받거나 법에서 허용하는 범위에서 이용해 주세요.</p>
 <h2>5. 보험 정보</h2>
 <p>회원 글과 리뷰는 개인 의견이며, 보험라이브는 보험계약 판매·중개나 가입·해지 권유 서비스를 제공하지 않습니다. 상품 가입 권유, 상담 고객 유치와 모집 광고는 금지하며, 계약 판단에는 해당 약관과 보험사의 공식 자료를 확인해 주세요.</p>
-<h2>6. AI 답변</h2>
-<p>‘AI답변 허용하기’를 켠 글의 제목·본문과 이어 묻기 흐름을 개인정보 제거 후 Anthropic의 Claude에 전달합니다. 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처·사전 검수 없이 AI 표시와 참고용 안내를 붙여 댓글로 공개합니다. 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. 오류 가능성이 있으므로 공식 자료를 확인하고, 오류·권리침해는 신고해 주세요.</p>
+<h2>6. 보라(AI) 답변</h2>
+<p>‘보라(AI) 답변 허용하기’를 켠 글의 제목·본문과 이어 묻기 흐름을 개인정보 제거 후 Anthropic의 Claude에 전달합니다. 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처·사전 검수 없이 AI 표시와 참고용 안내를 붙여 댓글로 공개합니다. 회원 누구나 보라 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. 오류 가능성이 있으므로 공식 자료를 확인하고, 오류·권리침해는 신고해 주세요. 댓글에 ‘@보라’를 붙여 부르면 AI 허용 여부·채널과 관계없이 그 글의 제목·본문과 해당 댓글 흐름을 같은 방식으로 개인정보 제거 후 보라(AI)에 전달하고, 보라가 그 댓글에 답글로 답합니다. @보라 호출은 하루·글당 횟수 제한이 없습니다.</p>
 <h2>7. 이용 제한과 권리침해 처리</h2>
 <p>운영팀은 위반 정도·피해·반복 여부에 따라 게시물 가림·삭제, 인증 보완·반려, 일시 또는 계속적 이용 제한을 적용하고 사유와 결과를 알립니다. 권리침해 신고는 소명을 검토해 삭제 등 필요한 조치를 하며, 판단이 어렵거나 다툼이 예상될 때는 최대 30일 임시조치 후 미결 건을 자동 복구하되 별도 법정 절차를 우선합니다. 신고 방법과 이의신청은 <a class="text-link" href="/help.html">운영 안내·권리침해 신고</a>에서 확인해 주세요.</p>
 <h2>8. 탈퇴</h2>
@@ -1520,14 +1524,14 @@
 <h2>11. 운영자와 문의</h2>
 <p>운영자: 김선미 · 이메일 <a class="text-link" href="mailto:bohumlive.help@gmail.com">bohumlive.help@gmail.com</a>. 문의·이의신청은 로그인 후 <a class="text-link" href="/help.html#inquiry">운영팀 문의</a> 또는 이메일로 보내 주세요.</p>`,
     privacy: `<h1>개인정보처리방침</h1>
-<p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 11일 · 보험라이브</p>
+<p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 22일 · 보험라이브</p>
 <p class="document-meta">변경 요지: 처리 항목·기간과 권리행사 안내를 간결하게 정리하고 이전 판 전문을 삭제했습니다.</p>
 <h2>1. 처리 목적과 항목</h2>
 <ul class="policy-list">
 <li><b>로그인·회원 관리</b>: 이메일, 로그인 방식, 제공자의 계정 식별정보·메타정보, 가입·마지막 로그인 시각을 받아 계정을 확인·관리합니다.</li>
 <li><b>설계사 인증</b>: 이름·닉네임·현재 소속·연락처·설계사 고유번호·증빙 사진 1장으로 설계사와 소속을 확인합니다. 중복 가입 확인값, 심사 상태·시각·사유, 글자인식 비교 결과와 일부 가린 요약도 처리합니다.</li>
-<li><b>커뮤니티 제공</b>: 글·댓글·리뷰, 좋아요·저장·팔로우·댓글 채택, 조회·이용 시각, 알림, AI 답변 허용 여부를 게시·집계·알림에 이용합니다.</li>
-<li><b>AI 답변 생성</b>: AI를 허용한 글의 제목·본문, 이어 묻기 질문·답변, 생성·처리 내역을 이용합니다. 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하되 출처는 표시하지 않습니다. 작성자 정보·개인정보는 AI에 보내기 전에 제거하며 고객 자료는 이용하지 않습니다.</li>
+<li><b>커뮤니티 제공</b>: 글·댓글·리뷰, 좋아요·저장·팔로우·댓글 채택, 조회·이용 시각, 알림, 보라 답변 허용 여부를 게시·집계·알림에 이용합니다.</li>
+<li><b>보라(AI) 답변 생성</b>: AI를 허용한 글 또는 댓글에서 ‘@보라’로 부른 글의 제목·본문, 이어 묻기·@보라 호출 질문·답변, 생성·처리 내역을 이용합니다. 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하되 출처는 표시하지 않습니다. 작성자 정보·개인정보는 AI에 보내기 전에 제거하며 고객 자료는 이용하지 않습니다.</li>
 <li><b>신고·문의 처리</b>: 신고·이의신청·문의 내용, 관련 계정·게시물과 처리 내역을 민원 답변·권리 보호·부정 이용 대응에 이용합니다. 관리자 처리·증빙 열람 기록은 운영 책임 확인에 이용합니다.</li>
 <li><b>접속·보안</b>: 외부 호스팅·로그인 서비스의 IP 주소, 기기·브라우저 정보와 접속 기록 처리는 아래 업체별 정책에 따릅니다.</li>
 </ul>
@@ -1555,11 +1559,11 @@
 <tr><td><a class="text-link" href="https://policies.google.com/privacy?hl=ko">Google</a></td><td>Google 로그인</td><td>이메일·계정 식별정보·접속 정보</td><td>미국 등</td></tr>
 <tr><td><a class="text-link" href="https://resend.com/legal/privacy-policy">Resend</a></td><td>로그인 메일 발송</td><td>이메일 주소·로그인 메일 내용</td><td>미국 등</td></tr>
 <tr><td><a class="text-link" href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Pages</a></td><td>웹 화면 제공</td><td>IP 주소 등 접속 기술 정보</td><td>미국 등</td></tr>
-<tr><td><a class="text-link" href="https://www.anthropic.com/legal/privacy">Anthropic(Claude)</a></td><td>AI 답변 생성</td><td>개인정보를 제거한 AI 허용 글·이어 묻기 흐름·공개 일반 채널 동료 글·댓글</td><td>미국 등</td></tr>
+<tr><td><a class="text-link" href="https://www.anthropic.com/legal/privacy">Anthropic(Claude)</a></td><td>보라 답변 생성</td><td>개인정보를 제거한 AI 허용 글·@보라 호출 글과 댓글·이어 묻기 흐름·공개 일반 채널 동료 글·댓글</td><td>미국 등</td></tr>
 </tbody></table></div>
-<p>가입·인증·서비스 이용, Google 로그인, 메일 요청, 웹 방문, AI 답변 생성 시 각 업무에 필요한 정보를 HTTPS로 전송합니다. 외부 업체의 로그·백업 등은 각 서비스·계약의 보관 기준을 따르며 보험라이브 탈퇴만으로 모두 즉시 삭제되지는 않습니다.</p>
-<p>AI에 전달하는 글·댓글·대화에서 개인정보를 제거하며 계정의 이름·연락처·닉네임·증빙을 별도 입력하지 않습니다. 회원은 AI 답변에 답글로 이어서 물을 수 있고 첫 답변 포함 글당 최대 5회입니다. 글쓴이가 채택·변경·취소할 수 있는 동료 답은 이후 AI 답변에서 우선 참고합니다.</p>
-<p>내 글의 AI 답변 생성을 원하지 않으면 ‘AI답변 허용하기’를 끄세요. 공개된 일반 채널의 글·댓글은 작성자 정보·개인정보를 제거한 뒤 다른 질문의 참고 내용으로 이용될 수 있습니다. 이미 전송한 내용과 공개된 답변은 자동 회수되지 않으므로 관련 요청은 운영팀 문의로 보내 주세요. Google 로그인 대신 이메일 로그인을 선택해도 Supabase·Resend를 이용합니다. 기본 기능의 국외 처리를 원하지 않으면 가입하지 않거나 탈퇴해야 하며 회원 기능은 이용하지 못합니다.</p>
+<p>가입·인증·서비스 이용, Google 로그인, 메일 요청, 웹 방문, 보라 답변 생성 시 각 업무에 필요한 정보를 HTTPS로 전송합니다. 외부 업체의 로그·백업 등은 각 서비스·계약의 보관 기준을 따르며 보험라이브 탈퇴만으로 모두 즉시 삭제되지는 않습니다.</p>
+<p>AI에 전달하는 글·댓글·대화에서 개인정보를 제거하며 계정의 이름·연락처·닉네임·증빙을 별도 입력하지 않습니다. 회원은 보라 답변에 답글로 이어서 물을 수 있고 첫 답변 포함 글당 최대 5회입니다. 댓글에 ‘@보라’를 붙이면 횟수 제한 없이 보라가 답글로 답합니다. 글쓴이가 채택·변경·취소할 수 있는 동료 답은 이후 보라 답변에서 우선 참고합니다.</p>
+<p>내 글의 보라 답변 생성을 원하지 않으면 ‘보라(AI) 답변 허용하기’를 끄세요. 다만 다른 회원이 댓글에서 ‘@보라’로 부르면 그 글의 제목·본문도 개인정보 제거 후 보라(AI)에 전달됩니다. 공개된 일반 채널의 글·댓글은 작성자 정보·개인정보를 제거한 뒤 다른 질문의 참고 내용으로 이용될 수 있습니다. 이미 전송한 내용과 공개된 답변은 자동 회수되지 않으므로 관련 요청은 운영팀 문의로 보내 주세요. Google 로그인 대신 이메일 로그인을 선택해도 Supabase·Resend를 이용합니다. 기본 기능의 국외 처리를 원하지 않으면 가입하지 않거나 탈퇴해야 하며 회원 기능은 이용하지 못합니다.</p>
 <h2>6. 자동 인증</h2>
 <p>기기 내 글자인식으로 증빙의 이름·14자리 설계사 고유번호·소속을 신청 정보와 비교해 일치하면 자동 승인, 명확히 다르면 자동 반려하며 불명확하면 운영자가 확인합니다. 결과는 인증 상태·회원 기능에 바로 반영되고 내 정보·알림으로 안내합니다. 이 과정에 외부 생성형 AI는 사용하지 않습니다.</p>
 <p>자동 인증의 설명·의견 제출·운영자 재검토는 ‘운영팀 문의’의 ‘개인정보 열람·정정·삭제 요청’으로 신청해 주세요.</p>
@@ -1578,7 +1582,7 @@
 <h2>11. 방침 변경</h2>
 <p>변경 내용과 시행일은 서비스 공지와 이 페이지에 알리며, 별도 동의가 필요한 변경은 동의를 받습니다.</p>`,
     rules: `<h1>커뮤니티 운영정책</h1>
-<p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 11일 · 보험라이브</p>
+<p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 22일 · 보험라이브</p>
 <p class="document-meta">변경 요지: 금지 행위와 신고·제재·이의신청 절차만 간결하게 정리했습니다.</p>
 <h2>1. 금지 행위</h2>
 <ul class="policy-list">
@@ -1590,8 +1594,8 @@
 <li>사칭·계정 거래·권한 우회·도배·좋아요와 리뷰 조작·악의적 신고</li>
 </ul>
 <p>익명 채널과 AI 질문에도 같은 기준을 적용합니다. 사실에 근거한 비판이나 불리한 회사 평가라는 이유만으로 제한하지 않습니다.</p>
-<p>AI는 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처는 표시하지 않습니다. 회원 누구나 AI 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다.</p>
-<p>글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. AI 댓글과 자기 댓글은 채택할 수 없으며, 채택된 동료 답은 이후 AI 답변에서 우선 참고합니다.</p>
+<p>AI는 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고하며 출처는 표시하지 않습니다. 회원 누구나 보라 답변에 답글로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 댓글에 ‘@보라’를 붙이면 어느 글에서든 횟수 제한 없이 보라가 답합니다.</p>
+<p>글쓴이는 동료 댓글 1개를 채택·변경·취소할 수 있습니다. AI 댓글과 자기 댓글은 채택할 수 없으며, 채택된 동료 답은 이후 보라 답변에서 우선 참고합니다.</p>
 <h2>2. 신고와 조치</h2>
 <p>설계사 인증을 마친 회원은 다른 회원의 글·댓글·리뷰와 AI 댓글을 신고합니다. 같은 콘텐츠에 서로 다른 회원의 신고가 3건 이상이면 자동으로 임시 가림하고 신고자·작성자에게 알립니다. 운영 공지는 자동 가림에서 제외하되 운영팀이 직접 검토합니다.</p>
 <p>소명된 권리침해 요청은 신고 수와 관계없이 지체 없이 검토합니다. 판단이 어렵거나 다툼이 예상될 때의 임시조치는 최대 30일이며, 소명 검토 후 복구 또는 최종 가림·삭제를 결정합니다. 미결 건은 기간 종료 후 자동 복구하며 불법정보·저작권 등 별도 법정 절차를 우선합니다.</p>
@@ -1601,12 +1605,12 @@
 <p>운영자: 김선미 · 이메일 <a class="text-link" href="mailto:bohumlive.help@gmail.com">bohumlive.help@gmail.com</a>. 로그인 후 <a class="text-link" href="/help.html#inquiry">운영팀 문의</a>(또는 이메일)에 ‘처리 결과 이의신청’이라고 적고 대상 주소·조치 내용·추가 소명을 보내 주세요.</p>
 <p>본인의 가려진 글에 있는 ‘내 글 조치에 이의신청’ 버튼도 이용해 주세요. 운영팀은 재검토 결과를 알리며 정당한 신고·이의제기를 이유로 불이익을 주지 않습니다.</p>`,
     help: `<h1>운영 안내·권리침해 신고</h1>
-<p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 11일 · 보험라이브</p>
+<p class="document-meta">시행일: 2026년 11월 11일 · 최종 수정일: 2026년 11월 22일 · 보험라이브</p>
 <p class="document-meta">변경 요지: 이용 순서와 신고·소명·문의 방법을 간결하게 정리했습니다.</p>
 <h2>1. 이용 순서</h2>
 <ol><li>Google 또는 이메일로 로그인합니다. 로그인하면 바로 글·댓글·좋아요·저장·팔로우를 이용합니다.</li><li>설계사 인증은 선택입니다. 인증하려면 이름·닉네임·소속·연락처·설계사 고유번호와 증빙 사진 1장을 제출합니다. 사진의 불필요한 개인정보는 가려 주세요.</li><li>인증이 승인되면 이름 옆 ‘소속 미확인’ 대신 회사 이름이 표시되고 회사 리뷰 작성과 게시물 신고를 할 수 있습니다. 결과는 내 정보·알림에서 확인합니다.</li></ol>
-<p>‘AI답변 허용하기’를 켜면 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고한 AI 댓글이 출처 표시·사전 검수 없이 공개됩니다. 공식 자료를 확인하고 고객정보는 적지 마세요.</p>
-<p>회원 누구나 AI 답변의 ‘답글’로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 글쓴이는 동료 댓글 1개를 채택하고 변경·취소할 수 있습니다.</p>
+<p>‘보라(AI) 답변 허용하기’를 켜면 보험 자료와 웹, 공개된 일반 채널의 동료 글·댓글을 참고한 AI 댓글이 출처 표시·사전 검수 없이 공개됩니다. 공식 자료를 확인하고 고객정보는 적지 마세요.</p>
+<p>회원 누구나 보라 답변의 ‘답글’로 이어서 물을 수 있고, 첫 답변 포함 글당 최대 5회입니다. 어느 글이든 댓글에 ‘@보라 질문’처럼 쓰면 횟수 제한 없이 보라가 답글로 답합니다. 글쓴이는 동료 댓글 1개를 채택하고 변경·취소할 수 있습니다.</p>
 <h2>2. 권리침해 신고 방법</h2>
 <p>설계사 인증을 마친 회원은 게시물의 ‘신고’를 이용합니다. 피해자 본인이나 적법한 대리인은 로그인 후 아래 문의에서 ‘권리침해 신고’를 선택해 주세요. 설계사 미인증·이용 정지 회원도 문의하며, 신고 버튼의 횟수 제한과 별개로 접수합니다.</p>
 <ul class="policy-list"><li>대상 글·댓글·리뷰의 주소와 문제 부분</li><li>침해된 권리·구체적 사실과 본인 또는 대리인 여부</li><li>최소한의 소명 자료와 원하는 조치(삭제·접근 차단·반박 내용 게재)</li></ul>
@@ -2161,9 +2165,18 @@
           return;
         }
         $$("[data-reply-slot]").forEach((x) => (x.innerHTML = ""));
-        const followup = parent.is_ai && aiFollowupAllowed(current);
-        slot.innerHTML = `<form data-form="comment" class="comment-form reply-form open"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}"><textarea name="body" rows="2" aria-label="${followup ? "AI에 이어서 묻기" : "답글"}" placeholder="${followup ? "앞선 답변에서 더 궁금한 점을 물어보세요." : "답글을 남겨 주세요."}" required maxlength="3000" data-testid="reply-body"></textarea>${followup ? '<p class="hint">AI 답변은 첫 답변 포함 글당 최대 5회예요. 고객정보는 적지 마세요.</p>' : ""}<p class="error" data-form-error role="alert"></p><div class="comment-form-actions"><button type="button" class="btn btn-small" data-do="reply-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`;
+        const followup = parent.is_ai && (parent.ai_mention === true || aiFollowupAllowed(current));
+        slot.innerHTML = `<form data-form="comment" class="comment-form reply-form open"><input type="hidden" name="post_id" value="${E(current.post.id)}"><input type="hidden" name="parent_id" value="${E(id)}"><textarea name="body" rows="2" aria-label="${followup ? "보라에게 이어서 묻기" : "답글"}" placeholder="${followup ? "보라에게 더 궁금한 점을 물어보세요." : "답글을 남겨 주세요. @보라 를 붙이면 보라가 답해요."}" required maxlength="3000" data-testid="reply-body"></textarea>${followup ? `<p class="hint">${parent.ai_mention === true ? "보라가 답글로 이어서 답해요." : "보라 답변은 첫 답변 포함 글당 최대 5회예요."} 고객정보는 적지 마세요.</p>` : ""}<p class="error" data-form-error role="alert"></p><div class="comment-form-actions">${followup ? "" : BORA_BTN}<button type="button" class="btn btn-small" data-do="reply-cancel">취소</button><button class="btn btn-primary btn-small" type="submit">등록</button></div></form>`;
         slot.querySelector("textarea").focus();
+        return;
+      }
+      case "mention-bora": {
+        const ta = el.closest("form")?.querySelector("textarea");
+        if (!ta) return;
+        if (!/@보라/.test(ta.value)) ta.value = "@보라 " + ta.value.replace(/^\s+/, "");
+        ta.closest("form.comment-form")?.classList.add("open");
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
         return;
       }
       case "comment-accept": {

@@ -4785,3 +4785,9 @@ h2 {
   .admin-tabs { gap: 6px; }
   .admin-tabs .chip { padding: 5px 10px; min-height: 30px; }
 }
+
+/* 2026-11-22 보라 표시명·@보라 호출 */
+.comment-ai-item .comment-author { font-weight: 700; color: #3f2fb0; }
+.comment-ai-item .ai-note { font-size: 12px; font-weight: 400; color: #6c7685; }
+.mention-bora { color: #5b46d6; font-weight: 700; }
+.mention-bora-btn { color: #5b46d6; border-color: #cfc3f3; margin-right: auto; }
