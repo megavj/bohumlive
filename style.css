@@ -4851,3 +4851,16 @@ h2 {
 .header-tools .header-login:focus-visible {
   background: var(--accent-soft);
 }
+
+/* 2026-11-23 @ 입력 시 @보라 추천 + 보라 호출 확인 표시 */
+.bora-mention-pop { position: absolute; z-index: 1000; min-width: 220px; padding: 4px; background: #fff; border: 1px solid #d9cff7; border-radius: 12px; box-shadow: 0 10px 28px rgba(60, 40, 140, .16); }
+.bora-mention-pop[hidden] { display: none; }
+.bora-mention-opt { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 9px; background: #f3efff; color: #2b2350; font: inherit; text-align: left; cursor: pointer; }
+.bora-mention-opt:hover, .bora-mention-opt:focus-visible { background: #e9e2ff; outline: none; }
+.bora-mention-opt b { display: block; color: #5b46d6; font-size: 15px; }
+.bora-mention-opt small { display: block; color: #6b6585; font-size: 12px; margin-top: 1px; }
+.bora-mention-av { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #7b61ff, #5b46d6); color: #fff; font-weight: 800; font-size: 14px; }
+.bora-mention-hint { margin: 6px 2px 0; font-size: 13px; line-height: 1.45; font-weight: 600; }
+.bora-mention-hint.ok { color: #5b46d6; }
+.bora-mention-hint.warn { color: #b4541a; }
+.bora-mention-hint.info { color: #6b6585; font-weight: 500; }

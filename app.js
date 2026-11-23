@@ -2764,3 +2764,98 @@
   }
   boot();
 })();
+
+// 2026-11-23 이사님 지시: 본문·댓글·답글에서 @ 를 치면 '@보라' 추천이 떠서 골라 넣게 하고,
+// 입력칸 아래에 보라 호출이 제대로 됐는지(서버와 같은 규칙) 바로 보여 준다.
+(() => {
+  const SEL = 'textarea[data-testid="comment-body"], textarea[data-testid="reply-body"], textarea[data-testid="post-body-input"]';
+  const OK = /(^|[^0-9A-Za-z가-힣_])@보라(야|님|씨)?($|[^0-9A-Za-z가-힣_])/;
+  const PREFIXES = ["", "ㅂ", "보", "볼", "보ㄹ", "보라"];
+  let pop = null, cur = null, at = -1;
+  const isPost = (ta) => ta.matches('[data-testid="post-body-input"]');
+  const close = () => { if (pop) pop.hidden = true; cur = null; at = -1; };
+  const ensurePop = () => {
+    if (pop) return pop;
+    pop = document.createElement("div");
+    pop.className = "bora-mention-pop";
+    pop.hidden = true;
+    pop.setAttribute("role", "listbox");
+    pop.innerHTML = '<button type="button" role="option" aria-selected="true" class="bora-mention-opt"><span class="bora-mention-av" aria-hidden="true">보</span><span><b>@보라</b><small>AI 보라에게 물어보기</small></span></button>';
+    pop.addEventListener("mousedown", (e) => e.preventDefault()); // 입력칸 초점 유지
+    pop.addEventListener("click", () => pick());
+    document.body.appendChild(pop);
+    return pop;
+  };
+  // 커서 바로 앞이 '@' 또는 '@보…' 처럼 보라를 쓰는 중이면 그 '@' 위치를 돌려준다.
+  const findAt = (ta) => {
+    const pos = ta.selectionStart, end = ta.selectionEnd;
+    if (pos !== end) return -1;
+    const before = ta.value.slice(0, pos), i = before.lastIndexOf("@");
+    if (i < 0 || pos - i > 3) return -1;
+    if (i > 0 && /[0-9A-Za-z가-힣_]/.test(before[i - 1])) return -1; // 이메일 등은 제외
+    return PREFIXES.includes(before.slice(i + 1)) ? i : -1;
+  };
+  const place = (ta) => {
+    const r = ta.getBoundingClientRect(), p = ensurePop();
+    p.style.left = Math.round(r.left + window.scrollX) + "px";
+    p.style.top = Math.round(r.bottom + window.scrollY + 4) + "px";
+  };
+  const pick = () => {
+    const ta = cur;
+    if (!ta || at < 0) return close();
+    const pos = ta.selectionStart, v = ta.value;
+    const after = v.slice(pos).replace(/^[\s]?/, "");
+    ta.value = v.slice(0, at) + "@보라 " + after;
+    const c = at + 4;
+    close();
+    ta.focus();
+    ta.setSelectionRange(c, c);
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const hintFor = (ta) => {
+    let h = ta.parentElement.querySelector(":scope > .bora-mention-hint");
+    if (!h) {
+      h = document.createElement("p");
+      h.className = "bora-mention-hint";
+      h.setAttribute("aria-live", "polite");
+      ta.insertAdjacentElement("afterend", h);
+    }
+    return h;
+  };
+  const updateHint = (ta) => {
+    const v = ta.value;
+    if (!v.includes("@보라")) { const h = ta.parentElement.querySelector(":scope > .bora-mention-hint"); if (h) h.remove(); return; }
+    const h = hintFor(ta);
+    if (!OK.test(v)) {
+      h.className = "bora-mention-hint warn";
+      h.textContent = "⚠ ‘@보라’ 바로 뒤에 한 칸 띄어 주세요. 붙여 쓰면 보라가 부름을 못 알아들어요.";
+      return;
+    }
+    const rest = v.replace(/@보라(야|님|씨)?/g, "").replace(/[\s\p{P}\p{S}]/gu, "");
+    if (!isPost(ta) && rest.length < 2) {
+      h.className = "bora-mention-hint info";
+      h.textContent = "‘@보라’ 뒤에 물어볼 내용을 이어서 적어 주세요.";
+      return;
+    }
+    h.className = "bora-mention-hint ok";
+    h.textContent = isPost(ta) ? "✓ 보라 호출됨 · 글을 올리면 보라(AI)가 댓글로 한 번 답해요." : "✓ 보라 호출됨 · 등록하면 보라(AI)가 답글로 답해요.";
+  };
+  document.addEventListener("input", (e) => {
+    const ta = e.target;
+    if (!ta.matches?.(SEL)) return;
+    updateHint(ta);
+    const i = findAt(ta);
+    if (i < 0) return close();
+    cur = ta; at = i;
+    place(ta);
+    ensurePop().hidden = false;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (!pop || pop.hidden || e.target !== cur || e.isComposing) return;
+    if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); e.stopPropagation(); pick(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+  }, true);
+  document.addEventListener("focusout", (e) => { if (e.target === cur) setTimeout(() => { if (document.activeElement !== cur) close(); }, 120); });
+  window.addEventListener("resize", () => { if (cur && pop && !pop.hidden) place(cur); });
+  document.addEventListener("click", (e) => { if (e.target.closest?.('[data-do="mention-bora"]')) setTimeout(() => { const ta = e.target.closest("form")?.querySelector("textarea"); if (ta) updateHint(ta); }, 0); });
+})();
