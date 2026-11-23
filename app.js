@@ -666,7 +666,10 @@
       saved = current?.post || {};
     // 고치는 글은 저장된 원래 내용과 다를 때만 불러온다.
     if (saved.id && d.title === (saved.title || "") && d.body === (saved.body || "")) return;
-    if (!params.get("channel") && d.channel_id && [...f.channel_id.options].some((o) => o.value === d.channel_id)) f.channel_id.value = d.channel_id;
+    // 2026-11-23 점검 F3: 들어온 채널(URL)과 임시저장 채널이 다르고 어느 한쪽이라도 완전익명이면 임시저장 채널을 지킨다(익명 글이 실명 채널로 새는 것 방지)
+    const dc = channels.find((c) => c.id === d.channel_id), pc = channels.find((c) => c.id === params.get("channel"));
+    const keepDraftChan = d.channel_id && [...f.channel_id.options].some((o) => o.value === d.channel_id) && (!params.get("channel") || (dc && dc.id !== pc?.id && (dc.anonymous || pc?.anonymous)));
+    if (keepDraftChan) f.channel_id.value = d.channel_id;
     f.title.value = d.title || "";
     f.body.value = d.body || "";
     f.is_question.checked = !!d.is_question;
@@ -675,7 +678,8 @@
       $("[data-testid=write-more]", form).open = true;
     }
     const a = ago(d.at);
-    $("[data-draft-text]").textContent = `임시저장한 글을 불러왔어요 (${a}).`;
+    $("[data-draft-text]").textContent = `임시저장한 글을 불러왔어요 (${a}).` + (keepDraftChan && params.get("channel") && dc ? ` ‘${dc.name}’ 채널에서 쓰던 글이라 그 채널로 맞췄어요.` : "");
+    f.body.dispatchEvent(new Event("input", { bubbles: true })); // @보라 호출 표시 갱신
     $("[data-draft-line]").hidden = false;
   }
   async function login() {
@@ -2216,6 +2220,7 @@
       case "comment-cancel": {
         const form = el.closest("form");
         form.reset();
+        form.querySelectorAll(".bora-mention-hint").forEach((h) => h.remove());
         form.classList.remove("open");
         const err = $("[data-form-error]", form);
         if (err) err.textContent = "";
@@ -2795,14 +2800,29 @@
     if (i > 0 && /[0-9A-Za-z가-힣_]/.test(before[i - 1])) return -1; // 이메일 등은 제외
     return PREFIXES.includes(before.slice(i + 1)) ? i : -1;
   };
+  // 입력칸 안 커서 좌표(같은 글꼴의 보이지 않는 복사본으로 계산)
+  const caretXY = (ta) => {
+    const cs = getComputedStyle(ta), m = document.createElement("div");
+    for (const k of ["boxSizing", "width", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "wordSpacing", "textIndent", "tabSize"]) m.style[k] = cs[k];
+    Object.assign(m.style, { position: "absolute", visibility: "hidden", whiteSpace: "pre-wrap", overflowWrap: "break-word", top: "0", left: "-9999px", borderStyle: "solid" });
+    m.textContent = ta.value.slice(0, ta.selectionStart);
+    const s = document.createElement("span"); s.textContent = "\u200b"; m.appendChild(s);
+    document.body.appendChild(m);
+    const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
+    const xy = { x: s.offsetLeft - ta.scrollLeft, y: s.offsetTop - ta.scrollTop + lh };
+    m.remove();
+    return xy;
+  };
   const place = (ta) => {
-    const r = ta.getBoundingClientRect(), p = ensurePop();
-    p.style.left = Math.round(r.left + window.scrollX) + "px";
-    p.style.top = Math.round(r.bottom + window.scrollY + 4) + "px";
+    const r = ta.getBoundingClientRect(), p = ensurePop(), c = caretXY(ta);
+    const y = Math.min(Math.max(c.y, 0), r.height) + 4;
+    const x = Math.min(Math.max(c.x - 8, 0), Math.max(0, Math.min(r.width, document.documentElement.clientWidth - r.left) - 230));
+    p.style.left = Math.round(r.left + window.scrollX + x) + "px";
+    p.style.top = Math.round(r.top + window.scrollY + y) + "px";
   };
   const pick = () => {
     const ta = cur;
-    if (!ta || at < 0) return close();
+    if (!ta || at < 0 || findAt(ta) !== at) return close();
     const pos = ta.selectionStart, v = ta.value;
     const after = v.slice(pos).replace(/^[\s]?/, "");
     ta.value = v.slice(0, at) + "@보라 " + after;
@@ -2852,10 +2872,14 @@
   });
   document.addEventListener("keydown", (e) => {
     if (!pop || pop.hidden || e.target !== cur || e.isComposing) return;
-    if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); e.stopPropagation(); pick(); }
+    if (findAt(cur) !== at) return close();
+    if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); pick(); }
     else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
   }, true);
   document.addEventListener("focusout", (e) => { if (e.target === cur) setTimeout(() => { if (document.activeElement !== cur) close(); }, 120); });
   window.addEventListener("resize", () => { if (cur && pop && !pop.hidden) place(cur); });
+  // 2026-11-23 점검 F1: 화살표·마우스로 커서를 옮기면 추천창을 닫는다(엉뚱한 자리에 끼워 넣기 방지)
+  document.addEventListener("selectionchange", () => { if (cur && pop && !pop.hidden && findAt(cur) !== at) close(); });
+  document.addEventListener("focusin", (e) => { if (e.target.matches?.(SEL)) updateHint(e.target); });
   document.addEventListener("click", (e) => { if (e.target.closest?.('[data-do="mention-bora"]')) setTimeout(() => { const ta = e.target.closest("form")?.querySelector("textarea"); if (ta) updateHint(ta); }, 0); });
 })();
