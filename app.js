@@ -2692,6 +2692,7 @@
     if (event.target === $("#dialog")) closeDialog();
   });
   let checking = false;
+  let netFails = 0;
   async function revalidate() {
     if (checking || !sb || !session || document.visibilityState === "hidden") return;
     checking = true;
@@ -2707,13 +2708,20 @@
         return;
       }
       const d = await read("me");
+      netFails = 0;
       mine = d;
       paintBell();
       if (`${viewer?.status}/${viewer?.role}` !== before) {
         closeDialog();
         await refresh();
       }
-    } catch {
+    } catch (err) {
+      // 2026-11-23 점검 F2: 인터넷이 잠깐 끊기거나 휴대폰 앱 전환 직후 첫 요청이 실패한 경우엔 쓰던 창을 닫지 않고
+      // 다음 확인 때 다시 시도한다(연속 3번 실패하면 기존처럼 가림). 서버가 권한 오류를 돌려준 경우는 바로 가림.
+      const msg = String(err?.message || err || ""), code = String(err?.code || "");
+      const authErr = /^(42501|28000|28P01|PGRST30\d)$/.test(code) || /jwt/i.test(msg);
+      const transient = !authErr && (!navigator.onLine || !code || /fetch|network|load failed|timeout|abort|50[234]/i.test(msg));
+      if (transient && ++netFails < 3) return;
       viewer = null;
       mine = null;
       closeDialog();

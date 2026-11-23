@@ -7,3 +7,9 @@ __pycache__/
 worker/.cron.lock
 worker/.cron.log
 worker/kb/
+worker/.admin_mail.log
+
+# 2026-11-23 서버 코드는 비공개 저장소 megavj/bohumlive-server 로 이전(파일은 이 Mac 그대로 유지)
+/db/
+/worker/
+*.bak-*
