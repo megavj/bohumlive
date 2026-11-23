@@ -176,7 +176,9 @@
             ? "company"
             : "";
     // 글쓰기는 머리줄의 연필 하나로만 들어간다(채널 화면에서는 그 채널이 미리 골라진다).
-    const writeHref = uri("write.html", page === "channel" && params.get("id") ? { channel: params.get("id") } : {});
+    // 2026-11-23 글 화면에서도 그 글의 채널이 미리 골라진다(layout 은 화면 내용을 읽은 뒤 그려진다).
+    const writeChan = page === "channel" ? params.get("id") : page === "post" ? current?.post?.channel_id : "";
+    const writeHref = uri("write.html", writeChan ? { channel: writeChan } : {});
     const unread = Number(viewer?.unread_count) || 0;
     // 머리줄을 새로 그리면 알림 창은 닫힌 상태로 시작한다.
     bellOpen = false;
@@ -664,7 +666,7 @@
       saved = current?.post || {};
     // 고치는 글은 저장된 원래 내용과 다를 때만 불러온다.
     if (saved.id && d.title === (saved.title || "") && d.body === (saved.body || "")) return;
-    if (d.channel_id && [...f.channel_id.options].some((o) => o.value === d.channel_id)) f.channel_id.value = d.channel_id;
+    if (!params.get("channel") && d.channel_id && [...f.channel_id.options].some((o) => o.value === d.channel_id)) f.channel_id.value = d.channel_id;
     f.title.value = d.title || "";
     f.body.value = d.body || "";
     f.is_question.checked = !!d.is_question;
@@ -2199,7 +2201,7 @@
           saved = current?.post || {};
         form.elements.title.value = saved.title || "";
         form.elements.body.value = saved.body || "";
-        form.elements.is_question.checked = !!saved.is_question;
+        form.elements.is_question.checked = saved.id ? !!saved.is_question : !(isAdmin() && !isVerified());
         form.elements.company_id.value = saved.company_id || "";
         form.elements.channel_id.value = saved.channel_id || params.get("channel") || "";
         $("[data-draft-line]").hidden = true;
