@@ -4791,3 +4791,63 @@ h2 {
 .comment-ai-item .ai-note { font-size: 12px; font-weight: 400; color: #6c7685; }
 .mention-bora { color: #5b46d6; font-weight: 700; }
 .mention-bora-btn { color: #5b46d6; border-color: #cfc3f3; margin-right: auto; }
+
+/* 2026-11-23 글쓰기 버튼을 보라색으로: 화면을 열면 둘레에 보라 물결이 세 번 퍼지고 멈춘다(움직임 줄이기 설정이면 없음) */
+.header-tools .tool-write {
+  padding: 0 13px 0 11px;
+  border: 0;
+  background: linear-gradient(135deg, #7c4ff0, #6d3fd8 55%, #5a2fc4);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  flex: none;
+  box-shadow: 0 2px 8px rgba(109, 63, 216, 0.28);
+  animation: write-wave 1.8s ease-out 0.6s 3;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.header-tools .tool-write svg.icon {
+  width: 16px;
+  height: 16px;
+  animation: write-pen 1.8s ease-in-out 0.6s 3;
+  transform-origin: 30% 80%;
+}
+.header-tools .tool-write .tool-label {
+  display: inline;
+}
+.header-tools .tool-write:hover,
+.header-tools .tool-write:focus-visible {
+  background: linear-gradient(135deg, #7c4ff0, #6d3fd8 55%, #5a2fc4);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(109, 63, 216, 0.34);
+}
+@keyframes write-wave {
+  0% { box-shadow: 0 2px 8px rgba(109, 63, 216, 0.28), 0 0 0 0 rgba(124, 79, 240, 0.45); }
+  70% { box-shadow: 0 2px 8px rgba(109, 63, 216, 0.28), 0 0 0 9px rgba(124, 79, 240, 0); }
+  100% { box-shadow: 0 2px 8px rgba(109, 63, 216, 0.28), 0 0 0 0 rgba(124, 79, 240, 0); }
+}
+@keyframes write-pen {
+  0%, 60%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-12deg); }
+  40% { transform: rotate(8deg); }
+}
+@media (max-width: 369px) {
+  .header-tools .tool-write { padding: 0 10px 0 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-tools .tool-write,
+  .header-tools .tool-write svg.icon { animation: none; transition: none; }
+}
+/* 2026-11-23 손님 머리줄: 글쓰기만 진하게 보이도록 '로그인·가입'은 흰 바탕 + 보라 테두리 */
+.header-tools .header-login {
+  background: #fff;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  transition: background 0.15s ease;
+}
+.header-tools .header-login:hover,
+.header-tools .header-login:focus-visible {
+  background: var(--accent-soft);
+}
